@@ -37,7 +37,7 @@ cargo binstall sieve-cli
 Build from source with Cargo:
 
 ```sh
-cargo install --git https://github.com/iamalvisng/sieve sieve-cli
+cargo install --locked --git https://github.com/iamalvisng/sieve sieve-cli
 ```
 
 ## Check the install

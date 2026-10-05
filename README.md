@@ -26,7 +26,7 @@ Other channels:
 ```sh
 brew install iamalvisng/tap/sieve
 cargo binstall sieve-cli
-cargo install --git https://github.com/iamalvisng/sieve sieve-cli
+cargo install --locked --git https://github.com/iamalvisng/sieve sieve-cli
 ```
 
 See [docs/guide/install.md](docs/guide/install.md) for each operating system.
