@@ -110,6 +110,7 @@ pub fn rebuild_graph_only(root: &Path, context_dir: &Path) -> std::io::Result<Re
         only_dirs: only_dirs.clone(),
         no_reuse: false,
         read_only: false,
+        progress: None,
     };
     let report = build_graph_cached_with(root, context_dir, &opts)?;
     let wiring_path = context_dir.join(".graph").join("wiring.json");

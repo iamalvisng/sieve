@@ -12,7 +12,7 @@ Options:
                      hermes, antigravity, copilot, kiro, windsurf, claude)
   --all-agents       write instruction files for every known agent, detected or
                      not
-  --no-agents        Claude Code wiring only; skip other agents
+  --no-agents        Claude Code only; skip other agents
   --list-agents      list known agent ids and exit
   --no-mcp           skip MCP server registration for other agents
   --no-hooks         skip hook installation for other agents

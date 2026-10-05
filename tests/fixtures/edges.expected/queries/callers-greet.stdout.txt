@@ -1,6 +1,6 @@
+greet  method  ts/base.ts:6-8
+1 caller · 2 within 2 hops
+└─ area  method  ts/derived.ts:4-6
+   │  5: return this.greet().length;
+   └─ outer  fn  ts/calls.ts:7-19
 [sieve] saved ≈ 135 tokens
-
-greet · method · ts/base.ts:L6-L8
-  calls ← area (ts/derived.ts:L4-L6) [depth 1]
-      5: return this.greet().length;
-  calls ← outer (ts/calls.ts:L7-L19) [depth 2]

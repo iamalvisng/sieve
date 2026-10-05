@@ -1,7 +1,7 @@
-[sieve] saved ≈ 58 tokens
-
-zed · function · src/calc.ts:L11-L15
-  calls → size (src/base.ts:L2-L4)
-  calls → double (src/calc.ts:L3-L5)
-  calls → doubled (src/calc.ts:L7-L9)
-  references → Widget (src/base.ts:L1-L5)
+zed  fn  src/calc.ts:11-15
+calls 4
+├─ size  method  src/base.ts:2-4
+├─ double  fn  src/calc.ts:3-5
+├─ doubled  fn  src/calc.ts:7-9
+└─ Widget  class  src/base.ts:1-5  · references
+[sieve] saved ≈ 60 tokens

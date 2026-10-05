@@ -1,1 +1,1 @@
-error: option '--dir <path>' argument missing
+sieve: --dir needs a value — see sieve --help

@@ -1,1 +1,1 @@
-error: unknown option '--bogus'
+sieve: sieve has no --bogus option — see sieve --help

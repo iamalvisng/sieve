@@ -1,5 +1,5 @@
-[sieve] saved ≈ 65 tokens
-
 ## alpha/
-alphaAdd · function · src/a.ts:L1-L3
-  calls ← alphaTwice (src/a.ts:L5-L7)
+alphaAdd  fn  src/a.ts:1-3
+1 caller
+└─ alphaTwice  fn  src/a.ts:5-7
+[sieve] saved ≈ 67 tokens

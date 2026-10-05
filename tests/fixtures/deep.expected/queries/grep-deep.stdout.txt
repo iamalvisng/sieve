@@ -1,10 +1,10 @@
-"add" — 3 hits in 3 symbols across 2 files (searched 9 indexed files)
+grep "add" · 3 hits in 3 symbols across 2 files · searched 9 files
 
-add · function · py/helpers.py:L1-L2 · 1 in-edges
-  L1: def add(a, b):
+add  fn  py/helpers.py:1-2  · 1 link in
+  1: def add(a, b):
 
-Calculator.total · method · py/main.py:L5-L6 · 1 in-edges
-  L6: return add(a, b)
+Calculator.total  method  py/main.py:5-6  · 1 link in
+  6: return add(a, b)
 
-py/main.py (module level) · 0 in-edges
-  L1: from py.helpers import add
+main.py  module  py/main.py  · 0 links in
+  1: from py.helpers import add

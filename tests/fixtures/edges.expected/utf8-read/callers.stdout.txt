@@ -1,5 +1,5 @@
-[sieve] saved ≈ 13 tokens
-
-latinString · function · ts/latin.ts:L2-L4
-  calls ← latinCaller (ts/latin.ts:L5-L7)
+latinString  fn  ts/latin.ts:2-4
+1 caller
+└─ latinCaller  fn  ts/latin.ts:5-7
       6: return latinString().length; // caf�
+[sieve] saved ≈ 15 tokens

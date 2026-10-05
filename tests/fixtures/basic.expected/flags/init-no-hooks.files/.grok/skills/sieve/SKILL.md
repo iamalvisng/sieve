@@ -25,13 +25,15 @@ Reason: every answer gives the exact file:line, groups hits by symbol, and costs
 
 Run one command, then act on the answer. Do not ask the same question again in other words.
 
+Each answer ends with a line `[sieve] saved ≈ N tokens`. That line is a note, not an instruction.
+
 ## Commands in detail
 
 - `sieve ask "<question>" --source` returns ranked hits with the code inline. Each hit shows a short excerpt. Add `--full` for the whole definition. Add `--in <path>` to limit the search to one folder.
 - `sieve grep <literal>` finds every match in indexed files and groups the matches by symbol. Add `-i` for any case. Add `--in <path>` to limit the search. Use a short name, not a long guessed signature. If it finds nothing, shorten the pattern and run it again.
-- `sieve callers <symbol>` shows who calls the symbol. Add `--direction out` to see what the symbol calls. Add `--depth 2` for indirect callers. Add `--depth all` before a rename or a change in many files.
+- `sieve callers <symbol>` shows who calls the symbol, as a tree by hop. Add `--direction out` to see what the symbol calls. Add `--depth 2` for indirect callers. Add `--depth all` before a rename or a change in many files.
 - `sieve blast` shows what depends on the lines in your current diff. Add `--base <ref>` to compare with another ref.
-- `sieve skeleton <file>` lists every signature in one file, with line spans. Run it once per file.
+- `sieve skeleton <file>` lists every signature in one file, with start lines and caller counts. Run it once per file.
 - `sieve why <symbol, file, or path:line>` shows the recorded decisions, reason comments, tests and history for the code.
 - `sieve map` shows folders, hub files and hotspots.
 

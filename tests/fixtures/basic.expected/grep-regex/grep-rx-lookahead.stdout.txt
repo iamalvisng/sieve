@@ -1,4 +1,4 @@
-"hit(?=me)" — 1 hits in 1 symbols across 1 files (searched 1 indexed files)
+grep "hit(?=me)" · 1 hit in 1 symbol across 1 file · searched 1 file
 
-src/regex-cases.ts (module level) · 0 in-edges
-  L1: // hitme
+regex-cases.ts  module  src/regex-cases.ts  · 0 links in
+  1: // hitme

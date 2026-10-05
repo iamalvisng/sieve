@@ -1,1 +1,0 @@
-parsing 1/4: src/app.ts                                        parsing 2/4: src/legacy.mjs                                    parsing 3/4: src/util.ts                                       parsing 4/4: src/view.tsx                                      

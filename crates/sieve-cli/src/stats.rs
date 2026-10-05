@@ -12,6 +12,7 @@ use sieve_core::product::product;
 
 use crate::jsonv::Json;
 use crate::query;
+use crate::ui::Ui;
 
 /// Flags for `sieve stats`.
 #[derive(Args, Debug)]
@@ -130,47 +131,78 @@ pub(crate) fn format_dollars(usd: f64) -> String {
     }
 }
 
-/// The text readout (`formatSessionStats`), for a session or for none.
-pub fn format_session_stats(s: Option<&Json>) -> String {
-    let name = product().name;
-    let Some(s) = s else {
-        return format!(
-            "{name} stats: no session recorded yet — use {name} in an agent session, then look again."
-        );
+/// Formats a token count as `950`, `1.5k`, `61.7k`, `214k` or `1.2M`.
+fn short_count(n: u64) -> String {
+    let (div, unit) = match n {
+        0..=999 => return n.to_string(),
+        1_000..=999_999 => (1_000.0, "k"),
+        _ => (1_000_000.0, "M"),
     };
-    let sieve = num(s, "toolReads");
+    let v = n as f64 / div;
+    if v < 100.0 {
+        format!("{:.1}{unit}", (v * 10.0).floor() / 10.0)
+    } else {
+        format!("{}{unit}", v.floor())
+    }
+}
+
+/// The text readout: what sieve saved today and this week, then the
+/// session and its last query when a session exists.
+pub fn format_stats(ui: &Ui, session: Option<&Json>, today: u64, week: u64) -> String {
+    let name = product().name;
+    let mut lines: Vec<String> = Vec::new();
+    if week == 0 {
+        lines.push(ui.dim(&format!(
+            "no saved tokens yet \u{2014} they appear after an agent session uses {name}"
+        )));
+    } else {
+        lines.push(format!(
+            "{} {} {} {} {} {}",
+            ui.fg(&format!("{name} saved")),
+            ui.green(&short_count(today)),
+            ui.fg("tokens today"),
+            ui.dim("\u{b7}"),
+            ui.green(&short_count(week)),
+            ui.fg("this week"),
+        ));
+    }
+    let Some(s) = session else {
+        return lines.join("\n");
+    };
+    let reads = num(s, "toolReads");
     let source = num(s, "sourceReads");
     let saved = num(s, "savedTokens");
-    let total = sieve + source;
-    let mix = if total == 0.0 {
-        "no retrieval yet".to_string()
-    } else {
-        format!("{}% {name}", ((sieve / total) * 100.0).round())
-    };
-    let id = s.get("id").and_then(Json::as_str).unwrap_or("");
-    let mut lines = vec![
-        format!("{name} stats — session {id}"),
-        format!("  {name} reads:   {sieve}"),
-        format!("  source reads:  {source}   (Read / Grep / Glob)"),
-        format!("  mix:           {mix}"),
-        format!("  tokens saved:  ~{}", to_locale_string(saved)),
-    ];
-    let usd = dollars_saved(
-        saved,
-        num(s, "inputCostMicros"),
-        num(s, "inputTokensBilled"),
-    );
-    if let Some(usd) = usd {
-        lines.push(format!("  value saved:   ~{}", format_dollars(usd)));
+    if reads + source + saved > 0.0 {
+        let mix = if reads + source == 0.0 {
+            "no retrieval yet".to_string()
+        } else {
+            format!(
+                "{}% of reads through {name}",
+                ((reads / (reads + source)) * 100.0).round()
+            )
+        };
+        let value = dollars_saved(
+            saved,
+            num(s, "inputCostMicros"),
+            num(s, "inputTokensBilled"),
+        )
+        .map(|usd| format!(" \u{b7} ~{}", format_dollars(usd)))
+        .unwrap_or_default();
+        lines.push(format!(
+            "{} {}",
+            ui.fg("this session"),
+            ui.dim(&format!(
+                "{} tokens saved \u{b7} {mix}{value}",
+                to_locale_string(saved)
+            ))
+        ));
     }
-    // `if (s.lastQuery)`: a non-empty string is the only shape a host
-    // writes. ponytail: a truthy non-string does not print.
     if let Some(q) = s
         .get("lastQuery")
         .and_then(Json::as_str)
         .filter(|q| !q.is_empty())
     {
-        lines.push(format!("  last query:    {q}"));
+        lines.push(format!("{} {}", ui.fg("last query"), ui.dim(q)));
     }
     lines.join("\n")
 }
@@ -302,7 +334,29 @@ pub fn run(args: &StatsArgs, dir_override: Option<&Path>) -> Result<(), String> 
         );
         return Ok(());
     }
-    println!("{}", format_session_stats(session.as_ref()));
+    let report = savings_report(
+        &stats_context_dir(&root),
+        session.as_ref(),
+        crate::telemetry::now_secs(),
+        crate::telemetry::local_offset_secs(),
+    );
+    let tokens = |key: &str| -> u64 {
+        report
+            .iter()
+            .find(|(k, _)| k == key)
+            .and_then(|(_, v)| v.get("tokens"))
+            .and_then(Json::as_f64)
+            .unwrap_or(0.0) as u64
+    };
+    println!(
+        "{}",
+        format_stats(
+            &Ui::stdout(),
+            session.as_ref(),
+            tokens("today"),
+            tokens("last7daysTotal")
+        )
+    );
     Ok(())
 }
 
@@ -340,8 +394,8 @@ mod tests {
         let s = Scratch::new("none");
         assert_eq!(latest_session(&s.0), None);
         assert_eq!(
-            format_session_stats(None),
-            "sieve stats: no session recorded yet — use sieve in an agent session, then look again."
+            format_stats(&Ui::plain(), None, 0, 0),
+            "no saved tokens yet \u{2014} they appear after an agent session uses sieve"
         );
     }
 
@@ -354,8 +408,10 @@ mod tests {
         );
         let session = latest_session(&s.0).expect("session");
         assert_eq!(
-            format_session_stats(Some(&session)),
-            "sieve stats — session x\n  sieve reads:   3\n  source reads:  1   (Read / Grep / Glob)\n  mix:           75% sieve\n  tokens saved:  ~12,345\n  value saved:   ~$0.06\n  last query:    ask bigwidget"
+            format_stats(&Ui::plain(), Some(&session), 123_456, 140_200),
+            "sieve saved 123k tokens today \u{b7} 140k this week\n\
+             this session 12,345 tokens saved \u{b7} 75% of reads through sieve \u{b7} ~$0.06\n\
+             last query ask bigwidget"
         );
         assert!(session.to_pretty().starts_with("{\n  \"id\": \"x\",\n  \"lastQuery\": \"ask bigwidget\",\n  \"perAgentQuery\": {},\n  \"toolReads\": 3,"));
     }
@@ -370,14 +426,22 @@ mod tests {
             "{\n  \"id\": \"x\",\n  \"lastQuery\": null,\n  \"perAgentQuery\": {},\n  \"toolReads\": 0,\n  \"sourceReads\": 0,\n  \"savedTokens\": 0,\n  \"injectedPointers\": [],\n  \"nudges\": 0\n}"
         );
         assert_eq!(
-            format_session_stats(Some(&session)),
-            "sieve stats — session x\n  sieve reads:   0\n  source reads:  0   (Read / Grep / Glob)\n  mix:           no retrieval yet\n  tokens saved:  ~0"
+            format_stats(&Ui::plain(), Some(&session), 0, 0),
+            "no saved tokens yet \u{2014} they appear after an agent session uses sieve"
         );
         s.write("x.json", "{}");
         assert_eq!(
             latest_session(&s.0).expect("session").to_pretty(),
             "{\n  \"id\": \"x\"\n}"
         );
+    }
+
+    #[test]
+    fn short_counts_use_k_and_m() {
+        assert_eq!(short_count(950), "950");
+        assert_eq!(short_count(1_500), "1.5k");
+        assert_eq!(short_count(123_456), "123k");
+        assert_eq!(short_count(1_234_567), "1.2M");
     }
 
     /// A fixture store: two sessions, three days. Pins the report fields.

@@ -1,1 +1,1 @@
-error: option '-d, --depth <n>' argument missing
+sieve: -d, needs a value — see sieve blast --help

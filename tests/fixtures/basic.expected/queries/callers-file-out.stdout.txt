@@ -1,5 +1,5 @@
-[sieve] saved ≈ 84 tokens
-
-app.ts · file · src/app.ts:L1-L21
-  imports → util.ts (src/util.ts:L1-L8)
-  imports → zod (unresolved import)
+app.ts  file  src/app.ts:1-21
+calls 2
+├─ util.ts  file  src/util.ts:1-8  · imports
+└─ zod  import  · imports
+[sieve] saved ≈ 85 tokens

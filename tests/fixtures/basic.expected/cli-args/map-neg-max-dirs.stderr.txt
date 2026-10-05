@@ -1,1 +1,1 @@
-✗ --max-dirs must be a positive integer, got "-1"
+sieve: --max-dirs must be a positive integer, got -1 — try --max-dirs 20

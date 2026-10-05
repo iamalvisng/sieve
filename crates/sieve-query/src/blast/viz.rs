@@ -513,6 +513,7 @@ mod tests {
                     span: "L2-L2".to_string(),
                     relation: sieve_core::Relation::Calls,
                     depth: 1,
+                    parent: None,
                 }],
                 from: vec![
                     "src/core.ts".to_string(),

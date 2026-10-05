@@ -1,6 +1,6 @@
-sieve ask — "who calls zzz"  (empty)
+ask  who calls zzz · 0 hits · empty
 
-⚠ structural index: no entries for 'calls' — showing lexical matches; for precise edges try sieve callers 'calls', or sieve grep 'calls' for every reference (loosen the pattern if it returns nothing)
-no matching nodes — try different words, or `sieve build` if sieve/ is empty — scopes here: packages/alpha/ · packages/gamma/ · packages/beta/ · (root)
+⚠ structural index: no entries for 'calls' — showing lexical matches; for exact links try sieve callers 'calls', or sieve grep 'calls' for every reference (loosen the pattern if it returns nothing)
+no matching symbols — try different words, or `sieve build` if sieve/ is empty — scopes here: packages/alpha/ · packages/gamma/ · packages/beta/ · (root)
 
 [sieve] no hits — don't re-ask with new wording; switch tool: `sieve grep "<literal>"` for every occurrence · `sieve skeleton <file>` for a file's full API · `sieve callers <symbol>` for who-uses.

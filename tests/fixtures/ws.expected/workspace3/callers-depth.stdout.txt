@@ -1,13 +1,13 @@
-[sieve] saved ≈ 49 tokens
-
 ## alpha/
-shared · function · src/a.ts:L9-L11
-  calls ← useShared (src/a.ts:L13-L15) [depth 1]
-  calls ← useSharedTwice (src/a.ts:L17-L19) [depth 2]
-
-[sieve] saved ≈ 53 tokens
+shared  fn  src/a.ts:9-11
+1 caller · 2 within 2 hops
+└─ useShared  fn  src/a.ts:13-15
+   └─ useSharedTwice  fn  src/a.ts:17-19
+[sieve] saved ≈ 52 tokens
 
 ## beta/
-shared · function · src/b.ts:L9-L11
-  calls ← useShared (src/b.ts:L13-L15) [depth 1]
-  calls ← useSharedTwice (src/b.ts:L17-L19) [depth 2]
+shared  fn  src/b.ts:9-11
+1 caller · 2 within 2 hops
+└─ useShared  fn  src/b.ts:13-15
+   └─ useSharedTwice  fn  src/b.ts:17-19
+[sieve] saved ≈ 56 tokens

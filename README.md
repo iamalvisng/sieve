@@ -5,11 +5,16 @@
 <p align="center"><img src="assets/banner.svg" alt="Six pixel mascots. Sieve, a kitchen sieve, is the default." width="480"></p>
 
 ```
-$ sieve ask "how does the dev server handle hot module replacement" --source
-sieve ask — "how does the dev server handle hot module replacement"  (lexical)
+$ sieve ask "how does the dev server handle hot module replacement"
+ask  how does the dev server handle hot module replacement · 8 hits
 
-1. [packages/vite/] createServerModuleRunner · function  [symbol]
-   packages/vite/src/node/ssr/runtime/serverModuleRunner.ts:L143-L160
+1  [packages/vite/] createServerModuleRunner  fn  packages/vite/src/node/ssr/runtime/serverModuleRunner.ts:143-160
+   function createServerModuleRunner( environment: DevEnvironment, options: ServerModuleRunnerOptions = {}, ): ModuleRunner
+
+2  [packages/vite/] handleHMRUpdate  fn  packages/vite/src/node/server/hmr.ts:411-679
+   async function handleHMRUpdate( type: 'create' | 'delete' | 'update', file: string, server: ViteDevServer, ): Promise<void>
+
+3  [packages/vite/] _createServer  fn  packages/vite/src/node/server/index.ts:513-1148
 ...
 ```
 
@@ -78,16 +83,16 @@ The samples are real output from vite. A `...` line marks cut output.
 
 ```
 $ sieve callers handleHMRUpdate --depth 2
-[sieve] saved ≈ 20,269 tokens
-
-handleHMRUpdate · function · packages/vite/src/node/server/hmr.ts:L411-L679
-  calls ← testRestartDuringHotUpdate (packages/vite/src/node/server/__tests__/hmr.spec.ts:L6-L40) [depth 1]
-      34: handleHMRUpdate(
-  calls ← onHMRUpdate (packages/vite/src/node/server/index.ts:L908-L915) [depth 1]
-      913: await handleHMRUpdate(type, file, server)
-  calls ← hmr.spec.ts (packages/vite/src/node/server/__tests__/hmr.spec.ts:L1-L56) [depth 2]
-  calls ← onFileAddUnlink (packages/vite/src/node/server/index.ts:L917-L953) [depth 2]
-...
+handleHMRUpdate  fn  packages/vite/src/node/server/hmr.ts:411-679
+2 callers · 5 within 2 hops
+├─ testRestartDuringHotUpdate  fn  packages/vite/src/node/server/__tests__/hmr.spec.ts:6-40
+│  │  34: handleHMRUpdate(
+│  └─ hmr.spec.ts  file  packages/vite/src/node/server/__tests__/hmr.spec.ts:1-56
+└─ onHMRUpdate  fn  packages/vite/src/node/server/index.ts:908-915
+   │  913: await handleHMRUpdate(type, file, server)
+   ├─ onFileAddUnlink  fn  packages/vite/src/node/server/index.ts:917-953
+   └─ onFileChange  fn  packages/vite/src/node/server/index.ts:955-969
+[sieve] saved ≈ 20,282 tokens
 ```
 
 ### See what a diff breaks before CI does
@@ -96,17 +101,15 @@ handleHMRUpdate · function · packages/vite/src/node/server/hmr.ts:L411-L679
 
 ```
 $ sieve blast
-blast radius — working tree vs HEAD (depth 2)
-  changed: 2 files in 1 area, 1 seed symbol
-  impacted: 3 symbols in 1 area
-
-⚠ handleHMRUpdate — 1 changed file, 1/1 reached by a test
-
-onHMRUpdate — 3 symbols in 1 file
-  calls ← onHMRUpdate (packages/vite/src/node/server/index.ts:L908-L915) [depth 1]
-  calls ← onFileAddUnlink (packages/vite/src/node/server/index.ts:L917-L953) [depth 2]
-  calls ← onFileChange (packages/vite/src/node/server/index.ts:L955-L969) [depth 2]
-...
+your diff changes handleHMRUpdate · 1 symbol in 2 files · 1 of 1 reached by a test · working tree vs HEAD
+3 callers affected within 2 hops
+└─ onHMRUpdate  fn  packages/vite/src/node/server/index.ts:908-915
+   ├─ onFileAddUnlink  fn  packages/vite/src/node/server/index.ts:917-953
+   └─ onFileChange  fn  packages/vite/src/node/server/index.ts:955-969
+1 test suite also references this code (not listed)
+tests for handleHMRUpdate were not updated
+ask for review  翠 (80 commits, 11d ago) · btea (4 commits, 28d ago)
+not indexed  1 file: .gitignore
 ```
 
 ### Read a file as an outline
@@ -115,11 +118,14 @@ onHMRUpdate — 3 symbols in 1 file
 
 ```
 $ sieve skeleton packages/vite/src/node/server/index.ts
-[sieve] saved ≈ 10,282 tokens
-
-sieve skeleton — packages/vite/src/node/server/index.ts
-- L119-L216  interface ServerOptions  interface ServerOptions extends CommonServerOptions
-- L241-L268  interface FileSystemServeOptions  interface FileSystemServeOptions
+packages/vite/src/node/server/hmr.ts · 42 symbols
+    48-56  WsOptions  iface
+    58-88  HmrOptions  iface
+    90-97  HotUpdateOptions  iface
+   99-105  HmrContext  iface
+  107-111  PropagationBoundary  iface
+  113-115  HotChannelClient  iface
+  117-120  HotChannelListener  type  <T extends string = string> = ( data: InferCustomEventPayload<T>, client: HotChannelClient, ) => void
 ...
 ```
 

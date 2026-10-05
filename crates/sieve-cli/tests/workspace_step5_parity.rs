@@ -147,8 +147,8 @@ fn test_p1_56_limit_three_cuts_the_merged_list() {
 #[test]
 fn test_p1_56_limit_zero_gives_empty_mode_and_the_note() {
     let stdout = assert_case("n0");
-    assert!(stdout.contains("(empty)"));
-    assert!(stdout.contains("no matching nodes across 3 workspace repo(s)"));
+    assert!(stdout.contains("\u{b7} empty"));
+    assert!(stdout.contains("no matching symbols across 3 workspace repos"));
 }
 
 /// P1-56: the `--json` result keeps the key order, the fused scores
@@ -222,7 +222,7 @@ fn test_p1_56_in_child_sub_scope() {
 #[test]
 fn test_p1_56_in_bad_sub_prefix_skips_the_child() {
     let stdout = assert_case("in-alpha-nosuch");
-    assert!(stdout.contains("(empty)"));
+    assert!(stdout.contains("\u{b7} empty"));
 }
 
 /// P1-56: an unknown first `--in` segment prints the plain message on
@@ -233,7 +233,7 @@ fn test_p1_56_in_unknown_child_exits_one() {
     assert_matches(GOLDEN, "in-zzz", &output, &copy.path);
     assert_eq!(output.status.code(), Some(1));
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("no workspace repo \"zzz\" - repos: alpha, beta, gamma"));
+    assert!(stderr.contains("no workspace repo named zzz \u{2014} use one of: alpha, beta, gamma"));
     assert!(!stderr.contains('✗'));
 }
 
@@ -266,7 +266,7 @@ fn test_p1_56_structural_child_is_gated_out_without_in() {
 #[test]
 fn test_p1_56_structural_in_child_keeps_the_hits() {
     let stdout = assert_case("structural-in-alpha");
-    assert!(stdout.contains("[alpha/] loadConfig  [caller]"));
+    assert!(stdout.contains("[alpha/] loadConfig  caller"));
     let json = assert_case("structural-in-alpha-json");
     assert!(!json.contains("subject"));
 }
@@ -275,7 +275,7 @@ fn test_p1_56_structural_in_child_keeps_the_hits() {
 #[test]
 fn test_p1_56_concept_pointer_gets_the_child_prefix() {
     let stdout = assert_case("concept");
-    assert!(stdout.contains("   alpha/src/a.ts, alpha/src/b.ts\n"));
+    assert!(stdout.contains("  concept  alpha/src/a.ts, alpha/src/b.ts\n"));
     assert_case("concept-json");
 }
 
@@ -284,7 +284,7 @@ fn test_p1_56_concept_pointer_gets_the_child_prefix() {
 #[test]
 fn test_p1_56_concept_at_a_child_top_locks_first() {
     let stdout = assert_case("concept-gamma");
-    assert!(stdout.contains("1. [gamma/] Config pipeline  [concept]"));
+    assert!(stdout.contains("1  [gamma/] Config pipeline  concept"));
     assert_case("concept-gamma-json");
 }
 
@@ -301,7 +301,7 @@ fn test_p1_56_unbuilt_child_adds_the_coverage_note() {
 #[test]
 fn test_p1_56_in_missing_child_gives_note_and_coverage() {
     let stdout = assert_case("unbuilt-in-beta");
-    assert!(stdout.contains("(empty)"));
+    assert!(stdout.contains("\u{b7} empty"));
     assert!(stdout.contains("2 of 3 workspace repos have graphs"));
 }
 
@@ -311,7 +311,7 @@ fn test_p1_56_in_missing_child_gives_note_and_coverage() {
 #[test]
 fn test_p1_56_baseline_ties_order_by_unpadded_id() {
     let stdout = assert_case("ties");
-    assert!(stdout.contains("1. [gamma/] parseConfigRb · function"));
+    assert!(stdout.contains("1  [gamma/] parseConfigRb  fn"));
 }
 
 /// P1-56: a package scope below a quarter of the best leader across the
@@ -343,7 +343,7 @@ fn test_p1_56_file_slice_is_max_of_four_n_and_twenty() {
 #[test]
 fn test_p1_56_file_gate_reads_the_union_strong_coverage() {
     let stdout = assert_case("filegate");
-    assert!(stdout.contains("1. [beta/] zeta-omega-sigma-rho.ts · file"));
+    assert!(stdout.contains("1  [beta/] zeta-omega-sigma-rho.ts  file"));
     let json = assert_case("filegate-json");
     assert!(json.contains("\"federated\": [\n      \"beta\"\n    ]"));
 }

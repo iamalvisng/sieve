@@ -1,14 +1,11 @@
-sieve ask — "zeta omega sigma rho kappa lambda mu nu xi pi"  (lexical)
+ask  zeta omega sigma rho kappa lambda mu nu xi pi · 3 hits
 
-1. [beta/] zeta-omega-sigma-rho.ts · file  [symbol]
-   beta/src/zeta-omega-sigma-rho.ts
+1  [beta/] zeta-omega-sigma-rho.ts  file  beta/src/zeta-omega-sigma-rho.ts
 
-2. [beta/] zetaOmega · function  [symbol]
-   beta/src/zeta-omega-sigma-rho.ts:L1-L3
+2  [beta/] zetaOmega  fn  beta/src/zeta-omega-sigma-rho.ts:1-3
    function zetaOmega(): number
 
-3. [beta/] betaFour · function  [symbol]
-   beta/src/zeta-omega-sigma-rho.ts:L5-L7
+3  [beta/] betaFour  fn  beta/src/zeta-omega-sigma-rho.ts:5-7
    function betaFour(): number
 
 matched in: beta/ (3)

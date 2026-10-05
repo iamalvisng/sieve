@@ -9,6 +9,6 @@ Arguments:
 Options:
   -y, --yes     actually remove (without this, prints what it would remove and
                 exits)
-  --keep-cache  keep sieve/ and the .gitignore entries — wiring only
+  --keep-cache  keep sieve/ and the .gitignore entries — remove agent files only
   --no-global   leave out-of-repo files alone (~/.codex, ~/.gemini)
   -h, --help    display help for command

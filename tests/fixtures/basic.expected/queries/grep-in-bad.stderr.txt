@@ -1,1 +1,1 @@
-✗ nothing indexed under "nowhere/" (or any path prefix)
+sieve: nothing is indexed under nowhere/ — try sieve map

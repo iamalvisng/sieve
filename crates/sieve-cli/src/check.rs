@@ -17,6 +17,7 @@ use sieve_parse::{CONTAINER_LANGS, GENERIC_LANGS};
 
 use crate::build::resolve_abs;
 use crate::query;
+use crate::ui::Ui;
 
 /// Every extension a build parses, sorted and de-duplicated: the native
 /// tier, the breadth tier and the container tier.
@@ -70,6 +71,7 @@ pub fn run(args: &CheckArgs, dir_override: Option<&Path>) -> Result<(), String> 
         return run_workspace(&root, &context_dir);
     }
 
+    let started = std::time::Instant::now();
     let context = check_context(&root, &context_dir);
     let graph = check_graph(&root, &context_dir).map_err(|e| e.to_string())?;
 
@@ -85,26 +87,49 @@ pub fn run(args: &CheckArgs, dir_override: Option<&Path>) -> Result<(), String> 
         let text = serde_json::to_string_pretty(&payload).map_err(|e| e.to_string())?;
         println!("{text}");
     } else if both_missing {
-        let name = sieve_core::product().name;
-        println!("{name} check: NO GRAPH\n\nNo {name}/ graph found. Run `{name} build` first.");
+        return Err(query::NO_INDEX.to_string());
     } else {
-        if context.missing {
-            println!("deep layer: not built — wiring graph is the source of truth");
-        } else {
+        let ui = Ui::stdout();
+        if !context.missing {
             println!("{}", format_check_report(&context));
         }
         if !graph.missing {
-            println!("\n{}", format_graph_check_report(&graph));
+            println!(
+                "{}",
+                graph_summary(&ui, &graph, &crate::build::elapsed_text(started.elapsed()))
+            );
         }
     }
 
     if exit_failure {
         // `check` has already printed its own report; there is no extra
-        // `✗`-prefixed line to add, so this exits directly instead of
-        // returning an error `main` would print.
+        // error line to add, so this exits directly instead of returning an
+        // error `main` would print.
         std::process::exit(1);
     }
     Ok(())
+}
+
+/// The check result as the reader sees it: a green tick and the elapsed time
+/// when the index is in sync, a red cross and the changed ids when it is
+/// behind.
+fn graph_summary(ui: &Ui, g: &GraphCheck, elapsed: &str) -> String {
+    let report = format_graph_check_report(g);
+    let (first, rest) = report.split_once('\n').unwrap_or((report.as_str(), ""));
+    if g.ok {
+        return format!(
+            "{} {} {}",
+            ui.green("\u{2713}"),
+            ui.fg(first),
+            ui.dim(&format!("\u{b7} checked in {elapsed}"))
+        );
+    }
+    let mut out = format!("{} {}", ui.red("\u{2717}"), ui.fg(first));
+    if !rest.is_empty() {
+        out.push('\n');
+        out.push_str(&ui.dim(rest));
+    }
+    out
 }
 
 /// The workspace `check` (P1-59, P1-60): one line per child, `OK`, `STALE (…)`
@@ -166,6 +191,38 @@ fn unknown_extension_lines(extensions: &[String]) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn graph(ok: bool) -> GraphCheck {
+        GraphCheck {
+            ok,
+            missing: false,
+            added: Vec::new(),
+            removed: Vec::new(),
+            changed: if ok {
+                Vec::new()
+            } else {
+                vec!["a.ts#f".to_string()]
+            },
+            stale: Vec::new(),
+            pending: 0,
+            pending_ids: Vec::new(),
+            nodes: 3,
+            files: 2,
+        }
+    }
+
+    #[test]
+    fn the_check_result_is_one_line_in_sync_and_names_the_ids_when_behind() {
+        let ui = Ui::plain();
+        assert_eq!(
+            graph_summary(&ui, &graph(true), "0.2 s"),
+            "\u{2713} sieve is in sync with the code \u{b7} 2 files \u{b7} checked in 0.2 s"
+        );
+        assert_eq!(
+            graph_summary(&ui, &graph(false), "0.2 s"),
+            "\u{2717} sieve is behind on 1 file \u{2014} run sieve build\n  ~ a.ts#f"
+        );
+    }
 
     #[test]
     fn test_p4_42_unknown_extensions_warn_each_then_list_supported_once() {

@@ -1,7 +1,6 @@
-sieve ask — "quadruple"  (lexical)
+ask  quadruple · 7 hits
 
-1. quadruple · function  [symbol]
-   src/util.ts:L5-L7
+1  quadruple  fn  src/util.ts:5-7
    This function quadruples the input number by applying the double function twice, demonstrating function composition.
 
 ```
@@ -10,8 +9,7 @@ export function quadruple(n: number): number {
 }
 ```
 
-2. run · method  [symbol]
-   src/app.ts:L11-L13
+2  run  method  src/app.ts:11-13
    The run method executes a quadrupling operation on a given number.
 
 ```
@@ -20,8 +18,7 @@ export function quadruple(n: number): number {
   }
 ```
 
-3. double · function  [symbol]
-   src/util.ts:L1-L3
+3  double  fn  src/util.ts:1-3
    This function doubles the input number, effectively providing a simple multiplication operation.
 
 ```
@@ -30,16 +27,13 @@ export function double(n: number): number {
 }
 ```
 
-4. app.ts · file  [symbol]
-   src/app.ts
+4  app.ts  file  src/app.ts
    This file contains the definition of the App class and the main function for application execution.
 
-5. util.ts · file  [symbol]
-   src/util.ts
+5  util.ts  file  src/util.ts
    This file contains utility functions for numerical operations, specifically for doubling and quadrupling a number.
 
-6. App · class  [symbol]
-   src/app.ts:L4-L14
+6  App  class  src/app.ts:4-14
    The App class represents an application with a name and provides functionality to run operations.
 
 ```
@@ -56,8 +50,7 @@ export class App {
 }
 ```
 
-7. main · function  [symbol]
-   src/app.ts:L16-L20
+7  main  fn  src/app.ts:16-20
    The main function serves as the entry point for the application, creating an App instance and invoking its run method.
 
 ```

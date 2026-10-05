@@ -48,7 +48,7 @@ pub fn tool_specs() -> Vec<ToolSpec> {
     let raw: [(&str, &str, &str); 6] = [
         (
             "sieve_find_code",
-            "Query the repo context graph in plain words. Returns ranked nodes with exact file:line spans and the relevant source inlined — usually the full answer, no file reads needed.",
+            "Query the repo context graph in plain words. Returns ranked symbols with exact file:line spans and the relevant source inlined — usually the full answer, no file reads needed.",
             r#"{"type":"object","properties":{"query":{"type":"string","description":"what you want to understand, in plain words"},"limit":{"type":"number","description":"max results (default 5)"},"full":{"type":"boolean","description":"inline whole definition spans instead of the default ≤8-line crux excerpts"},"in":{"type":"string","description":"narrow to nodes under this path prefix, filtered before scoring (segment-aware, like scopeOf)"}},"required":["query"]}"#,
         ),
         (
@@ -63,7 +63,7 @@ pub fn tool_specs() -> Vec<ToolSpec> {
         ),
         (
             "sieve_trace_calls",
-            "Structural edges for a symbol, over call/reference/import/implements/extends ($0, no LLM). Defaults to direct callers (who depends on it). Set direction:\"out\" for callees (what it calls); set depth>1 (or depth:\"all\" for the full closure) to walk transitively for the full blast radius — every source that breaks if it changes. Run before a multi-file refactor to find ALL affected files.",
+            "Structural links for a symbol, over call/reference/import/implements/extends ($0, no LLM). Defaults to direct callers (who depends on it). Set direction:\"out\" for callees (what it calls); set depth>1 (or depth:\"all\" for the full closure) to walk transitively for the full blast radius — every source that breaks if it changes. Run before a multi-file refactor to find ALL affected files.",
             r#"{"type":"object","properties":{"symbol":{"type":"string","description":"bare name, qualified (Class.method), or package-qualified (pkg.Fn); a file path also works"},"direction":{"type":"string","enum":["in","out"],"description":"\"in\" (default) = callers/dependents; \"out\" = callees/dependencies"},"depth":{"description":"transitive walk depth for blast radius (default 1 = direct edges only); pass \"all\" for the full connected closure — every source that would be affected"},"in":{"type":"string","description":"narrow matches to nodes at or under this repo-relative path prefix, e.g. server/src"}},"required":["symbol"]}"#,
         ),
         (
@@ -73,7 +73,7 @@ pub fn tool_specs() -> Vec<ToolSpec> {
         ),
         (
             "sieve_repo_map",
-            "Token-budgeted repo orientation — directory clusters, per-directory hubs, and global hotspots computed purely from the wiring graph ($0, no LLM). Use this to get oriented in an unfamiliar repo before diving into files.",
+            "Token-budgeted repo orientation — directory clusters, per-directory hubs, and global hotspots computed purely from the symbol graph ($0, no LLM). Use this to get oriented in an unfamiliar repo before diving into files.",
             r#"{"type":"object","properties":{"max_dirs":{"type":"number","description":"max directory entries shown, rest counted into dropped (default 16)"}}}"#,
         ),
     ];

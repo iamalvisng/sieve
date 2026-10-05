@@ -1,1 +1,1 @@
-error: missing required argument 'query'
+sieve: ask needs a question — run sieve ask "how does login work"

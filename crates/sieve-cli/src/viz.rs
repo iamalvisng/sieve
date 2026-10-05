@@ -13,6 +13,7 @@ use sieve_query::viz::{export_page, ExportOptions, Viewer, TABS};
 
 use crate::build::resolve_abs;
 use crate::query;
+use crate::ui::Ui;
 use crate::viz_serve;
 
 /// The three viewer files, embedded as they are.
@@ -78,10 +79,10 @@ pub fn parse_tabs(raw: Option<&str>) -> Result<Option<Vec<String>>, String> {
         let got = if bad.is_empty() {
             String::new()
         } else {
-            format!(" — got \"{}\"", bad.join("\", \""))
+            format!(", got \"{}\"", bad.join("\", \""))
         };
         return Err(format!(
-            "--tabs takes a comma-separated subset of {}{got}",
+            "--tabs takes a comma-separated subset of {}{got} \u{2014} try --tabs context",
             TABS.join(", ")
         ));
     }
@@ -99,7 +100,14 @@ fn serve_live(args: &VizArgs, context_dir: PathBuf, repo_name: String) -> Result
         .map_err(|_| format!("invalid port \"{}\"", args.port))?;
     let (listener, port) = viz_serve::bind(port)?;
     let url = format!("http://127.0.0.1:{port}");
-    println!("{} viz → {url}  (ctrl-c to stop)", product().name);
+    let ui = Ui::stdout();
+    println!(
+        "{} {} {} {}",
+        ui.fg(&format!("{} viz serves", product().name)),
+        ui.cyan(&url),
+        ui.dim("\u{b7}"),
+        ui.dim("press ctrl-c to stop")
+    );
     if !args.no_open {
         viz_serve::open_browser(&url);
     }
@@ -126,7 +134,7 @@ pub fn run(args: &VizArgs, dir_override: Option<&Path>) -> Result<(), String> {
     };
     if !context_dir.exists() {
         return Err(format!(
-            "no context graph at {} — run `{name} build` first",
+            "no index at {} \u{2014} run {name} build",
             context_dir.display()
         ));
     }
@@ -152,11 +160,15 @@ pub fn run(args: &VizArgs, dir_override: Option<&Path>) -> Result<(), String> {
     let file = out_dir.join("index.html");
     std::fs::write(&file, &out.page).map_err(|e| e.to_string())?;
     let kb = (out.page.len() as f64 / 1024.0).round();
+    let ui = Ui::stdout();
     println!(
-        "{name} viz → {} ({kb} kB, {} concept nodes, {} code nodes)",
-        file.display(),
-        out.context_nodes,
-        out.code_nodes
+        "{} {} {}",
+        ui.fg(&format!("{name} viz wrote")),
+        ui.cyan(&file.display().to_string()),
+        ui.dim(&format!(
+            "\u{b7} {kb} kB \u{b7} {} concepts \u{b7} {} symbols",
+            out.context_nodes, out.code_nodes
+        ))
     );
     Ok(())
 }
@@ -174,15 +186,15 @@ mod tests {
         );
         assert_eq!(
             parse_tabs(Some("bogus")).expect_err("bad"),
-            "--tabs takes a comma-separated subset of context, code, outline — got \"bogus\""
+            "--tabs takes a comma-separated subset of context, code, outline, got \"bogus\" \u{2014} try --tabs context"
         );
         assert_eq!(
             parse_tabs(Some("x,code,y")).expect_err("bad"),
-            "--tabs takes a comma-separated subset of context, code, outline — got \"x\", \"y\""
+            "--tabs takes a comma-separated subset of context, code, outline, got \"x\", \"y\" \u{2014} try --tabs context"
         );
         assert_eq!(
             parse_tabs(Some(" , ")).expect_err("empty"),
-            "--tabs takes a comma-separated subset of context, code, outline"
+            "--tabs takes a comma-separated subset of context, code, outline \u{2014} try --tabs context"
         );
     }
 }

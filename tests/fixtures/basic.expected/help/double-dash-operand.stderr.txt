@@ -1,1 +1,1 @@
-error: unknown command 'foo'
+sieve: no command named foo — see sieve --help

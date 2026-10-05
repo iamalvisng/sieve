@@ -1,5 +1,5 @@
-//! The savings header: token estimates and the "tokens saved" line every
-//! retrieval command prepends to its output (P3-34 to P3-39).
+//! The savings line: token estimates and the "saved" line every retrieval
+//! command puts last in its output (P3-34 to P3-39).
 
 use std::collections::HashSet;
 
@@ -109,9 +109,22 @@ pub fn savings_line(name: &str, body: &str, saved: Option<&Savings>) -> String {
     sieve_header(name, delta)
 }
 
-/// Renders `body` with the savings line prepended as a header.
+/// Adds the savings `line` as the last line of `text`.
 ///
-/// `name` is the product name the header opens with, in `[name]`.
+/// `text` keeps its own final newline, if it has one. The result always
+/// ends with one newline after `line`, so a reader finds the marker on the
+/// last line.
+pub fn append_line(text: &str, line: &str) -> String {
+    if text.ends_with('\n') {
+        format!("{text}{line}\n")
+    } else {
+        format!("{text}\n{line}\n")
+    }
+}
+
+/// Renders `body` with the savings line as the last line.
+///
+/// `name` is the product name the line opens with, in `[name]`.
 ///
 /// Returns `body` unchanged when the savings line is empty.
 pub fn with_savings(name: &str, body: &str, saved: Option<&Savings>) -> String {
@@ -119,10 +132,22 @@ pub fn with_savings(name: &str, body: &str, saved: Option<&Savings>) -> String {
     if line.is_empty() {
         body.to_string()
     } else {
-        format!("{line}\n\n{body}")
+        append_line(body, &line)
     }
 }
 
+/// [`with_savings`] for a `body` with no final newline. The result ends
+/// with exactly one newline, with or without the savings line.
+pub fn with_savings_nl(name: &str, body: &str, saved: Option<&Savings>) -> String {
+    let text = with_savings(name, body, saved);
+    if text.ends_with('\n') {
+        text
+    } else {
+        format!("{text}\n")
+    }
+}
+
+/// The part of a rendered `ask` output that the savings line measures.
 /// The part of a rendered `ask` output that the savings line measures.
 ///
 /// The savings line measures `body`: the joined lines,
@@ -155,6 +180,34 @@ mod tests {
         assert_eq!(
             ask_pack_region("sieve", "sieve ask — \"x\"  (lexical)\n\n1. a\n"),
             "sieve ask — \"x\"  (lexical)\n\n1. a"
+        );
+    }
+
+    #[test]
+    fn with_savings_nl_ends_with_one_newline_either_way() {
+        let saved = Savings {
+            baseline_chars: 229_476,
+            files: 14,
+        };
+        let body = "x".repeat(40);
+        let text = with_savings_nl("sieve", &body, Some(&saved));
+        assert_eq!(
+            text.lines().last(),
+            Some("[sieve] saved \u{2248} 57,359 tokens")
+        );
+        assert!(text.ends_with("tokens\n"));
+        assert_eq!(with_savings_nl("sieve", "a", None), "a\n");
+    }
+
+    #[test]
+    fn append_line_puts_the_saving_on_the_last_line() {
+        assert_eq!(
+            append_line("a\nb\n", "[sieve] saved"),
+            "a\nb\n[sieve] saved\n"
+        );
+        assert_eq!(
+            append_line("a\nb", "[sieve] saved"),
+            "a\nb\n[sieve] saved\n"
         );
     }
 

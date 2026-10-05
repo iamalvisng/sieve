@@ -1,1 +1,1 @@
-✗ invalid pattern "a**": Invalid regular expression: /a**/: Nothing to repeat
+sieve: invalid pattern "a**": Invalid regular expression: /a**/: Nothing to repeat — fix the pattern, or add --fixed

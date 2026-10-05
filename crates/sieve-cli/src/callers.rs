@@ -138,6 +138,8 @@ fn run_workspace(args: &CallersArgs, root: &Path, context_dir: &Path) -> Result<
         |graph, body, paths| {
             let saved = savings_for(graph, paths);
             with_savings(sieve_core::product().name, body, saved.as_ref())
+                .trim_end_matches('\n')
+                .to_string()
         },
     )
     .map_err(|e| e.to_string())?;

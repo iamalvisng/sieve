@@ -15,12 +15,12 @@ The index is a cache. Sieve adds `sieve/` to `.gitignore`. A teammate runs
 ## Spans
 
 Every answer names a symbol and an exact `file:line` span, such as
-`L411-L679`. You can open the span at once.
+`411-679`. You can open the span at once.
 
-## Hubs and in-edges
+## Hubs and links in
 
-An in-edge is a link that points at a symbol. A hub is a symbol with many
-in-edges. `sieve map` lists hubs for each directory.
+A link in is a link that points at a symbol. A hub is a symbol with many
+links in. `sieve map` lists hubs for each directory.
 
 ## Callers and blast radius
 

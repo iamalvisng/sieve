@@ -1,6 +1,6 @@
 Usage: sieve [options] [command]
 
-Index a repo into a symbol graph with call edges, for coding agents.
+Index a repo into a symbol graph with call links, for coding agents.
 
 Options:
   -v, --version                     output the version number
@@ -12,13 +12,13 @@ Commands:
   telemetry [action]                Show that Sieve sends no usage data. The
                                     command records nothing.
   version                           Print the installed version
-  build [options] [dir]             Build sieve/ from your code — wiring graph +
-                                    per-file cards ($0, no key).
+  build [options] [dir]             Build sieve/ from your code — symbol graph +
+                                    per-file pages ($0, no key).
   ask [options] <query> [dir]       Query the sieve/ graph — returns ranked
-                                    nodes + exact file:line, routed to prose or
-                                    wiring ($0, no key)
+                                    symbols + exact file:line, routed to prose or
+                                    code ($0, no key)
   skeleton [options] <file> [dir]   Signatures-only view of one file from the
-                                    wiring graph — the cheapest way to see a
+                                    symbol graph — the cheapest way to see a
                                     file's API surface
   check [options] [dir]             Fail if sieve/ is stale relative to the code
                                     (for CI)
@@ -44,7 +44,7 @@ Commands:
                                     coupling ($0, no LLM)
   map [options] [dir]               Token-budgeted repo orientation — directory
                                     clusters, per-directory hubs, and global
-                                    hotspots from the wiring graph ($0, no LLM)
+                                    hotspots from the symbol graph ($0, no LLM)
   why [options] [symbol] [dir]      Show the decision entries that explain a
                                     symbol
   init [options] [dir]              Wire Sieve into the AI coding agents used

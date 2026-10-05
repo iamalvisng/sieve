@@ -1,6 +1,4 @@
-[sieve] saved ≈ 2,246 tokens
-
-repo map — 39 files · 237 symbols · 160 edges · go, java, kotlin, php, python, r, swift, typescript
+map · 39 files · 237 symbols · 160 links · go, java, kotlin, php, python, r, swift, typescript
 
 kotlin/             3 files · 27 symbols   hubs: FamAWidget (App.kt, 1←), Greeter (App.kt, 1←), helper (Calls.kt, 1←)
 php/                3 files · 26 symbols   hubs: helper (Closures.php, 3←), mk (Closures.php, 2←), Base (Closures.php, 1←)
@@ -10,14 +8,27 @@ scala/              2 files · 16 symbols   hubs: area (Rich.scala, 2←), Greet
 cpp/                2 files · 14 symbols   hubs: famB_run (app.cpp, 1←), get (rich.cpp, 1←), greet (app.cpp, 1←)
 dart/               2 files · 13 symbols   hubs: describe (rich.dart, 1←), speak (rich.dart, 1←)
 java/               2 files · 13 symbols   hubs: App (App.java, 1←), greet (App.java, 1←), Greeter (App.java, 1←)
-ocaml/              1 files · 12 symbols
+ocaml/              1 file · 12 symbols
 c/                  3 files · 11 symbols   hubs: apply (rich.c, 1←), greet (app.c, 1←), twice (rich.c, 1←)
 clojure/            2 files · 9 symbols   hubs: greet (app.clj, 1←), helper (rich.clj, 1←), twice (rich.clj, 1←)
-swift/              1 files · 8 symbols   hubs: App (App.swift, 1←), greet (App.swift, 1←), Greeter (App.swift, 1←)
-zig/                1 files · 7 symbols
+swift/              1 file · 8 symbols   hubs: App (App.swift, 1←), greet (App.swift, 1←), Greeter (App.swift, 1←)
+zig/                1 file · 7 symbols
 nix/                2 files · 6 symbols   hubs: double (rich.nix, 3←), greet (default.nix, 1←), quad (rich.nix, 1←)
-r/                  1 files · 6 symbols   hubs: greet (app.R, 1←)
-ruby/               1 files · 6 symbols   hubs: greet (app.rb, 1←)
+r/                  1 file · 6 symbols   hubs: greet (app.R, 1←)
+ruby/               1 file · 6 symbols   hubs: greet (app.rb, 1←)
 … +7 more directories not shown (raise max-dirs to see more)
 
-hotspots: double · function · nix/rich.nix:L2-L2 · 3←  helper · function · php/Closures.php:L31-L33 · 3←  area · function · scala/Rich.scala:L6-L6 · 2←  mk · method · php/Closures.php:L10-L12 · 2←  new · function · rust/rich.rs:L18-L20 · 2←  App · class · java/App.java:L15-L42 · 1←  App · class · swift/App.swift:L14-L24 · 1←  apply · function · c/rich.c:L24-L26 · 1←  Base · class · php/Closures.php:L9-L13 · 1←  describe · function · dart/rich.dart:L29-L31 · 1←  FamAWidget · class · kotlin/App.kt:L31-L31 · 1←  famB_run · function · cpp/app.cpp:L30-L31 · 1←
+hotspots
+double  fn  nix/rich.nix:2-2  · 3 links in
+helper  fn  php/Closures.php:31-33  · 3 links in
+area  fn  scala/Rich.scala:6-6  · 2 links in
+mk  method  php/Closures.php:10-12  · 2 links in
+new  fn  rust/rich.rs:18-20  · 2 links in
+App  class  java/App.java:15-42  · 1 link in
+App  class  swift/App.swift:14-24  · 1 link in
+apply  fn  c/rich.c:24-26  · 1 link in
+Base  class  php/Closures.php:9-13  · 1 link in
+describe  fn  dart/rich.dart:29-31  · 1 link in
+FamAWidget  class  kotlin/App.kt:31-31  · 1 link in
+famB_run  fn  cpp/app.cpp:30-31  · 1 link in
+[sieve] saved ≈ 2,249 tokens

@@ -1,7 +1,6 @@
-sieve ask — "parse config"  (lexical)
+ask  parse config · 8 hits
 
-1. [alpha/] parseConfigFile · function  [symbol]
-   alpha/src/a.ts:L9-L11
+1  [alpha/] parseConfigFile  fn  alpha/src/a.ts:9-11
    function parseConfigFile(path: string): string
 
 ```
@@ -10,8 +9,7 @@ export function parseConfigFile(path: string): string {
 }
 ```
 
-2. [gamma/] parseConfigRoot · function  [symbol]
-   gamma/src/root.ts:L1-L3
+2  [gamma/] parseConfigRoot  fn  gamma/src/root.ts:1-3
    function parseConfigRoot(text: string): string
 
 ```
@@ -20,8 +18,7 @@ export function parseConfigRoot(text: string): string {
 }
 ```
 
-3. [gamma/packages/x/] parseConfigX · function  [symbol]
-   gamma/packages/x/src/parse-config.ts:L1-L3
+3  [gamma/packages/x/] parseConfigX  fn  gamma/packages/x/src/parse-config.ts:1-3
    function parseConfigX(text: string): string
 
 ```
@@ -30,8 +27,7 @@ export function parseConfigX(text: string): string {
 }
 ```
 
-4. [gamma/packages/y/] configY · function  [symbol]
-   gamma/packages/y/src/parse/y.ts:L1-L3
+4  [gamma/packages/y/] configY  fn  gamma/packages/y/src/parse/y.ts:1-3
    function configY(): number
 
 ```
@@ -40,8 +36,7 @@ export function configY(): number {
 }
 ```
 
-5. [alpha/] configName · function  [symbol]
-   alpha/src/b.ts:L5-L7
+5  [alpha/] configName  fn  alpha/src/b.ts:5-7
    function configName(): string
 
 ```
@@ -50,8 +45,7 @@ export function configName(): string {
 }
 ```
 
-6. [alpha/] parseConfig · function  [symbol]
-   alpha/src/a.ts:L1-L3
+6  [alpha/] parseConfig  fn  alpha/src/a.ts:1-3
    function parseConfig(text: string): string
 
 ```
@@ -60,8 +54,7 @@ export function parseConfig(text: string): string {
 }
 ```
 
-7. [gamma/packages/x/] loadConfigX · function  [symbol]
-   gamma/packages/x/src/parse-config.ts:L5-L7
+7  [gamma/packages/x/] loadConfigX  fn  gamma/packages/x/src/parse-config.ts:5-7
    function loadConfigX(path: string): string
 
 ```
@@ -70,8 +63,7 @@ export function loadConfigX(path: string): string {
 }
 ```
 
-8. [gamma/packages/y/] y.ts · file  [symbol]
-   gamma/packages/y/src/parse/y.ts
+8  [gamma/packages/y/] y.ts  file  gamma/packages/y/src/parse/y.ts
 
 matched in: alpha/ (3) · gamma/packages/x/ (2) · gamma/packages/y/ (2) · gamma/ (1)
 also matched: beta/ — narrow with --in beta/

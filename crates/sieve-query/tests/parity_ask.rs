@@ -105,20 +105,18 @@ struct GoldenBody {
 fn parse_golden_body(stdout: &str) -> GoldenBody {
     let mut pointers = Vec::new();
     let mut footer = Vec::new();
-    let lines: Vec<&str> = stdout.lines().collect();
-    for (i, line) in lines.iter().enumerate() {
-        let trimmed = line.trim_start();
-        if let Some(rest) = numbered_hit_rest(trimmed) {
-            let (scope, _title) = match rest.strip_prefix('[') {
+    for line in stdout.lines() {
+        // A hit row is `<n>  [scope/] name  kind  path:start-end`.
+        if let Some(rest) = numbered_hit_rest(line) {
+            let (scope, row) = match rest.strip_prefix('[') {
                 Some(after) => {
                     let (label, tail) = after.split_once("] ").unwrap_or((after, ""));
                     (Some(label.trim_end_matches('/').to_string()), tail)
                 }
                 None => (None, rest),
             };
-            if let Some(next) = lines.get(i + 1) {
-                pointers.push((next.trim().to_string(), scope));
-            }
+            let pointer = row.rsplit("  ").next().unwrap_or("").trim().to_string();
+            pointers.push((pointer, scope));
         }
         if line.starts_with("matched in:") || line.starts_with("also matched:") {
             footer.push(line.to_string());
@@ -127,10 +125,10 @@ fn parse_golden_body(stdout: &str) -> GoldenBody {
     GoldenBody { pointers, footer }
 }
 
-/// Strips the leading `<n>. ` numbering from a hit's first line, when
-/// present.
+/// Strips the leading `<n>  ` numbering from a hit row, when present. A
+/// snippet line starts with spaces, so it never matches.
 fn numbered_hit_rest(line: &str) -> Option<&str> {
-    let (num, rest) = line.split_once(". ")?;
+    let (num, rest) = line.split_once("  ")?;
     if !num.chars().all(|c| c.is_ascii_digit()) || num.is_empty() {
         return None;
     }
@@ -222,7 +220,7 @@ fn test_p3_01_to_13_ask_hit_order_matches_golden() {
             if stdout_golden
                 .lines()
                 .next()
-                .is_some_and(|l| l.ends_with("(structural)"))
+                .is_some_and(|l| l.ends_with("\u{b7} structural"))
             {
                 if result.mode != AskMode::Structural {
                     failures.push(format!(
@@ -237,7 +235,7 @@ fn test_p3_01_to_13_ask_hit_order_matches_golden() {
             let got_pointers: Vec<(String, Option<String>)> = result
                 .hits
                 .iter()
-                .map(|h| (h.pointer.clone(), h.scope.clone()))
+                .map(|h| (sieve_core::voice::pointer(&h.pointer), h.scope.clone()))
                 .collect();
             let want_pointers: Vec<String> =
                 golden.pointers.iter().map(|(p, _)| p.clone()).collect();
@@ -378,12 +376,12 @@ fn test_p3_05_pagerank_matches_the_sieve_golden_on_basic() {
 /// on every parity fixture (section 11, `basic/ask-source`) — but the
 /// stripping runs anyway, so a future fixture with one still passes.
 fn strip_savings_header(golden: &str) -> &str {
-    if let Some(rest) = golden.strip_prefix("[sieve]") {
-        if let Some(idx) = rest.find("\n\n") {
-            return &rest[idx + 2..];
-        }
+    // The saving is the last line of a golden. Keep the newline before it.
+    let body = golden.strip_suffix('\n').unwrap_or(golden);
+    match body.rfind('\n') {
+        Some(i) if body[i + 1..].starts_with("[sieve] saved") => &golden[..=i],
+        _ => golden,
     }
-    golden
 }
 
 /// A short unified-style diff: the first line where `got` and `want`

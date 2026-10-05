@@ -54,7 +54,7 @@ fn test_f6_build_writes_the_sidecar_and_why_answers() {
     let out = run(&temp.path, &["why", "build_repo"], None);
     assert!(out.status.success(), "{}", text(&out.stderr));
     let body = text(&out.stdout);
-    assert!(body.contains("why build_repo  src/lib.rs:1"), "{body}");
+    assert!(body.contains("build_repo  fn  src/lib.rs:1-3"), "{body}");
     assert!(body.contains("docs/decisions/LEDGER.md:"), "{body}");
     assert!(body.contains("build takes a lock"), "{body}");
     assert!(body.contains("Code anchor"), "{body}");
@@ -273,7 +273,7 @@ fn mask_shas(s: &str) -> String {
         .join(" ")
 }
 
-const ROWS_GOLDEN: &str = "why build_repo  src/lib.rs:1
+const ROWS_GOLDEN: &str = "build_repo  fn  src/lib.rs:1-9
 decision  docs/decisions/LEDGER.md:3  2026-10-01, build takes a lock
           link: Code anchor
 comment  src/lib.rs:2  SAFETY: the lock is held here.

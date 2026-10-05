@@ -1,2 +1,1 @@
-error: unknown option '--jsn'
-(Did you mean --json?)
+sieve: ask has no --jsn option — did you mean --json, or see sieve ask --help

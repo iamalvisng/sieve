@@ -72,7 +72,7 @@ fn rename_table_query_output_names_sieve() {
     let ask_result = ask(&graph, index.as_ref(), "double", &opts, &expected_dir).expect("ask runs");
     let ask_rendered = format_ask(&ask_result);
     assert!(
-        ask_rendered.contains("sieve ask —"),
+        ask_rendered.starts_with("ask  double"),
         "rendered ask text: {ask_rendered}"
     );
 
@@ -80,15 +80,15 @@ fn rename_table_query_output_names_sieve() {
     let skeleton_result = skeleton(Some(&graph), "src/util.ts");
     let skeleton_rendered = format_skeleton(&skeleton_result);
     assert!(
-        skeleton_rendered.contains("sieve skeleton —"),
+        skeleton_rendered.starts_with("src/util.ts \u{b7} "),
         "rendered skeleton text: {skeleton_rendered}"
     );
 
-    // skeleton, with no graph — the "run `<product> build` first" note.
+    // skeleton, with no graph — the "run <product> build ." text.
     let no_graph_result = skeleton(None, "src/util.ts");
     let no_graph_rendered = format_skeleton(&no_graph_result);
     assert!(
-        no_graph_rendered.contains("run `sieve build` first"),
+        no_graph_rendered.contains("run sieve build ."),
         "rendered skeleton text: {no_graph_rendered}"
     );
 }

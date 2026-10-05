@@ -1,1 +1,1 @@
-error: unknown option '-1E5'
+sieve: grep has no -1E5 option — see sieve grep --help

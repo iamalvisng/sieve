@@ -1,1 +1,1 @@
-error: missing required argument 'symbol'
+sieve: callers needs a symbol — see sieve callers --help

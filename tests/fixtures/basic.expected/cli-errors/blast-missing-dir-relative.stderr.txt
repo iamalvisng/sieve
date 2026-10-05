@@ -1,1 +1,1 @@
-✗ Directory not found: x
+sieve: directory not found: x — check the --dir path

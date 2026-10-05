@@ -1,7 +1,5 @@
-blast radius — working tree vs HEAD (depth 1)
-  changed: 2 files in 1 area, 2 seed symbols
-  impacted: 0 symbols in 0 areas
-
-✗ extra — 2 changed files, 0/2 reached by a test
-
-no indexed dependents outside the changed files themselves
+your diff changes extra, newFn · 2 symbols in 2 files · 0 of 2 reached by a test · working tree vs HEAD
+  extra  fn  ts/derived.ts:13-13
+  newFn  fn  ts/newfile.ts:1-3
+no callers affected outside the changed files
+no test reaches extra

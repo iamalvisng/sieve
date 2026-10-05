@@ -1,2 +1,1 @@
-error: unknown option '--versio'
-(Did you mean --version?)
+sieve: sieve has no --versio option — did you mean --version, or see sieve --help

@@ -1,4 +1,4 @@
-✓ wiring: 11 nodes (8 function, 3 file), 8 edges, 3 cards [typescript]
-  parsed: 3 of 3 files (0 replayed from cache)
-  → <TMP>/sieve
-  <TMP>/sieve/ is git-ignored (added automatically) — a local cache; teammates run `sieve build` to get their own.
+sieve sifted repo in 0.0 s
+3 files → 11 symbols · 8 links
+typescript
+index in <TMP>/sieve · git-ignored · stays on this machine

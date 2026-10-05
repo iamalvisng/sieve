@@ -1,15 +1,10 @@
-blast radius — working tree vs HEAD (depth 1)
-  changed: 3 files in 2 areas, 3 seed symbols
-  impacted: 2 symbols in 2 areas
-
-✗ extra — 2 changed files, 0/2 reached by a test
-✗ helper — 1 changed file, 0/1 reached by a test
-
-alpha — 1 symbol in 1 file
-  calls ← alpha (lib/alpha.ts:L2-L2) [depth 1]
-
-Zulu — 1 symbol in 1 file
-  calls ← Zulu (lib2/zulu.ts:L2-L2) [depth 1]
-
-who to tag
-  Other Person — 3 areas · 3 commits, last 1mo ago
+your diff changes extra, newFn and 1 more · 3 symbols in 3 files · 0 of 3 reached by a test · working tree vs HEAD
+  extra  fn  ts/derived.ts:13-13
+  newFn  fn  ts/newfile.ts:1-3
+  helper  fn  util/helper.ts:1-3
+2 callers affected
+├─ alpha  fn  lib/alpha.ts:2-2
+└─ Zulu  fn  lib2/zulu.ts:2-2
+no test reaches extra
+no test reaches helper
+ask for review  Other Person (3 commits, 1mo ago)

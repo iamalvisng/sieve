@@ -1,1 +1,1 @@
-✗ invalid pattern "a)": Invalid regular expression: /a)/: Unmatched ')'
+sieve: invalid pattern "a)": Invalid regular expression: /a)/: Unmatched ')' — fix the pattern, or add --fixed

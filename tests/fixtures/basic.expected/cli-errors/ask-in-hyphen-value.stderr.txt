@@ -1,1 +1,1 @@
-✗ nothing indexed under "-h/" (or any path prefix)
+sieve: nothing is indexed under -h/ — try sieve map

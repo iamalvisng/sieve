@@ -1,1 +1,1 @@
-error: option '--tabs <list>' argument missing
+sieve: --tabs needs a value — see sieve viz --help

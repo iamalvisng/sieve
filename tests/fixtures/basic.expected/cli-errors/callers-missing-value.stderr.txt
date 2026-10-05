@@ -1,1 +1,1 @@
-error: option '--direction <in|out>' argument missing
+sieve: --direction needs a value — see sieve callers --help

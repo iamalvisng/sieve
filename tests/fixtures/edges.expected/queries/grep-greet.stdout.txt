@@ -1,15 +1,14 @@
-[sieve] saved ≈ 76 tokens
+grep "greet" · 4 hits in 4 symbols across 3 files · searched 12 files
 
-"greet" — 4 hits in 4 symbols across 3 files (searched 12 indexed files)
+Base.greet  method  ts/base.ts:6-8  · 1 link in
+  6: greet(): string {
 
-Base.greet · method · ts/base.ts:L6-L8 · 1 in-edges
-  L6: greet(): string {
+outer  fn  ts/calls.ts:7-19  · 1 link in
+  11: b.greet();
 
-outer · function · ts/calls.ts:L7-L19 · 1 in-edges
-  L11: b.greet();
+Circle.area  method  ts/derived.ts:4-6  · 1 link in
+  5: return this.greet().length;
 
-Circle.area · method · ts/derived.ts:L4-L6 · 1 in-edges
-  L5: return this.greet().length;
-
-Circle.describe · method · ts/derived.ts:L8-L10 · 0 in-edges
-  L9: return super.greet();
+Circle.describe  method  ts/derived.ts:8-10  · 0 links in
+  9: return super.greet();
+[sieve] saved ≈ 83 tokens

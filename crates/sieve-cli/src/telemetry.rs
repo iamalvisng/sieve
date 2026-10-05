@@ -107,7 +107,7 @@ pub fn run(args: &TelemetryArgs) -> Result<(), String> {
     let known = ["status", "enable", "disable", "debug"];
     if !known.contains(&args.action.as_str()) {
         return Err(format!(
-            "unknown action \"{}\" — expected status, enable, disable, or debug",
+            "unknown action {} \u{2014} use status, enable, disable, or debug",
             args.action
         ));
     }

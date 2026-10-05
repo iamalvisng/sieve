@@ -1,6 +1,6 @@
-[sieve] saved ≈ 68 tokens
-
-util.ts · file · src/util.ts:L1-L8
-  imports ← app.ts (src/app.ts:L1-L21) [depth 1]
-  calls ← run (src/app.ts:L11-L13) [depth 1]
-  calls ← main (src/app.ts:L16-L20) [depth 2]
+util.ts  file  src/util.ts:1-8
+2 callers · 3 within 2 hops
+├─ app.ts  file  src/app.ts:1-21  · imports
+└─ run  method  src/app.ts:11-13
+   └─ main  fn  src/app.ts:16-20
+[sieve] saved ≈ 70 tokens

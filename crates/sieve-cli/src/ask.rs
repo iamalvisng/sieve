@@ -9,7 +9,9 @@ use sieve_core::askindex::{ask_index_path, read_ask_index};
 use sieve_core::workspace;
 use sieve_query::ask::{ask, format_ask, format_ask_json, AskOptions, AskSaved};
 use sieve_query::workspace::{federate_ask, FederateAskOptions};
-use sieve_savings::{ask_pack_region, savings_for, sieve_header, to_tokens, utf16_len};
+use sieve_savings::{
+    append_line, ask_pack_region, savings_for, sieve_header, to_tokens, utf16_len,
+};
 
 use crate::query;
 
@@ -129,11 +131,11 @@ fn source_saved(
 }
 
 /// Renders the text report, with the `ask --source` savings sentence
-/// prepended when the rule in `ask-ranking.md` section 7.9 keeps it.
+/// as the last line when the rule in `ask-ranking.md` section 7.9 keeps it.
 fn render_text(result: &sieve_query::ask::AskResult) -> String {
     let body = format_ask(result);
     match source_savings_line(result, &body) {
-        Some(line) => format!("{line}\n\n{body}"),
+        Some(line) => append_line(&body, &line),
         None => body,
     }
 }
@@ -323,17 +325,17 @@ mod tests {
 
         let rendered = sieve_query::ask::format_ask(&result);
 
-        // Built by hand from `formatAsk`'s rules: the header, a blank line,
-        // then each hit's `"N. title  [kind]"`, its pointer, its fenced
+        // Built by hand from the report rules: the header, a blank line,
+        // then each hit's row `"N  name  kind  path:start-end"`, its fenced
         // `code` block when present, and a blank line after each hit. No
         // scope footer (no `scopes`), no rules. `trimEnd()` then drops the
         // last hit's trailing blank line. This is the exact `body` the
         // `askSavingsLine` measures: header included, nudge excluded (4
         // hits or fewer triggers the nudge, but it is appended after the
         // measurement, so it never counts toward `pack`).
-        let expected = "sieve ask — \"q\"  (lexical)\n\n\
-1. one  [symbol]\n   a.ts:L1-L3\n\n```\nline1\nline2\nline3\n```\n\n\
-2. two  [symbol]\n   b.ts:L1-L1";
+        let expected = "ask  q \u{b7} 2 hits\n\n\
+1  one  symbol  a.ts:1-3\n\n```\nline1\nline2\nline3\n```\n\n\
+2  two  symbol  b.ts:1-1";
 
         assert_eq!(pack_region(&rendered), expected);
     }

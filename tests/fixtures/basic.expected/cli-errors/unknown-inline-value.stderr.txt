@@ -1,2 +1,1 @@
-error: unknown option '--limt=3'
-(Did you mean --limit?)
+sieve: ask has no --limt=3 option — did you mean --limit, or see sieve ask --help

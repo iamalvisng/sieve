@@ -360,7 +360,7 @@ fn test_p1_51_dv7_limit_takes_the_value_then_dv4() {
             stderr.contains(&format!("invalid value '{value}' for '--limit <n>'")),
             "{args:?}: {stderr}"
         );
-        assert_eq!(output.status.code(), Some(2), "{args:?}");
+        assert_eq!(output.status.code(), Some(1), "{args:?}");
     }
 }
 
@@ -413,7 +413,7 @@ fn test_p1_51_removed_model_flags_are_unknown_options() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert_eq!(output.status.code(), Some(1), "{args:?}: {stderr}");
         assert!(
-            stderr.contains("error: unknown option"),
+            stderr.starts_with("sieve: ") && stderr.contains(" option "),
             "{args:?}: {stderr}"
         );
     }

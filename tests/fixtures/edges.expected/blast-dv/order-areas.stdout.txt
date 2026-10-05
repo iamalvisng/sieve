@@ -1,9 +1,9 @@
-blast radius — working tree vs HEAD (depth 1)
-  changed: 4 files in 3 areas, 4 seed symbols
-  impacted: 0 symbols in 0 areas
-
-✗ extra — 2 changed files, 0/2 reached by a test
-✗ alpha — 1 changed file, 0/1 reached by a test
-✗ Zulu — 1 changed file, 0/1 reached by a test
-
-no indexed dependents outside the changed files themselves
+your diff changes alpha, Zulu and 2 more · 4 symbols in 4 files · 0 of 4 reached by a test · working tree vs HEAD
+  alpha  fn  lib/alpha.ts:1-1
+  Zulu  fn  lib2/zulu.ts:1-1
+  extra  fn  ts/derived.ts:13-13
+  newFn  fn  ts/newfile.ts:1-3
+no callers affected outside the changed files
+no test reaches extra
+no test reaches alpha
+no test reaches Zulu

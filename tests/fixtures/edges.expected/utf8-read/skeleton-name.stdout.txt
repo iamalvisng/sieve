@@ -1,2 +1,2 @@
-sieve skeleton — ts/latin-name.ts
-- L1-L3  function caf�Name  function caf�Name(): number
+ts/latin-name.ts · 1 symbol
+1-3  caf�Name  fn  (): number

@@ -1,1 +1,1 @@
-✗ This is a workspace parent. Run this command inside one repo, or give a path under one.
+sieve: this is a workspace parent — run the command inside one repo, or give a path under one

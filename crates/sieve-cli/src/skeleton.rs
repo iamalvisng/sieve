@@ -9,7 +9,7 @@ use serde::Serialize;
 use sieve_core::wiring::Graph;
 use sieve_core::workspace;
 use sieve_query::skeleton::{format_skeleton, skeleton, skeleton_saved_paths};
-use sieve_savings::{savings_for, with_savings};
+use sieve_savings::{savings_for, with_savings_nl};
 
 use crate::query;
 
@@ -76,10 +76,10 @@ fn load_target(
     }
     if let Some(child) = graphs.missing.iter().find(|c| under(c).is_some()) {
         return Err(format!(
-            "No index in {child} yet. Run `sieve build .` there first."
+            "no index in {child} yet \u{2014} run sieve build . there first"
         ));
     }
-    Err("This is a workspace parent. Run `sieve skeleton` inside one repo, or give a path under one.".to_string())
+    Err("this is a workspace parent \u{2014} run sieve skeleton inside one repo, or give a path under one".to_string())
 }
 
 /// Runs `sieve skeleton`: the query prelude, then the lookup, then the
@@ -98,6 +98,10 @@ pub fn run(args: &SkeletonArgs, dir_override: Option<&Path>) -> Result<(), Strin
         return Ok(());
     }
 
+    if result.entries.is_empty() {
+        return Err(miss_message(&file, result.note.as_deref()));
+    }
+
     // `format_skeleton` appends its own trailing newline, but
     // `with_savings(body, saved)` plus a newline measures the savings pack on
     // `body` with no trailing newline, then adds one newline after the
@@ -109,11 +113,26 @@ pub fn run(args: &SkeletonArgs, dir_override: Option<&Path>) -> Result<(), Strin
     let body = rendered.strip_suffix('\n').unwrap_or(&rendered);
     let saved_paths = skeleton_saved_paths(&result);
     let saved = savings_for(&graph, &saved_paths);
-    println!(
+    print!(
         "{}",
-        with_savings(sieve_core::product().name, body, saved.as_ref())
+        with_savings_nl(sieve_core::product().name, body, saved.as_ref())
     );
     Ok(())
+}
+
+/// The error line for a file that has no symbols in the index.
+fn miss_message(file: &str, note: Option<&str>) -> String {
+    let name = sieve_core::product().name;
+    match note {
+        Some(n) if n.starts_with("ambiguous \u{2014} matches: ") => {
+            let list = n.trim_start_matches("ambiguous \u{2014} matches: ");
+            format!("{file} matches more than one file: {list} \u{2014} give the full path")
+        }
+        Some(n) if n.starts_with("no wiring graph") => {
+            format!("no index here yet \u{2014} run {name} build .")
+        }
+        _ => format!("{file} is not in the index \u{2014} check the path, or run {name} build ."),
+    }
 }
 
 /// Prints the result as pretty JSON, with a `saved` key appended when a
@@ -132,7 +151,20 @@ fn print_json(graph: &sieve_core::wiring::Graph, result: &sieve_query::skeleton:
 
 #[cfg(test)]
 mod tests {
+    use super::miss_message;
     use sieve_query::skeleton::SkeletonResult;
+
+    #[test]
+    fn a_file_that_is_not_in_the_index_is_an_error_line() {
+        assert_eq!(
+            miss_message("nope.ts", Some("no definitions indexed for this file")),
+            "nope.ts is not in the index \u{2014} check the path, or run sieve build ."
+        );
+        assert_eq!(
+            miss_message("a.ts", Some("ambiguous \u{2014} matches: x/a.ts, y/a.ts")),
+            "a.ts matches more than one file: x/a.ts, y/a.ts \u{2014} give the full path"
+        );
+    }
 
     #[test]
     fn print_json_attaches_saved_after_entries_and_note() {

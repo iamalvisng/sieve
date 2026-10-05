@@ -1,7 +1,7 @@
-"dou.le" — 2 hits in 2 symbols across 1 files (searched 7 indexed files)
+grep "dou.le" · 2 hits in 2 symbols across 1 file · searched 7 files
 
-double · function · src/util.ts:L1-L3 · 1 in-edges
-  L1: export function double(n: number): number {
+double  fn  src/util.ts:1-3  · 1 link in
+  1: export function double(n: number): number {
 
-quadruple · function · src/util.ts:L5-L7 · 1 in-edges
-  L6: return double(double(n));
+quadruple  fn  src/util.ts:5-7  · 1 link in
+  6: return double(double(n));

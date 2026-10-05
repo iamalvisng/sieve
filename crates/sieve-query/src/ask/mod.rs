@@ -287,8 +287,15 @@ fn scopes_here_clause(labels: &[String]) -> String {
 /// there is more than one scope to name. Matches `grep`'s wording
 /// (`ask-ranking.md` section 8.8).
 fn prefix_not_indexed_message(prefix: &str, scopes: &[String]) -> String {
-    let clause = scopes_here_clause(scopes);
-    format!("nothing indexed under \"{prefix}/\"{clause} (or any path prefix)")
+    let clause = if scopes.len() > 1 {
+        format!(" (scopes here: {})", scopes.join(" \u{b7} "))
+    } else {
+        String::new()
+    };
+    format!(
+        "nothing is indexed under {prefix}/{clause} \u{2014} try {} map",
+        sieve_core::product().name
+    )
 }
 
 /// Every way `ask` can fail.

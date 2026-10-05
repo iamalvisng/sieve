@@ -10,11 +10,11 @@ Arguments:
                         index)
 
 Options:
-  --direction <in|out>  edge direction: "in" = callers (default), "out" =
+  --direction <in|out>  link direction: "in" = callers (default), "out" =
                         callees
   -d, --depth <n>       walk transitively up to N hops for blast radius, or
                         "all" for the full connected closure (default 1)
-  --in <path>           narrow matches to nodes at or under this path prefix
+  --in <path>           narrow matches to symbols at or under this path prefix
   --json                output as JSON
   --no-refresh          skip the freshness check — answer from the graph as-is
   -h, --help            display help for command

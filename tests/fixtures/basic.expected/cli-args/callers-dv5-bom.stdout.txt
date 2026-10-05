@@ -1,7 +1,7 @@
-[sieve] saved ≈ 31 tokens
-
-add · function · py/helpers.py:L1-L2
-  calls ← go (py/bom.py:L1-L1)
-      1: def go(): return add(1, 2)
-  calls ← total (py/main.py:L5-L6)
+add  fn  py/helpers.py:1-2
+2 callers
+├─ go  fn  py/bom.py:1-1
+│     1: def go(): return add(1, 2)
+└─ total  method  py/main.py:5-6
       6: return add(a, b)
+[sieve] saved ≈ 33 tokens

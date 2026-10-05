@@ -19,7 +19,7 @@ pub use build::{
 };
 pub use cache::{CacheEntry, ExtractCache};
 pub use check::{
-    check_context, check_graph, federated_check_text, format_check_report,
+    behind_files, check_context, check_graph, federated_check_text, format_check_report,
     format_graph_check_report, ContentDrift, ContextCheck, GraphCheck, PENDING_SAMPLE,
 };
 pub use container::{container_lang_of, extract_container, ContainerLang, CONTAINER_LANGS};

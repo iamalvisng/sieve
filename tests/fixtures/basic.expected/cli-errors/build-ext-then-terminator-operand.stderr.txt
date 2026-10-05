@@ -1,3 +1,3 @@
 ⚠ -e ".zz": no parser registered for this extension — ignoring it.
   supported: .astro .bb .c .cc .cjs .clj .cljc .cljs .cpp .cs .cts .cxx .dart .ex .exs .go .h .hh .hpp .java .js .jsx .kt .kts .lua .mjs .ml .mli .mts .nix .php .py .pyi .r .rb .rs .sc .scala .sol .svelte .swift .ts .tsx .vue .zig
-ENOENT: no such file or directory, scandir '<TMP>/nodir'
+sieve: directory not found: <TMP>/nodir — check the path, or run sieve build . inside the repo

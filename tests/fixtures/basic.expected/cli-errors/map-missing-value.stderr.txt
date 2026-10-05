@@ -1,1 +1,1 @@
-error: option '--max-dirs <n>' argument missing
+sieve: --max-dirs needs a value — see sieve map --help

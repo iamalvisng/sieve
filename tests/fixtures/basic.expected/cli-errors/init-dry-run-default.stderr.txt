@@ -1,7 +1,7 @@
-would write — this repo:
-  .claude/settings.json          sieve statusline + hook blocks
-  .claude/skills/sieve/SKILL.md  sieve skill
-  .mcp.json                      mcpServers.sieve
+sieve would set up Claude Code in this repo
+  .claude/settings.json          hooks and the status line
+  .claude/skills/sieve/SKILL.md  tells the agent when to use sieve
+  .mcp.json                      the sieve MCP server
 
-nothing was written (--dry-run)
-· skipped agents, adal, cursor, gemini, grok, hermes, antigravity, copilot, kiro, windsurf (no marker in this repo) — add with --agents <name>
+skipped agents, adal, cursor, gemini, grok, hermes, antigravity, copilot, kiro, windsurf (no marker in this repo) — add with --agents <name>
+dry run · nothing written · nothing outside this repo

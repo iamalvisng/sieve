@@ -1,1 +1,1 @@
-error: unknown option '--bad'
+sieve: callers has no --bad option — see sieve callers --help

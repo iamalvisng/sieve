@@ -1,7 +1,6 @@
-[sieve] saved ≈ 25 tokens
-
-sieve skeleton — src/app.ts
-- L4-L14  class App  class App
-- L7-L9  method constructor  constructor(name: string)
-- L11-L13  method run  run(n: number): number
-- L16-L20  function main  function main(): void
+src/app.ts · 4 symbols
+ 4-14  App  class
+  7-9  constructor  method  (name: string)
+11-13  run  method  (n: number): number  · 1 caller
+16-20  main  fn  (): void
+[sieve] saved ≈ 37 tokens

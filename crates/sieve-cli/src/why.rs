@@ -1072,8 +1072,11 @@ fn row_text(refs: &WhyRefs, l: &LinkRec) -> String {
 }
 
 fn node_head(n: &Node) -> String {
-    let line = span_lines(&n.span).map_or(0, |s| s.0);
-    format!("why {}  {}:{}\n", n.name, n.path, line)
+    let kind = format!("{:?}", n.kind).to_lowercase();
+    format!(
+        "{}\n",
+        sieve_core::voice::row(&n.name, &kind, &n.path, Some(&n.span))
+    )
 }
 
 /// The text answer for a list of nodes.
@@ -1788,7 +1791,7 @@ mod tests {
             .find(|n| n.name == "build_repo")
             .expect("node");
         let out = render_text(&refs, "build_repo", &[n], false, None);
-        assert!(out.starts_with("why build_repo  crates/a/src/lib.rs:1\n"));
+        assert!(out.starts_with("build_repo  fn  crates/a/src/lib.rs:1"));
         assert!(out.contains("build takes a lock"), "{out}");
         let walk = g.nodes.iter().find(|n| n.name == "walk").expect("node");
         assert!(render_text(&refs, "walk", &[walk], false, None).contains("SUPERSEDED by"));
@@ -2423,9 +2426,9 @@ mod tests {
             ),
             "{out}"
         );
-        assert!(out.contains("why f1  src/lib.rs:1"), "{out}");
+        assert!(out.contains("f1  fn  src/lib.rs:1"), "{out}");
         assert!(out.contains("decision  docs/decisions/LEDGER.md"), "{out}");
-        assert!(!out.contains("why f2"), "{out}");
+        assert!(!out.contains("f2  fn  "), "{out}");
         assert!(!out.contains("history"), "{out}");
     }
 
@@ -2439,7 +2442,7 @@ mod tests {
             "{out}"
         );
         assert!(!out.contains("file-level  "), "{out}");
-        assert!(!out.contains("why f"), "{out}");
+        assert!(!out.contains("  fn  src/lib.rs"), "{out}");
     }
 
     #[test]
@@ -2488,11 +2491,14 @@ mod tests {
             "{range}"
         );
         assert!(
-            range.contains("why f2") && !range.contains("why f3"),
+            range.contains("f2  fn  ") && !range.contains("f3  fn  "),
             "{range}"
         );
         let rev = report(&s, &g, "`src/lib.rs#f2`, `src/lib.rs#f3`", Some("HEAD"));
-        assert!(rev.contains("why f3") && !rev.contains("why f2"), "{rev}");
+        assert!(
+            rev.contains("f3  fn  ") && !rev.contains("f2  fn  "),
+            "{rev}"
+        );
     }
 
     #[test]
@@ -2504,7 +2510,7 @@ mod tests {
             let sc = Scratch(PathBuf::from(dir));
             let out = report(&sc, &lines_graph(2), "`src/lib.rs#f1`", None);
             std::mem::forget(sc);
-            assert!(out.contains("why f1"), "{out}");
+            assert!(out.contains("f1  fn  "), "{out}");
             return;
         }
         let s = edited_repo("diff-fake", 2, &[1]);
@@ -2611,7 +2617,10 @@ mod tests {
         assert!(text.contains("more: "), "{text}");
         assert_eq!(text.lines().count(), 1 + DIFF_ROWS + 1, "{text}");
         let all = diff_report(&refs, &g, &diff, "w", true, false);
-        assert!(!all.contains("more: ") && all.contains("why f25"), "{all}");
+        assert!(
+            !all.contains("more: ") && all.contains("f25  fn  "),
+            "{all}"
+        );
         let json = diff_report(&refs, &g, &diff, "w", false, true);
         let v: serde_json::Value = serde_json::from_str(&json).expect("json");
         assert_eq!(v["symbols"].as_array().map(Vec::len), Some(25), "{json}");

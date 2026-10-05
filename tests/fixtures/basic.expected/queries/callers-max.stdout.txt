@@ -1,7 +1,7 @@
-[sieve] saved ≈ 58 tokens
-
-double · function · src/util.ts:L1-L3
-  calls ← quadruple (src/util.ts:L5-L7) [depth 1]
-      6: return double(double(n));
-  calls ← run (src/app.ts:L11-L13) [depth 2]
-  calls ← main (src/app.ts:L16-L20) [depth 3]
+double  fn  src/util.ts:1-3
+1 caller · 3 within 3 hops
+└─ quadruple  fn  src/util.ts:5-7
+   │  6: return double(double(n));
+   └─ run  method  src/app.ts:11-13
+      └─ main  fn  src/app.ts:16-20
+[sieve] saved ≈ 63 tokens

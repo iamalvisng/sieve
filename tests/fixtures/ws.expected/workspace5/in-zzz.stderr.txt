@@ -1,1 +1,1 @@
-no workspace repo "zzz" - repos: alpha, beta, gamma
+no workspace repo named zzz — use one of: alpha, beta, gamma

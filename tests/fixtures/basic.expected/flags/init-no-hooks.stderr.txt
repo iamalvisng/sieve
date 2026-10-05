@@ -1,14 +1,16 @@
-✓ graph ready · 21 nodes, 23 edges
-✓ claude        .claude/, .mcp.json
-✓ agents        AGENTS.md
-✓ adal          .adal/skills/sieve/SKILL.md
-✓ cursor        .cursor/rules/sieve.mdc, .cursor/mcp.json +1 more
-✓ gemini        GEMINI.md, .gemini/settings.json
-✓ grok          .grok/skills/sieve/SKILL.md, .grok/config.toml
-✓ hermes        AGENTS.md
-✓ antigravity   AGENTS.md
-✓ copilot       .github/copilot-instructions.md
-✓ kiro          .kiro/steering/sieve.md, .kiro/settings/mcp.json
-✓ windsurf      .windsurf/rules/sieve.md
-· restart your agents so a new session picks up sieve
-· commit .claude/ .mcp.json AGENTS.md .adal/ +7 more to share it — sieve/ stays local and git-ignored
+sieve set up Claude Code, AGENTS.md, AdaL and 8 more in this repo
+graph ready · 21 symbols · 23 links
+Claude Code     .claude/, .mcp.json
+AGENTS.md       AGENTS.md
+AdaL            .adal/skills/sieve/SKILL.md
+Cursor          .cursor/rules/sieve.mdc, .cursor/mcp.json +1 more
+Gemini CLI      GEMINI.md, .gemini/settings.json
+Grok            .grok/skills/sieve/SKILL.md, .grok/config.toml
+Hermes          AGENTS.md
+Antigravity     AGENTS.md
+GitHub Copilot  .github/copilot-instructions.md
+Kiro            .kiro/steering/sieve.md, .kiro/settings/mcp.json
+Windsurf        .windsurf/rules/sieve.md
+restart your agents so a new session picks up sieve
+commit .claude/ .mcp.json AGENTS.md .adal/ +7 more to share it · sieve/ stays local and git-ignored
+done · wrote 17 files in this repo · nothing outside this repo was written

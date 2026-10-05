@@ -85,17 +85,21 @@ fn build_and_commit(repo: &Path, context_dir: &Path) {
     .expect("write_graph should not error");
 }
 
-/// Assembles `sieve check`'s stdout, the way CLI assembly (spec section
-/// 5.5) does: the markdown-layer line, a blank line, the graph report,
-/// one trailing newline.
-fn assemble_stdout(c: &sieve_parse::ContextCheck, g: &sieve_parse::GraphCheck) -> String {
-    let markdown_line = if c.missing {
-        "deep layer: not built — wiring graph is the source of truth".to_string()
+/// Assembles `sieve check`'s stdout, the way the CLI does: a glyph, the
+/// graph report, and the elapsed time, which a test run fixes at `0.0 s`.
+fn assemble_stdout(g: &sieve_parse::GraphCheck) -> String {
+    let report = format_graph_check_report(g);
+    let (first, rest) = report.split_once('\n').unwrap_or((report.as_str(), ""));
+    let rest = if rest.is_empty() {
+        String::new()
     } else {
-        format_check_report(c)
+        format!("\n{rest}")
     };
-    let graph_line = format_graph_check_report(g);
-    format!("{markdown_line}\n\n{graph_line}\n")
+    if g.ok {
+        format!("\u{2713} {first} \u{b7} checked in 0.0 s\n")
+    } else {
+        format!("\u{2717} {first}{rest}\n")
+    }
 }
 
 #[test]
@@ -110,7 +114,7 @@ fn test_p1_33_to_36_p4_42_check_matches_golden() {
 
         let golden_stdout = read_golden(&golden_queries(name, "check.stdout.txt"));
         assert_eq!(
-            assemble_stdout(&c, &g),
+            assemble_stdout(&g),
             golden_stdout,
             "check stdout mismatch for fixture {name}"
         );
@@ -187,7 +191,7 @@ fn test_p1_33_to_36_p4_42_check_matches_golden() {
             bad2,
             "a stale graph must trip the exit-1 rule for fixture {name}"
         );
-        assert!(format_graph_check_report(&g2).starts_with("graph check: STALE"));
+        assert!(format_graph_check_report(&g2).starts_with("sieve is behind on"));
     }
 }
 
@@ -199,11 +203,16 @@ fn test_p4_42_mcp_check_freshness_text_matches_golden() {
 
     let g = check_graph(&repo.path, &context_dir).expect("check_graph should not error");
     let c = check_context(&repo.path, &context_dir);
-    let text = format!(
-        "{}\n\n{}",
-        format_check_report(&c),
+    // The tool text omits the deep-layer part when no manifest exists.
+    let text = if c.missing {
         format_graph_check_report(&g)
-    );
+    } else {
+        format!(
+            "{}\n\n{}",
+            format_check_report(&c),
+            format_graph_check_report(&g)
+        )
+    };
 
     let session_path =
         manifest_dir().join("../../tests/fixtures/basic.expected/mcp/session.stdout.txt");

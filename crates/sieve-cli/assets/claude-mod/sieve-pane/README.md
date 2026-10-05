@@ -20,7 +20,7 @@ You can also set that key by hand.
 `assets/mascots.json` is the source. Run `node scripts/gen-mascots.mjs` to make `hooks/mascots.ts`.
 The pane reacts to the Read, Edit and Write tools, and to Sieve queries made through Bash and MCP.
 The band above the prompt shows, after an Edit, MultiEdit or Write:
-`✎ checkApiKeyRateLimit → affects 6 callers in 2 routes`, in the level color.
+`✎ checkApiKeyRateLimit and 2 more changed → 6 callers affected in 2 routes`, in the level color.
 The saved numbers come from `sieve stats --json`, at most every 30 seconds.
 Try it: run `sieve build`, put `sieve` on PATH, then `claude --plugin-dir <absolute path to this folder>`.
 Run `claude plugin test <this folder>` for the tests. The mod never changes a tool call and makes no model call.

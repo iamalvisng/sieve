@@ -1,1 +1,1 @@
-error: unknown option '-hh'
+sieve: ask has no -hh option — see sieve ask --help

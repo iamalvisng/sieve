@@ -75,13 +75,11 @@ fn parse_grep_query(args: &str) -> ParsedQuery {
 }
 
 fn strip_savings_header(golden: &str) -> &str {
-    if golden.starts_with("[sieve]") {
-        match golden.find("\n\n") {
-            Some(idx) => &golden[idx + 2..],
-            None => golden,
-        }
-    } else {
-        golden
+    // The saving is the last line of a golden. Keep the newline before it.
+    let body = golden.strip_suffix('\n').unwrap_or(golden);
+    match body.rfind('\n') {
+        Some(i) if body[i + 1..].starts_with("[sieve] saved") => &golden[..=i],
+        _ => golden,
     }
 }
 
@@ -143,7 +141,7 @@ fn test_p1_12_to_16_p3_16_to_19_grep_matches_golden() {
 
             if stdout_golden.trim().is_empty() {
                 let last_stderr_line = stderr_golden.lines().last().unwrap_or("");
-                if let Some(want) = last_stderr_line.strip_prefix("✗ ") {
+                if let Some(want) = last_stderr_line.strip_prefix("sieve: ") {
                     // An error case.
                     match result {
                         Ok(_) => failures.push(format!("{fixture}/{id}: expected an error")),

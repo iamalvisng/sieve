@@ -1,7 +1,3 @@
-sieve stats — session x
-  sieve reads:   1
-  source reads:  0   (Read / Grep / Glob)
-  mix:           100% sieve
-  tokens saved:  ~100
-  value saved:   ~<$0.01
-  last query:    grep x
+no saved tokens yet — they appear after an agent session uses sieve
+this session 100 tokens saved · 100% of reads through sieve · ~<$0.01
+last query grep x

@@ -1,7 +1,6 @@
-sieve ask — "parse config"  (lexical)
+ask  parse config · 2 hits
 
-1. [alpha/] parseConfigFile · function  [symbol]
-   alpha/src/a.ts:L9-L11
+1  [alpha/] parseConfigFile  fn  alpha/src/a.ts:9-11
    function parseConfigFile(path: string): string
 
 ```
@@ -9,8 +8,7 @@ sieve ask — "parse config"  (lexical)
 … (crux — full definition at src/a.ts:L9-L11; rerun with --full)
 ```
 
-2. [gamma/] parseConfigRoot · function  [symbol]
-   gamma/src/root.ts:L1-L3
+2  [gamma/] parseConfigRoot  fn  gamma/src/root.ts:1-3
    function parseConfigRoot(text: string): string
 
 ```

@@ -1,1 +1,1 @@
-error: option '-n, --limit <n>' argument missing
+sieve: -n, needs a value — see sieve ask --help

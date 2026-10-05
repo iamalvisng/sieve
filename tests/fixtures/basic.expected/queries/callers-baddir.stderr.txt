@@ -1,1 +1,1 @@
-✗ --direction must be "in" or "out", got "sideways"
+sieve: --direction must be in or out, got sideways — try --direction in

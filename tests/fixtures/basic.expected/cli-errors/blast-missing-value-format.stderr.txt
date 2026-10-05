@@ -1,1 +1,1 @@
-error: option '--format <fmt>' argument missing
+sieve: --format needs a value — see sieve blast --help

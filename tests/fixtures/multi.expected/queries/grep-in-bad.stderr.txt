@@ -1,1 +1,1 @@
-✗ nothing indexed under "nowhere/" — scopes here: packages/alpha/ · packages/gamma/ · packages/beta/ · (root) (or any path prefix)
+sieve: nothing is indexed under nowhere/ (scopes here: packages/alpha/ · packages/gamma/ · packages/beta/ · (root)) — try sieve map

@@ -1662,7 +1662,7 @@ pub fn graph_counts(context_dir: &Path) -> Option<(usize, usize)> {
 /// (a repo where `sieve` exists as a plain file forces the build to fail).
 pub fn epilogue(counts: Option<(usize, usize)>) -> String {
     let counts_suffix = match counts {
-        Some((nodes, edges)) => format!("  {nodes} nodes · {edges} edges"),
+        Some((nodes, edges)) => format!("  {nodes} symbols · {edges} links"),
         None => String::new(),
     };
     let steps = if counts.is_some() {

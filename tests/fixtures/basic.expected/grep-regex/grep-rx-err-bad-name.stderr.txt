@@ -1,1 +1,1 @@
-✗ invalid pattern "(?<1>a)": Invalid regular expression: /(?<1>a)/: Invalid capture group name
+sieve: invalid pattern "(?<1>a)": Invalid regular expression: /(?<1>a)/: Invalid capture group name — fix the pattern, or add --fixed

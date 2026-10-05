@@ -1,1 +1,1 @@
-error: too many arguments for 'check'. Expected 1 argument but got 2: a, b.
+sieve: too many arguments for 'check'. Expected 1 argument but got 2: a, b. — see sieve check --help

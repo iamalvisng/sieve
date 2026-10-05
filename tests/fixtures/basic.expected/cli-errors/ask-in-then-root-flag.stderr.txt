@@ -1,1 +1,1 @@
-error: option '--in <path>' argument missing
+sieve: --in needs a value — see sieve ask --help

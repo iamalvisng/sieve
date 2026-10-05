@@ -1,2 +1,2 @@
 [sieve] refreshed the graph (3 files changed) before answering
-• --export-viz: <TMP>/edges/vizout/index.html (28 kB, 4 areas, 0 code nodes)
+sieve blast wrote <TMP>/edges/vizout/index.html · 28 kB · 4 areas · 0 symbols

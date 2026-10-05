@@ -1,1 +1,1 @@
-✗ unknown agent id(s): -x — valid: agents, adal, cursor, gemini, grok, hermes, antigravity, copilot, kiro, windsurf, claude
+sieve: unknown agent id(s): -x — use one of: agents, adal, cursor, gemini, grok, hermes, antigravity, copilot, kiro, windsurf, claude

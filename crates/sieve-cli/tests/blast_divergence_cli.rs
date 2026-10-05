@@ -246,7 +246,7 @@ fn test_p1_27_blast_no_graph_exits_1() {
 fn test_p3_20_blast_default_depth_is_2() {
     assert_case_matches_golden("depth-default");
     let (out, _, _) = golden("depth-default");
-    assert!(out.contains("(depth 2)") && out.contains("l2 ") && !out.contains("l3 "));
+    assert!(out.contains("within 2 hops") && out.contains("l2  fn") && !out.contains("l3  fn"));
 }
 
 /// P3-22: blast follows in edges only. The seed `newFn` calls `leaf`, and

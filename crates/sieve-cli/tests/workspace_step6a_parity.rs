@@ -53,7 +53,7 @@ fn files(base: &Path) -> BTreeSet<PathBuf> {
 }
 
 const WIRED: &str = "\
-\u{b7} workspace: wiring <TMP> and 2 child repo(s) \u{2014} a, b
+workspace: setting up <TMP> and 2 child repos \u{2014} a, b
 building 2 workspace repos: a, b
 \u{2713} wrote <TMP>/.claude/settings.json
 \u{2713} wrote <TMP>/.claude/skills/sieve/SKILL.md
@@ -85,11 +85,11 @@ fn test_p4_45_init_verbose_at_a_parent_wires_the_parent_then_each_child() {
     let stderr = drop_update_nudge(&mask(&String::from_utf8_lossy(&out.stderr), &copy.path));
     // The skipped-global line is a recorded deviation (ledger 2026-09-16).
     let stderr = stderr.replace(
-        "\u{b7} skipped global hooks under ~ (pass --global to write them)\n",
+        "skipped global hooks under ~ \u{b7} pass --global to write them\n",
         "",
     );
     assert!(stderr.starts_with(WIRED), "{stderr}");
-    assert!(stderr.contains("  |___/_|\\___| \\_/ \\___|  4 nodes \u{b7} 2 edges\n"));
+    assert!(stderr.contains("  |___/_|\\___| \\_/ \\___|  4 symbols \u{b7} 2 links\n"));
 }
 
 /// P4-45, P4-47: the compact default at a parent. One graph line (the
@@ -104,11 +104,13 @@ fn test_p4_45_init_compact_at_a_parent_wires_the_parent_then_each_child() {
     assert_eq!(out.status.code(), Some(0));
     let stderr = drop_update_nudge(&mask(&String::from_utf8_lossy(&out.stderr), &copy.path));
     let want = "\
-\u{b7} workspace: wiring <TMP> and 2 child repo(s) \u{2014} a, b
-\u{2713} graph built
-\u{2713} claude   .claude/, .mcp.json
-\u{b7} restart your agents so a new session picks up sieve
-\u{b7} commit .claude/ .mcp.json to share it \u{2014} sieve/ stays local and git-ignored
+workspace: setting up <TMP> and 2 child repos \u{2014} a, b
+sieve set up Claude Code in this repo
+graph built
+Claude Code  .claude/, .mcp.json
+restart your agents so a new session picks up sieve
+commit .claude/ .mcp.json to share it \u{b7} sieve/ stays local and git-ignored
+done \u{b7} wrote 3 files in this repo \u{b7} nothing outside this repo was written
 ";
     assert_eq!(stderr, want);
     for child in ["a", "b"] {

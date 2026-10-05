@@ -1,1 +1,1 @@
-sieve stats: no session recorded yet — use sieve in an agent session, then look again.
+no saved tokens yet — they appear after an agent session uses sieve

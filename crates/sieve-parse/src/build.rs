@@ -350,6 +350,9 @@ pub struct BuildOptions {
     /// extract cache, so a `sieve check` on a built tree leaves the cache dir
     /// as it found it.
     pub read_only: bool,
+    /// Called after each claimed file with the count done, the total and the
+    /// file path. The CLI uses it to draw its one progress line.
+    pub progress: Option<fn(usize, usize, &str)>,
 }
 
 /// [`build_graph_cached`] with explicit [`BuildOptions`].
@@ -372,6 +375,14 @@ pub fn build_graph_cached_with(
 
     let mut files = collect_files(root, context_dir)?;
     files.retain(|rel| under_only_dirs(&to_slash(rel), &opts.only_dirs));
+    let total = if opts.progress.is_some() {
+        files
+            .iter()
+            .filter(|rel| claim_label(rel, &to_slash(rel)).is_some())
+            .count()
+    } else {
+        0
+    };
     let mut extractor = Extractor::new().map_err(std::io::Error::other)?;
     let mut generic_extractor = GenericExtractor::new().map_err(std::io::Error::other)?;
     let mut nodes = Vec::new();
@@ -394,6 +405,9 @@ pub fn build_graph_cached_with(
             continue;
         };
         claimed_ids.push(id.clone());
+        if let Some(progress) = opts.progress {
+            progress(claimed_ids.len(), total, &id);
+        }
 
         // Every file is read and hashed, every build; only the parse is
         // replayed. A stat may decide whether a query rebuilds; it never
@@ -1524,6 +1538,7 @@ mod tests {
             only_dirs: vec!["src".to_string()],
             no_reuse: false,
             read_only: false,
+            progress: None,
         };
         let report = build_graph_cached_with(&dir.path, &context_dir, &only).expect("build");
         assert_eq!(report.claimed, vec!["src/a.ts".to_string()]);
@@ -1536,6 +1551,7 @@ mod tests {
             only_dirs: Vec::new(),
             no_reuse: true,
             read_only: false,
+            progress: None,
         };
         let report = build_graph_cached_with(&dir.path, &context_dir, &cold).expect("build");
         assert_eq!(report.claimed.len(), 2);

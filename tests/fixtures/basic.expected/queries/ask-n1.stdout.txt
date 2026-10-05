@@ -1,7 +1,6 @@
-sieve ask — "double"  (lexical)
+ask  double · 1 hit
 
-1. double · function  [symbol]
-   src/util.ts:L1-L3
+1  double  fn  src/util.ts:1-3
    function double(n: number): number
 
 [sieve] only 1 hit — don't re-ask with new wording; switch tool: `sieve grep "<literal>"` for every occurrence · `sieve skeleton <file>` for a file's full API · `sieve callers <symbol>` for who-uses.

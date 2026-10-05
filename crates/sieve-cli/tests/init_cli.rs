@@ -676,7 +676,7 @@ fn test_p4_01_init_continues_when_the_build_fails() {
 
     let stderr = String::from_utf8(init_output.stderr).expect("utf-8 stderr");
     assert!(
-        stderr.contains("✗ "),
+        stderr.contains("sieve: "),
         "missing the build's own error line:\n{stderr}"
     );
     assert!(
@@ -902,7 +902,7 @@ fn init_without_global_writes_nothing_under_home() {
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("· skipped global hooks under ~ (pass --global to write them)"),
+        stderr.contains("skipped global hooks under ~ \u{b7} pass --global to write them"),
         "missing the global-skip line:\n{stderr}"
     );
 
@@ -1020,7 +1020,7 @@ fn uninstall_without_global_leaves_home_untouched() {
 
     let stderr = String::from_utf8_lossy(&uninstall_output.stderr);
     assert!(
-        stderr.contains("· skipped global hooks under ~ (pass --global to remove them)"),
+        stderr.contains("skipped global hooks under ~ \u{b7} pass --global to remove them"),
         "missing the uninstall global-skip line:\n{stderr}"
     );
 }
@@ -1051,7 +1051,7 @@ fn uninstall_dry_run_without_global_says_global_hooks_stay() {
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("· global hooks under ~ stay (pass --global to remove them)"),
+        stderr.contains("global hooks under ~ stay \u{b7} pass --global to remove them"),
         "missing the dry-run global-stay line:\n{stderr}"
     );
 
@@ -1692,7 +1692,7 @@ fn test_p4_49_dry_run_removes_nothing_and_plans_no_removal() {
         &["--agents", "claude", "--dry-run"],
     );
     assert!(
-        stderr.contains("would write"),
+        stderr.contains("would set up"),
         "plan text missing:\n{stderr}"
     );
     assert!(
@@ -2222,7 +2222,7 @@ fn test_p4_51_agents_write_the_codex_config_and_opencode_json() {
     let stderr = run_init_in(&local.path, &home.path, &["--agents", "agents"]);
     assert!(!toml.exists(), "HOME file written without --global");
     assert!(local.path.join("opencode.json").is_file());
-    assert!(stderr.contains("· skipped global hooks under ~ (pass --global to write them)"));
+    assert!(stderr.contains("skipped global hooks under ~ \u{b7} pass --global to write them"));
 
     // No opencode dir: no opencode.json.
     let bare = TempDir::new("p4-51-bare-home");
@@ -2390,7 +2390,7 @@ fn test_p1_72_uninstall_report_matches_golden() {
     };
     let before = snapshot_tree(&root);
     let dry = run_uninstall_in(&project.path, &home.path, &["--global"]);
-    let closing = "Dry run — nothing was touched. Re-run with -y to remove.\nEntries marked [machine-wide] affect every project; --no-global skips them.";
+    let closing = "dry run \u{b7} nothing removed \u{b7} run sieve uninstall -y to remove\nentries marked [machine-wide] affect every project \u{b7} --no-global skips them";
     assert_eq!(
         dry,
         format!("{}\n\n{closing}", fill(GOLDEN_UNINSTALL_REPORT))
@@ -2399,7 +2399,7 @@ fn test_p1_72_uninstall_report_matches_golden() {
 
     let done = run_uninstall_in(&project.path, &home.path, &["-y", "--global"]);
     let removed = GOLDEN_UNINSTALL_REPORT.replace("would remove", "removed");
-    let last = "✓ sieve fully removed. `sieve init` re-wires from scratch.";
+    let last = "✓ sieve removed \u{b7} run sieve init to set it up again";
     assert_eq!(done, format!("{}\n\n{last}", fill(&removed)));
     // The user's own content stays.
     let agents = fs::read_to_string(project.path.join("AGENTS.md")).expect("read");
@@ -2411,7 +2411,7 @@ fn test_p1_72_uninstall_report_matches_golden() {
     let empty = TempDir::new("p1-72-empty-project");
     let quiet = TempDir::new("p1-72-empty-home");
     let dry = run_uninstall_in(&empty.path, &quiet.path, &["--no-global"]);
-    let want = "· nothing to remove — no sieve wiring found here\n\nDry run — nothing was touched. Re-run with -y to remove.";
+    let want = "nothing to remove \u{2014} no sieve files found here\n\ndry run \u{b7} nothing removed \u{b7} run sieve uninstall -y to remove";
     assert_eq!(dry, want);
 }
 
@@ -2480,11 +2480,13 @@ fn test_p4_47_init_compact_output() {
         &["--no-build", "--agents", "cursor", "claude"],
     );
     let want = "\
-\u{b7} skipped the graph build \u{2014} run sieve build
-\u{2713} cursor   .cursor/rules/sieve.mdc, .cursor/mcp.json +1 more
-\u{2713} claude   .claude/, .mcp.json
-\u{b7} restart your agents so a new session picks up sieve
-\u{b7} commit .claude/ .mcp.json .cursor/ to share it \u{2014} sieve/ stays local and git-ignored
+sieve set up Cursor, Claude Code in this repo
+graph build skipped \u{2014} run sieve build
+Cursor       .cursor/rules/sieve.mdc, .cursor/mcp.json +1 more
+Claude Code  .claude/, .mcp.json
+restart your agents so a new session picks up sieve
+commit .claude/ .mcp.json .cursor/ to share it \u{b7} sieve/ stays local and git-ignored
+done \u{b7} wrote 6 files in this repo \u{b7} nothing outside this repo was written
 ";
     let lines: String = stderr
         .lines()
@@ -2507,11 +2509,13 @@ fn test_p4_47_init_compact_keeps_the_agents_order() {
         &["--no-build", "--agents", "agents", "claude"],
     );
     let want = "\
-\u{b7} skipped the graph build \u{2014} run sieve build
-\u{2713} agents   AGENTS.md
-\u{2713} claude   .claude/, .mcp.json
-\u{b7} restart your agents so a new session picks up sieve
-\u{b7} commit .claude/ .mcp.json AGENTS.md to share it \u{2014} sieve/ stays local and git-ignored
+sieve set up AGENTS.md, Claude Code in this repo
+graph build skipped \u{2014} run sieve build
+AGENTS.md    AGENTS.md
+Claude Code  .claude/, .mcp.json
+restart your agents so a new session picks up sieve
+commit .claude/ .mcp.json AGENTS.md to share it \u{b7} sieve/ stays local and git-ignored
+done \u{b7} wrote 4 files in this repo \u{b7} nothing outside this repo was written
 ";
     let lines: String = stderr
         .lines()
@@ -2528,12 +2532,17 @@ fn test_p4_47_init_compact_all_agents_lists_claude_first() {
     let project = TempDir::new("p4-47-all-project");
     let home = TempDir::new("p4-47-all-home");
     let stderr = run_init_compact(&project.path, &home.path, &["--no-build", "--all-agents"]);
-    let ids: Vec<&str> = stderr
+    let hosts: Vec<&str> = stderr
         .lines()
-        .filter_map(|l| l.strip_prefix("\u{2713} "))
-        .filter_map(|l| l.split_whitespace().next())
+        .skip(2)
+        .take_while(|l| !l.starts_with("restart your agents"))
+        .filter_map(|l| l.split("  ").next())
         .collect();
-    assert_eq!(&ids[..4], ["claude", "agents", "adal", "cursor"]);
+    assert_eq!(&hosts[..4], ["Claude Code", "AGENTS.md", "AdaL", "Cursor"]);
+    assert!(
+        stderr.starts_with("sieve set up Claude Code, AGENTS.md, AdaL and 8 more in this repo\n"),
+        "{stderr}"
+    );
 }
 
 /// P4-47: `--verbose` brings back the per-file lines and the banner. The
@@ -2562,7 +2571,7 @@ fn test_p4_10_init_compact_reports_a_failed_build() {
         "{stderr}"
     );
     assert!(
-        stderr.contains("\u{2713} claude   .claude/, .mcp.json"),
+        stderr.contains("Claude Code  .claude/, .mcp.json"),
         "{stderr}"
     );
     assert!(stderr.contains("restart your agents"), "{stderr}");
@@ -2580,15 +2589,21 @@ fn test_p4_47_init_compact_output_in_sieve_mode() {
         &["init", "--no-build", "--agents", "claude"],
     );
     assert!(
-        stderr.contains("\u{b7} skipped the graph build \u{2014} run sieve build"),
+        stderr.contains("graph build skipped \u{2014} run sieve build"),
         "{stderr}"
     );
     assert!(
-        stderr.contains("\u{2713} claude   .claude/, .mcp.json"),
+        stderr.contains("Claude Code  .claude/, .mcp.json"),
         "{stderr}"
     );
     assert!(
-        stderr.contains("to share it \u{2014} sieve/ stays local and git-ignored"),
+        stderr.contains("to share it \u{b7} sieve/ stays local and git-ignored"),
+        "{stderr}"
+    );
+    assert!(
+        stderr.ends_with(
+            "done \u{b7} wrote 3 files in this repo \u{b7} nothing outside this repo was written\n"
+        ),
         "{stderr}"
     );
 }

@@ -1,1 +1,1 @@
-error: unknown option '-xyz'
+sieve: ask has no -xyz option — see sieve ask --help

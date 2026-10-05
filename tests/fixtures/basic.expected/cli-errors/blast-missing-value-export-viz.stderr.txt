@@ -1,1 +1,1 @@
-error: option '--export-viz <dir>' argument missing
+sieve: --export-viz needs a value — see sieve blast --help

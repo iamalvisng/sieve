@@ -1,5 +1,5 @@
-[sieve] saved ≈ 15 tokens
-
-total · method · py/main.py:L5-L6
-  calls ← run (py/main.py:L9-L11)
+total  method  py/main.py:5-6
+1 caller
+└─ run  fn  py/main.py:9-11
       11: return calc.total(1, 2)
+[sieve] saved ≈ 16 tokens

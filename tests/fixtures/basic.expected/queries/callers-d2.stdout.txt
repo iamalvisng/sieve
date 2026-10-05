@@ -1,6 +1,6 @@
-[sieve] saved ≈ 20 tokens
-
-add · function · py/helpers.py:L1-L2
-  calls ← total (py/main.py:L5-L6) [depth 1]
-      6: return add(a, b)
-  calls ← run (py/main.py:L9-L11) [depth 2]
+add  fn  py/helpers.py:1-2
+1 caller · 2 within 2 hops
+└─ total  method  py/main.py:5-6
+   │  6: return add(a, b)
+   └─ run  fn  py/main.py:9-11
+[sieve] saved ≈ 22 tokens

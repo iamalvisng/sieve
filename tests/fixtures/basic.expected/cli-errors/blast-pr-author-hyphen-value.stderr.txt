@@ -1,1 +1,1 @@
-✗ could not read a diff in <TMP> — is this a git repository?
+sieve: could not read a diff in <TMP> — run it inside a git repository

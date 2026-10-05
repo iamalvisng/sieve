@@ -1,1 +1,1 @@
-✗ invalid pattern "(?i)a": Invalid regular expression: /(?i)a/: Invalid group
+sieve: invalid pattern "(?i)a": Invalid regular expression: /(?i)a/: Invalid group — fix the pattern, or add --fixed

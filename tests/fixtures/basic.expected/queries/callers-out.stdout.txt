@@ -1,4 +1,4 @@
-[sieve] saved ≈ 15 tokens
-
-quadruple · function · src/util.ts:L5-L7
-  calls → double (src/util.ts:L1-L3)
+quadruple  fn  src/util.ts:5-7
+calls 1
+└─ double  fn  src/util.ts:1-3
+[sieve] saved ≈ 17 tokens

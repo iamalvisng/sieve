@@ -18,6 +18,7 @@ use crate::hosts::{
 };
 use crate::names;
 use crate::pane_mod;
+use crate::ui::Ui;
 
 /// Flags for `sieve init`. `--dry-run` writes nothing, prints the plan on
 /// stderr and exits 0.
@@ -116,15 +117,19 @@ pub fn run(args: &InitArgs, context_dir_override: Option<&Path>) -> Result<(), S
     if args.dry_run {
         let home = home_dir()?;
         let plan = plan_writes(&root, &home, &selected, args, false);
-        eprintln!("{}", format_plan(&plan, &root, &home));
-        print_skipped(args, &selected);
+        let ui = Ui::stderr();
+        let skipped = skipped_line(args, &selected);
+        eprintln!(
+            "{}",
+            format_plan(&ui, &plan, &root, &home, skipped.as_deref())
+        );
         if workspace::is_build_root(&root, &context_dir) {
             for child in workspace::discover_children(&root) {
                 let dir = root.join(&child);
                 let plan = plan_writes(&dir, &home, &selected, args, false);
                 eprintln!(
                     "\n\u{2014} {child}/ (workspace child)\n{}",
-                    format_plan(&plan, &dir, &home)
+                    format_plan(&ui, &plan, &dir, &home, None)
                 );
             }
         }
@@ -141,7 +146,7 @@ pub fn run(args: &InitArgs, context_dir_override: Option<&Path>) -> Result<(), S
     };
     if !children.is_empty() {
         eprintln!(
-            "\u{b7} workspace: wiring {} and {} child repo(s) \u{2014} {}",
+            "workspace: setting up {} and {} child repos \u{2014} {}",
             root.display(),
             children.len(),
             children.join(", ")
@@ -465,7 +470,7 @@ fn wire_target(
     } else if skipped_global {
         say!(
             out,
-            "· skipped global hooks under ~ (pass --global to write them)"
+            "skipped global hooks under ~ \u{b7} pass --global to write them"
         );
     }
 
@@ -757,11 +762,7 @@ fn build_graph_if_missing(root: &Path, context_dir: &Path, no_build: bool) -> Re
     match crate::build::run(&build_args, Some(context_dir)) {
         Ok(()) => Ok(true),
         Err(message) => {
-            if message.starts_with("ENOENT") {
-                eprintln!("{message}");
-            } else {
-                eprintln!("✗ {message}");
-            }
+            crate::ui::print_error(&message);
             Ok(false)
         }
     }
@@ -780,6 +781,30 @@ fn install_claude_global() -> Result<(), String> {
     let mcp_path = home.join(".claude.json");
     hosts::merge_mcp_json(&mcp_path, "mcpServers").map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// What a file that holds the MCP server entry is for.
+const MCP_PURPOSE: &str = "the sieve MCP server";
+
+/// What a hooks file under `HOME` is for.
+const HOOKS_PURPOSE: &str = "hooks for every repo";
+
+/// The name of one agent host, for the reader.
+fn host_label(id: &str) -> &str {
+    match id {
+        "claude" => "Claude Code",
+        "agents" => "AGENTS.md",
+        "adal" => "AdaL",
+        "cursor" => "Cursor",
+        "gemini" => "Gemini CLI",
+        "grok" => "Grok",
+        "hermes" => "Hermes",
+        "antigravity" => "Antigravity",
+        "copilot" => "GitHub Copilot",
+        "kiro" => "Kiro",
+        "windsurf" => "Windsurf",
+        other => other,
+    }
 }
 
 /// One file `init` writes, for the `--dry-run` plan.
@@ -822,9 +847,9 @@ fn plan_writes(
             claude.join("settings.json"),
             false,
             if args.mod_ {
-                "sieve statusline + hook blocks + enabledPlugins.sieve-pane@skills-dir"
+                "hooks, the status line and the pane mod"
             } else {
-                "sieve statusline + hook blocks"
+                "hooks and the status line"
             },
         ));
         out.push(w(
@@ -833,21 +858,21 @@ fn plan_writes(
                 .join(product().skill_dir())
                 .join("SKILL.md"),
             false,
-            "sieve skill",
+            "tells the agent when to use sieve",
         ));
-        out.push(w(root.join(".mcp.json"), false, "mcpServers.sieve"));
+        out.push(w(root.join(".mcp.json"), false, MCP_PURPOSE));
         if args.mod_ {
             for path in pane_mod::owned_paths(root) {
-                out.push(w(path, false, "sieve-pane mod file"));
+                out.push(w(path, false, "the sieve-pane mod"));
             }
         }
         if args.global {
             out.push(w(
                 home.join(".claude").join("settings.json"),
                 true,
-                "SessionStart / UserPromptSubmit / PostToolUse / Stop",
+                HOOKS_PURPOSE,
             ));
-            out.push(w(home.join(".claude.json"), true, "mcpServers.sieve"));
+            out.push(w(home.join(".claude.json"), true, MCP_PURPOSE));
         }
         for row in &mut out {
             row.id = "claude";
@@ -859,9 +884,9 @@ fn plan_writes(
         }
         let first = out.len();
         let what = if host.kind == Kind::Owned {
-            "sieve-owned file"
+            "tells the agent when to use sieve"
         } else {
-            "fenced sieve section"
+            "adds a sieve section"
         };
         out.push(w(root.join(&host.rel_path), false, what));
         // `--no-mcp` skips every host MCP file but Claude's `.mcp.json`, and
@@ -875,7 +900,7 @@ fn plan_writes(
             out.push(w(
                 base.join(target.rel_path),
                 target.under_home,
-                "mcpServers.sieve",
+                MCP_PURPOSE,
             ));
         }
         // Codex's config is global; opencode's is in the repo. Each needs
@@ -883,30 +908,30 @@ fn plan_writes(
         if host.id == "agents" && !no_mcp {
             if args.global {
                 if let Some(path) = hosts::codex_mcp_path(home) {
-                    out.push(w(path, true, "[mcp_servers.sieve]"));
+                    out.push(w(path, true, MCP_PURPOSE));
                 }
             }
             if let Some(path) = hosts::opencode_mcp_path(root, home) {
-                out.push(w(path, false, "mcp.sieve"));
+                out.push(w(path, false, MCP_PURPOSE));
             }
         }
         match host.id {
             "grok" if !no_mcp => out.push(w(
                 root.join(".grok").join("config.toml"),
                 false,
-                "[mcp_servers.sieve]",
+                MCP_PURPOSE,
             )),
             "agents" if args.global && !no_hooks && home.join(".codex").is_dir() => {
                 out.push(w(
                     home.join(".codex").join("hooks.json"),
                     true,
-                    "SessionStart / UserPromptSubmit / PostToolUse / Stop",
+                    HOOKS_PURPOSE,
                 ));
             }
             "cursor" if !no_hooks => out.push(w(
                 root.join(".cursor").join("hooks.json"),
                 false,
-                "postToolUse / afterMCPExecution / sessionEnd",
+                "hooks that count what sieve saves",
             )),
             "antigravity" if args.global => out.push(w(
                 home.join(".gemini")
@@ -914,7 +939,7 @@ fn plan_writes(
                     .join(product().skill_dir())
                     .join("SKILL.md"),
                 true,
-                "sieve skill (shared)",
+                "tells the agent when to use sieve (shared)",
             )),
             _ => {}
         }
@@ -956,6 +981,12 @@ fn fmt_count(n: usize) -> String {
     out
 }
 
+/// A count with commas and its noun: `1 symbol`, `1,204 symbols`.
+fn plural(n: usize, noun: &str) -> String {
+    let s = if n == 1 { "" } else { "s" };
+    format!("{} {noun}{s}", fmt_count(n))
+}
+
 /// Splits the run of digits and commas that starts `text` from the rest.
 /// The count has commas removed. A run with no digit counts as 0.
 fn take_count(text: &str) -> Option<(usize, &str)> {
@@ -971,46 +1002,22 @@ fn take_count(text: &str) -> Option<(usize, &str)> {
     ))
 }
 
-/// The first `<marker><count>` in one line of `text`, and the rest after it.
-fn find_count<'a>(text: &'a str, marker: &str) -> Option<(usize, &'a str)> {
-    let mut from = 0;
-    while let Some(i) = text[from..].find(marker) {
-        let start = from + i + marker.len();
-        if let Some(found) = take_count(&text[start..]) {
-            return Some(found);
-        }
-        from = start;
-    }
-    None
-}
-
-/// Reads the totals out of a build's stdout. It uses two unanchored patterns:
-/// `✓ wiring: N nodes.*?, E edges` on one line, and `parsed: X of Y files`
-/// anywhere.
+/// Reads the totals out of a build's stdout: the line
+/// `N files \u{2192} S symbols \u{b7} L links`. Returns the symbols, the links
+/// and the files. A build that changed nothing prints no such line.
 fn parse_build_summary(stdout: &str) -> Option<(usize, usize, usize)> {
-    let (nodes, edges) = stdout.lines().find_map(|line| {
-        let (nodes, rest) = find_count(line, "\u{2713} wiring: ")?;
-        let mut rest = rest.strip_prefix(" nodes")?;
-        // The lazy `.*?, ` of the pattern: the first `, N edges`.
-        while let Some(i) = rest.find(", ") {
-            rest = &rest[i + 2..];
-            if let Some((edges, tail)) = take_count(rest) {
-                if tail.starts_with(" edges") {
-                    return Some((nodes, edges));
-                }
-            }
-        }
-        None
-    })?;
-    let files = stdout
-        .lines()
-        .find_map(|line| {
-            let (_, rest) = find_count(line, "parsed: ")?;
-            let (files, tail) = take_count(rest.strip_prefix(" of ")?)?;
-            tail.starts_with(" files").then_some(files)
-        })
-        .unwrap_or(0);
-    Some((nodes, edges, files))
+    stdout.lines().find_map(|line| {
+        let (files, rest) = take_count(line.trim_start())?;
+        let rest = rest
+            .strip_prefix(" files \u{2192} ")
+            .or_else(|| rest.strip_prefix(" file \u{2192} "))?;
+        let (symbols, rest) = take_count(rest)?;
+        let rest = rest
+            .strip_prefix(" symbols \u{b7} ")
+            .or_else(|| rest.strip_prefix(" symbol \u{b7} "))?;
+        let (links, rest) = take_count(rest)?;
+        rest.starts_with(" link").then_some((symbols, links, files))
+    })
 }
 
 /// How long the quiet build may run before `init` stops it.
@@ -1100,7 +1107,7 @@ fn build_quiet(ctx: &CompactCtx, no_build: bool) -> QuietBuild {
         .lines()
         .chain(stderr.lines())
         .map(|l| l.trim_end().to_string())
-        .filter(|l| l.trim_start().starts_with(['\u{26a0}', '\u{2717}']))
+        .filter(|l| l.trim_start().starts_with(['\u{26a0}', '\u{2717}']) || l.starts_with("sieve:"))
         .collect();
     if !ok {
         return QuietBuild {
@@ -1209,9 +1216,45 @@ fn compact_writes(rows: &[&PlanWrite], root: &Path, home: &Path) -> String {
     parts.join(" \u{b7} ")
 }
 
-/// Prints the compact `init` report (P4-47): the graph line, the removals, the
-/// warnings, one line per agent, then two epilogue lines. `--verbose` prints
-/// the old per-file lines instead.
+/// The graph line of the compact `init` report.
+fn graph_line(ctx: &CompactCtx, res: &QuietBuild) -> String {
+    let name = product().name;
+    let wiring = ctx.context_dir.join(".graph").join("wiring.json");
+    let has_index = wiring.is_file() || workspace::workspace_path(ctx.context_dir).is_file();
+    if let Some((symbols, links, files)) = res.graph {
+        let from = match files {
+            0 => String::new(),
+            1 => " from 1 file".to_string(),
+            n => format!(" from {} files", fmt_count(n)),
+        };
+        format!(
+            "graph built \u{b7} {} \u{b7} {}{from}",
+            plural(symbols, "symbol"),
+            plural(links, "link")
+        )
+    } else if res.built {
+        "graph built".to_string()
+    } else if res.failed {
+        format!("\u{26a0} the graph build failed \u{2014} run {name} build to see why")
+    } else if let Some((symbols, links)) =
+        graph_counts(ctx.context_dir).filter(|_| !ctx.has_children)
+    {
+        format!(
+            "graph ready \u{b7} {} \u{b7} {}",
+            plural(symbols, "symbol"),
+            plural(links, "link")
+        )
+    } else if has_index {
+        "graph ready".to_string()
+    } else {
+        format!("graph build skipped \u{2014} run {name} build")
+    }
+}
+
+/// Prints the compact `init` report (P4-47): a summary with the small
+/// mascot on a terminal, the graph line, the removals, the warnings, one
+/// line per agent host, two tips, and a last line that says what `init`
+/// wrote. `--verbose` prints the per-file lines instead.
 fn print_compact(
     args: &InitArgs,
     ctx: &CompactCtx,
@@ -1220,45 +1263,10 @@ fn print_compact(
     warnings: Vec<String>,
 ) -> Result<(), String> {
     let name = product().name;
+    let ui = Ui::stderr();
     let res = build_quiet(ctx, args.no_build);
     for m in &res.messages {
         eprintln!("{m}");
-    }
-    let wiring = ctx.context_dir.join(".graph").join("wiring.json");
-    let has_index = wiring.is_file() || workspace::workspace_path(ctx.context_dir).is_file();
-    let graph_line = if let Some((nodes, edges, files)) = res.graph {
-        let from = match files {
-            0 => String::new(),
-            1 => " from 1 file".to_string(),
-            n => format!(" from {} files", fmt_count(n)),
-        };
-        format!(
-            "\u{2713} graph built \u{b7} {} nodes, {} edges{from}",
-            fmt_count(nodes),
-            fmt_count(edges)
-        )
-    } else if res.built {
-        "\u{2713} graph built".to_string()
-    } else if res.failed {
-        format!("\u{26a0} the graph build failed \u{2014} run {name} build to see why")
-    } else if let Some((nodes, edges)) = graph_counts(ctx.context_dir).filter(|_| !ctx.has_children)
-    {
-        format!(
-            "\u{2713} graph ready \u{b7} {} nodes, {} edges",
-            fmt_count(nodes),
-            fmt_count(edges)
-        )
-    } else if has_index {
-        "\u{2713} graph ready".to_string()
-    } else {
-        format!("\u{b7} skipped the graph build \u{2014} run {name} build")
-    };
-    eprintln!("{graph_line}");
-    for id in retracted {
-        eprintln!("- removed {id} \u{2014} agent not selected");
-    }
-    for w in &warnings {
-        eprintln!("{w}");
     }
 
     let home = home_dir()?;
@@ -1270,14 +1278,32 @@ fn print_compact(
     if args.agents.is_empty() {
         ids.sort_by_key(|i| *i != "claude");
     }
-    let width = ids.iter().map(|i| i.len()).max().unwrap_or(0);
-    for id in &ids {
+    let labels: Vec<&str> = ids.iter().map(|id| host_label(id)).collect();
+    let set_up = match labels.len() {
+        0 => "no agent host".to_string(),
+        1..=3 => labels.join(", "),
+        n => format!("{} and {} more", labels[..3].join(", "), n - 3),
+    };
+
+    let mut lines: Vec<String> = vec![
+        format!("{} set up {} in this repo", ui.fg(name), ui.purple(&set_up)),
+        ui.dim(&graph_line(ctx, &res)),
+    ];
+    for id in retracted {
+        lines.push(format!("removed {id} \u{2014} agent not selected"));
+    }
+    lines.extend(warnings.iter().map(|w| ui.yellow(w)));
+
+    let width = labels.iter().map(|l| l.len()).max().unwrap_or(0);
+    for (id, label) in ids.iter().zip(&labels) {
         let rows: Vec<&PlanWrite> = plan.iter().filter(|r| r.id == *id).collect();
         let summary = compact_writes(&rows, ctx.root, &home);
-        eprintln!(
-            "{}",
-            format!("\u{2713} {id:<width$}   {summary}").trim_end()
+        let text = format!(
+            "{}  {}",
+            ui.purple(&format!("{label:<width$}")),
+            ui.cyan(&summary)
         );
+        lines.push(text.trim_end().to_string());
     }
 
     // What to commit: the top-level entries the selected agents wrote.
@@ -1295,98 +1321,157 @@ fn print_compact(
             tops.push(top);
         }
     }
-    eprintln!("\u{b7} restart your agents so a new session picks up sieve");
+    lines.push(ui.dim("restart your agents so a new session picks up sieve"));
     if !tops.is_empty() {
         let more = if tops.len() > 4 {
             format!(" +{} more", tops.len() - 4)
         } else {
             String::new()
         };
-        eprintln!(
-            "\u{b7} commit {}{more} to share it \u{2014} {}/ stays local and git-ignored",
+        lines.push(ui.dim(&format!(
+            "commit {}{more} to share it \u{b7} {}/ stays local and git-ignored",
             tops[..tops.len().min(4)].join(" "),
             product().context_dir_name()
-        );
+        )));
     }
-    print_skipped(args, selected);
+
+    match crate::ui::mascot_rows(ctx.root, ui.depth).filter(|_| !res.failed) {
+        Some(mascot) => eprint!("{}", crate::ui::beside_mascot(&mascot, &lines)),
+        None => lines.iter().for_each(|l| eprintln!("{l}")),
+    }
+    if let Some(line) = skipped_line(args, selected) {
+        eprintln!("{}", ui.dim(&line));
+    }
+
+    let real = plan_writes(ctx.root, &home, selected, args, false);
+    let inside = real.iter().filter(|r| !r.global).count();
+    let outside = real.iter().filter(|r| r.global).count();
+    let files = |n: usize| format!("{n} {}", if n == 1 { "file" } else { "files" });
+    let tail = if outside == 0 {
+        "nothing outside this repo was written".to_string()
+    } else {
+        format!("also wrote {} outside it (--global)", files(outside))
+    };
+    eprintln!(
+        "{}",
+        ui.dim(&format!(
+            "done \u{b7} wrote {} in this repo \u{b7} {tail}",
+            files(inside)
+        ))
+    );
     Ok(())
 }
 
 /// Names the hosts that `--yes` or `--dry-run` left out and how to add them.
-fn print_skipped(args: &InitArgs, selected: &[&str]) {
+fn skipped_line(args: &InitArgs, selected: &[&str]) -> Option<String> {
     if (args.yes || args.dry_run) && args.agents.is_empty() && !args.all_agents && !args.no_agents {
         let skipped: Vec<&str> = agent_ids()
             .into_iter()
             .filter(|id| !selected.contains(id))
             .collect();
         if !skipped.is_empty() {
-            eprintln!(
-                "\u{b7} skipped {} (no marker in this repo) \u{2014} add with --agents <name>",
+            return Some(format!(
+                "skipped {} (no marker in this repo) \u{2014} add with --agents <name>",
                 skipped.join(", ")
-            );
+            ));
         }
     }
+    None
 }
 
-/// The `--dry-run` plan text:
-/// repo writes first, then the out-of-repo writes in their own section.
-/// ponytail: no ANSI dimming, which a TTY could show.
-fn format_plan(writes: &[PlanWrite], root: &Path, home: &Path) -> String {
-    if writes.is_empty() {
-        return "would write \u{2014} nothing (no agents selected)".to_string();
-    }
-    let rows = |global: bool| -> Vec<(String, &str)> {
-        writes
-            .iter()
-            .filter(|p| p.global == global)
-            .map(|p| {
-                let shown = if global {
-                    match p.path.strip_prefix(home) {
-                        Ok(rest) => format!("~/{}", rest.display()),
-                        Err(_) => p.path.display().to_string(),
-                    }
-                } else {
-                    p.path
-                        .strip_prefix(root)
-                        .unwrap_or(&p.path)
-                        .display()
-                        .to_string()
-                };
-                (shown, p.what.as_str())
-            })
-            .collect()
-    };
-    let pad = |rows: &[(String, &str)]| -> Vec<String> {
-        let width = rows
-            .iter()
-            .map(|(p, _)| p.encode_utf16().count())
-            .max()
-            .unwrap_or(0);
-        rows.iter()
-            .map(|(p, what)| {
-                let fill = width - p.encode_utf16().count();
-                format!("  {p}{}  {what}", " ".repeat(fill))
-            })
-            .collect()
-    };
+/// The `--dry-run` plan text: one block per agent host, each file with a
+/// short purpose, then one closing line. The closing line says that nothing
+/// was written, and that nothing outside the repo was written unless
+/// `--global` adds files there.
+fn format_plan(
+    ui: &Ui,
+    writes: &[PlanWrite],
+    root: &Path,
+    home: &Path,
+    skipped: Option<&str>,
+) -> String {
+    let name = product().name;
     let mut lines: Vec<String> = Vec::new();
-    let repo_rows = rows(false);
-    if !repo_rows.is_empty() {
-        lines.push("would write \u{2014} this repo:".to_string());
-        lines.extend(pad(&repo_rows));
+    if writes.is_empty() {
+        lines.push(format!(
+            "{} would set up nothing \u{2014} no agents selected",
+            ui.fg(name)
+        ));
     }
-    let global_rows = rows(true);
-    if !global_rows.is_empty() {
-        if !lines.is_empty() {
-            lines.push(String::new());
+    let mut ids: Vec<&str> = Vec::new();
+    for w in writes {
+        if !ids.contains(&w.id) {
+            ids.push(w.id);
         }
-        lines.push("would write \u{2014} your machine, affects ALL repos:".to_string());
-        lines.extend(pad(&global_rows));
-        lines.push(String::new());
-        lines.push("suppress the out-of-repo writes by leaving out --global".to_string());
     }
+    let shown = |p: &PlanWrite, global: bool| {
+        if global {
+            match p.path.strip_prefix(home) {
+                Ok(rest) => format!("~/{}", rest.display()),
+                Err(_) => p.path.display().to_string(),
+            }
+        } else {
+            p.path
+                .strip_prefix(root)
+                .unwrap_or(&p.path)
+                .display()
+                .to_string()
+        }
+    };
+    for global in [false, true] {
+        for id in &ids {
+            let rows: Vec<(String, &str)> = writes
+                .iter()
+                .filter(|p| p.id == *id && p.global == global)
+                .map(|p| (shown(p, global), p.what.as_str()))
+                .collect();
+            if rows.is_empty() {
+                continue;
+            }
+            if !lines.is_empty() {
+                lines.push(String::new());
+            }
+            let where_ = if global {
+                "on your machine, for every repo (--global)"
+            } else {
+                "in this repo"
+            };
+            let also = if global { "also " } else { "" };
+            lines.push(format!(
+                "{} would {also}set up {} {where_}",
+                ui.fg(name),
+                ui.purple(host_label(id))
+            ));
+            let width = rows
+                .iter()
+                .map(|(p, _)| p.encode_utf16().count())
+                .max()
+                .unwrap_or(0);
+            for (path, what) in rows {
+                let fill = width - path.encode_utf16().count();
+                lines.push(format!(
+                    "  {}{}  {}",
+                    ui.cyan(&path),
+                    " ".repeat(fill),
+                    ui.dim(what)
+                ));
+            }
+        }
+    }
+    let outside = writes.iter().filter(|p| p.global).count();
+    let tail = if outside == 0 {
+        "nothing outside this repo".to_string()
+    } else {
+        format!(
+            "would write {outside} {} outside this repo (--global)",
+            if outside == 1 { "file" } else { "files" }
+        )
+    };
     lines.push(String::new());
-    lines.push("nothing was written (--dry-run)".to_string());
+    if let Some(skipped) = skipped {
+        lines.push(ui.dim(skipped));
+    }
+    lines.push(ui.dim(&format!("dry run \u{b7} nothing written \u{b7} {tail}")));
     lines.join("\n")
 }
 
@@ -1455,7 +1540,7 @@ fn select_hosts(args: &InitArgs, root: &Path) -> Result<Option<Vec<&'static str>
         }
         if !unknown.is_empty() {
             return Err(format!(
-                "unknown agent id(s): {} — valid: {}",
+                "unknown agent id(s): {} \u{2014} use one of: {}",
                 unknown.join(", "),
                 known.join(", ")
             ));
@@ -1723,22 +1808,25 @@ mod tests {
 
     #[test]
     fn test_p4_47_parse_build_summary_reads_the_totals() {
-        let out = "\u{2713} wiring: 21 nodes (5 function, 3 file), 23 edges, 7 cards [ts]\n  parsed: 7 of 7 files (0 replayed from cache)\n";
+        let out =
+            "sieve sifted app in 1.8 s\n7 files \u{2192} 21 symbols \u{b7} 23 links\ntypescript\n";
         assert_eq!(parse_build_summary(out), Some((21, 23, 7)));
         assert_eq!(parse_build_summary("nothing here\n"), None);
     }
 
     #[test]
-    fn test_p4_47_parse_build_summary_matches_golden_patterns() {
-        // Unanchored: text before the marker is fine, and commas group digits.
-        let out = "x \u{2713} wiring: 1,204 nodes (a, b), 2,000 edges\nparsed: 3 of 1,942 files\n";
+    fn test_p4_47_parse_build_summary_reads_commas_and_ignores_other_lines() {
+        let out = "1,942 files \u{2192} 1,204 symbols \u{b7} 2,000 links\n";
         assert_eq!(parse_build_summary(out), Some((1204, 2000, 1942)));
-        // No `parsed:` line gives 0 files.
-        let out = "\u{2713} wiring: 4 nodes, 2 edges\n";
-        assert_eq!(parse_build_summary(out), Some((4, 2, 0)));
-        // A workspace build prints no `wiring:` line.
+        // A build that changed nothing, and a workspace build, print no totals.
         assert_eq!(
-            parse_build_summary("\u{2713} workspace: 2 repos federated\n"),
+            parse_build_summary("sieve is up to date \u{b7} 3 files unchanged \u{b7} 0.1 s\n"),
+            None
+        );
+        assert_eq!(
+            parse_build_summary(
+                "sieve sifted 2 workspace repos \u{b7} index in sieve/workspace.json\n"
+            ),
             None
         );
     }

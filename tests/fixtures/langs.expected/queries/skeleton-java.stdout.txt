@@ -1,14 +1,13 @@
-[sieve] saved ≈ 6 tokens
-
-sieve skeleton — java/App.java
-- L4-L6  interface Greeter  interface Greeter
-- L5-L5  method greet  String greet();
-- L8-L10  enum Level  enum Level
-- L12-L13  struct Point  record Point(int x, int y)
-- L15-L42  class App  class App implements Greeter
-- L18-L20  method App  App(String name)
-- L22-L24  method greet  public String greet()
-- L26-L28  method join  public String join(String... parts)
-- L30-L33  method main  public static void main(String[] args)
-- L35-L37  method famACall  public static void famACall()
-- L39-L41  method famCCall  public static void famCCall()
+java/App.java · 11 symbols
+  4-6  Greeter  iface  · 1 caller
+  5-5  greet  method  String greet();
+ 8-10  Level  enum
+12-13  Point  struct  record Point(int x, int y)
+15-42  App  class  implements Greeter  · 1 caller
+18-20  App  method  (String name)
+22-24  greet  method  String greet()  · 1 caller
+26-28  join  method  String join(String... parts)
+30-33  main  method  void main(String[] args)
+35-37  famACall  method  void famACall()
+39-41  famCCall  method  void famCCall()
+[sieve] saved ≈ 31 tokens

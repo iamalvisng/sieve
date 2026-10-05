@@ -146,7 +146,10 @@ fn format_thousands(n: u64) -> String {
 const MASCOTS: &str = include_str!("../assets/mascots.json");
 
 const SAND: Rgb = (232, 184, 109);
+/// The border color. It gives 2.8:1 on the dark background, so it is for the separator only.
 const DIM: Rgb = (86, 95, 137);
+/// The dim text color, Tokyo Night fg_dark. It gives 7:1 on the dark background.
+const FG_DARK: Rgb = (154, 165, 206);
 const GREEN: Rgb = (158, 206, 106);
 const BLUE: Rgb = (122, 162, 247);
 const TEAL: Rgb = (115, 218, 202);
@@ -206,8 +209,8 @@ struct SieveView<'a> {
     ctx_pct: Option<i64>,
     today: u64,
     week: u64,
-    /// The three mascot rows, or `None` for no mascot.
-    mascot: Option<[String; 3]>,
+    /// The two mascot rows, or `None` for no mascot.
+    mascot: Option<[String; 2]>,
     depth: Depth,
 }
 
@@ -240,14 +243,14 @@ fn mascots() -> Option<&'static Value> {
         .as_ref()
 }
 
-/// Reads one hand-made small frame: 6 pixel rows. A plain downscale of the
-/// large frame loses the eyes and the ears, so the `small` frames in
-/// `mascots.json` are drawn by hand.
-fn small_pixels(name: &str, frame: usize, mascots: &Value) -> Option<Vec<Vec<Option<Rgb>>>> {
+/// Reads one hand-made tiny frame: 4 pixel rows, at most 8 columns. A plain
+/// downscale of the large frame loses the eyes and the ears, so the `tiny`
+/// frames in `mascots.json` are drawn by hand.
+fn tiny_pixels(name: &str, frame: usize, mascots: &Value) -> Option<Vec<Vec<Option<Rgb>>>> {
     let rows = mascots
         .get("mascots")?
         .get(name)?
-        .get("small")?
+        .get("tiny")?
         .get(frame)?
         .as_array()?;
     let palette = mascots.get("palette")?;
@@ -257,19 +260,19 @@ fn small_pixels(name: &str, frame: usize, mascots: &Value) -> Option<Vec<Vec<Opt
         .filter_map(Value::as_str)
         .map(|r| r.chars().map(color_of).collect())
         .collect();
-    Some(px).filter(|p| p.len() == 6)
+    Some(px).filter(|p| p.len() == 4)
 }
 
 /// U+2800 BRAILLE PATTERN BLANK. It is one column wide and is not whitespace,
 /// so Claude Code does not trim it from the start of a status line.
 const BLANK: &str = "\u{2800}";
 
-/// Draws the three terminal rows of the small mascot. A cell with a top
+/// Draws the two terminal rows of the tiny mascot. A cell with a top
 /// and a bottom pixel is an upper half block: the top color is the
 /// foreground and the bottom color is the background. A cell with one
 /// pixel is an upper or a lower half block.
-fn mascot_rows(name: &str, frame: usize, depth: Depth) -> Option<[String; 3]> {
-    let px = small_pixels(name, frame, mascots()?)?;
+fn mascot_rows(name: &str, frame: usize, depth: Depth) -> Option<[String; 2]> {
+    let px = tiny_pixels(name, frame, mascots()?)?;
     let row = |top: &[Option<Rgb>], bottom: &[Option<Rgb>]| -> String {
         top.iter()
             .zip(bottom)
@@ -285,16 +288,12 @@ fn mascot_rows(name: &str, frame: usize, depth: Depth) -> Option<[String; 3]> {
             })
             .collect()
     };
-    Some([
-        row(&px[0], &px[1]),
-        row(&px[2], &px[3]),
-        row(&px[4], &px[5]),
-    ])
+    Some([row(&px[0], &px[1]), row(&px[2], &px[3])])
 }
 
 /// The mascot rows for a config name. `none` gives no mascot. An unknown
 /// name gives the default `sieve` mascot.
-fn mascot_for(name: &str, frame: usize, depth: Depth) -> Option<[String; 3]> {
+fn mascot_for(name: &str, frame: usize, depth: Depth) -> Option<[String; 2]> {
     if name == "none" || depth == Depth::Plain {
         return None;
     }
@@ -414,7 +413,7 @@ fn render_sieve_at(
     })
 }
 
-/// Renders the sieve status line: 3 lines with the mascot on the left.
+/// Renders the sieve status line: 3 lines, with the mascot beside lines 1 and 2.
 fn render_sieve(v: &SieveView) -> String {
     let paint = |c: Rgb, s: &str| {
         if v.depth == Depth::Plain {
@@ -424,13 +423,9 @@ fn render_sieve(v: &SieveView) -> String {
         }
     };
     // Each mascot row has the same width, so the text column lines up.
-    let (cells1, cells2, cells3) = match &v.mascot {
-        Some([a, b, c]) => (
-            format!("{a}{BLANK}"),
-            format!("{b}{BLANK}"),
-            Some(format!("{c}{BLANK}")),
-        ),
-        None => (String::new(), String::new(), None),
+    let (cells1, cells2) = match &v.mascot {
+        Some([a, b]) => (format!("{a}{BLANK}"), format!("{b}{BLANK}")),
+        None => (String::new(), String::new()),
     };
     let head = format!(
         "{cells1}{} {} ",
@@ -439,10 +434,10 @@ fn render_sieve(v: &SieveView) -> String {
     );
     let (line1, line2) = match v.stats {
         None => (
-            format!("{head}{}", paint(DIM, "no savings yet")),
+            format!("{head}{}", paint(FG_DARK, "no savings yet")),
             format!(
                 "{cells2}{}",
-                paint(DIM, "no index yet \u{b7} run sieve build")
+                paint(FG_DARK, "no index yet \u{b7} run sieve build")
             ),
         ),
         Some(stats) => {
@@ -462,20 +457,16 @@ fn render_sieve(v: &SieveView) -> String {
                 format!(
                     "{head}{}{}{}",
                     paint(GREEN, &format!("{} saved today", format_short(v.today))),
-                    paint(DIM, " \u{b7} "),
+                    paint(FG_DARK, " \u{b7} "),
                     paint(BLUE, &format!("{} this week", format_short(v.week))),
                 ),
-                format!("{cells2}{}{fresh}", paint(DIM, &counts)),
+                format!("{cells2}{}{fresh}", paint(FG_DARK, &counts)),
             )
         }
     };
     let mut lines = vec![line1, line2];
-    let ctx = v.ctx_pct.map(|pct| paint(DIM, &format!("ctx {pct}%")));
-    match (cells3, ctx) {
-        (Some(c3), ctx) => lines.push(format!("{c3}{}", ctx.unwrap_or_default())),
-        (None, Some(ctx)) => lines.push(ctx),
-        (None, None) => {}
-    }
+    // Line 3 has no mascot cells.
+    lines.extend(v.ctx_pct.map(|pct| paint(FG_DARK, &format!("ctx {pct}%"))));
     lines.join("\n")
 }
 
@@ -497,7 +488,7 @@ mod tests {
         out
     }
 
-    fn view_of(stats: &Stats, mascot: Option<[String; 3]>) -> SieveView<'_> {
+    fn view_of(stats: &Stats, mascot: Option<[String; 2]>) -> SieveView<'_> {
         SieveView {
             stats: Some(stats),
             ctx_pct: Some(54),
@@ -508,7 +499,7 @@ mod tests {
         }
     }
 
-    fn view(stats: &Stats, mascot: Option<[String; 3]>, color: bool) -> String {
+    fn view(stats: &Stats, mascot: Option<[String; 2]>, color: bool) -> String {
         render_sieve(&SieveView {
             depth: if color { Depth::True } else { Depth::Plain },
             ..view_of(stats, mascot)
@@ -530,33 +521,33 @@ mod tests {
         let text = strip_ansi(&out);
         let lines: Vec<&str> = text.split('\n').collect();
         assert_eq!(lines.len(), 3, "{text}");
-        // The sieve mascot is 12 cells wide, then one space, then the text.
+        // The tiny sieve mascot is 8 cells wide, then one blank, then the text.
         let cut = |l: &str, n: usize| l.chars().skip(n).collect::<String>();
-        for l in &lines {
-            let cells: String = l.chars().take(12).collect();
+        for l in &lines[..2] {
+            let cells: String = l.chars().take(8).collect();
             assert!(
                 cells
                     .chars()
                     .all(|c| "\u{2800}\u{2580}\u{2584}".contains(c)),
                 "{l}"
             );
-            assert_eq!(l.chars().nth(12), Some('\u{2800}'), "{l}");
+            assert_eq!(l.chars().nth(8), Some('\u{2800}'), "{l}");
         }
         assert!(lines[0].contains('\u{2580}'), "{}", lines[0]);
         assert_eq!(
-            cut(lines[0], 13),
+            cut(lines[0], 9),
             "sieve \u{2502} 61.7k saved today \u{b7} 214k this week"
         );
         assert_eq!(
-            cut(lines[1], 13),
+            cut(lines[1], 9),
             "752 symbols \u{b7} 2,017 links \u{b7} \u{2713} up to date"
         );
-        assert_eq!(cut(lines[2], 13), "ctx 54%");
+        assert_eq!(lines[2], "ctx 54%", "line 3 has no mascot cells");
         let no_ctx = strip_ansi(&render_sieve(&SieveView {
             ctx_pct: None,
             ..view_of(&stats, mascot_rows("sieve", 0, Depth::True))
         }));
-        assert_eq!(cut(no_ctx.split('\n').nth(2).unwrap_or("x"), 13), "");
+        assert_eq!(no_ctx.split('\n').count(), 2);
         assert!(out.contains("\x1b[48;2;"), "bottom pixels use a background");
     }
 
@@ -566,12 +557,13 @@ mod tests {
         let text = strip_ansi(&view(&stats, mascot_rows("sieve", 0, Depth::True), true));
         let lines: Vec<&str> = text.split('\n').collect();
         assert_eq!(lines.len(), 3);
+        assert!(lines[2].starts_with("ctx"), "line 3 has no mascot cells");
         // `trim_start` removes Unicode White_Space, as JS trimStart does.
         let col = |l: &str, w: &str| l.find(w).map(|i| l[..i].chars().count());
-        for (l, word) in lines.iter().zip(["sieve", "752", "ctx"]) {
+        for (l, word) in lines.iter().zip(["sieve", "752"]) {
             assert!(!l.chars().next().is_some_and(char::is_whitespace), "{l}");
             assert_eq!(*l, l.trim_start(), "the trim removed cells");
-            assert_eq!(col(l, word), Some(13), "{l}");
+            assert_eq!(col(l, word), Some(9), "{l}");
         }
     }
 
@@ -630,6 +622,41 @@ mod tests {
                 "{name}"
             );
         }
+    }
+
+    /// The WCAG contrast ratio of two colors.
+    fn contrast(a: Rgb, b: Rgb) -> f64 {
+        let lin = |v: u8| {
+            let c = f64::from(v) / 255.0;
+            if c <= 0.03928 {
+                c / 12.92
+            } else {
+                ((c + 0.055) / 1.055).powf(2.4)
+            }
+        };
+        let luma = |c: Rgb| 0.2126 * lin(c.0) + 0.7152 * lin(c.1) + 0.0722 * lin(c.2);
+        let (hi, lo) = (luma(a).max(luma(b)), luma(a).min(luma(b)));
+        (hi + 0.05) / (lo + 0.05)
+    }
+
+    /// The color of a 256-color cube index.
+    fn cube_rgb(i: u8) -> Rgb {
+        const LEVELS: [u8; 6] = [0, 95, 135, 175, 215, 255];
+        let n = (i - 16) as usize;
+        (LEVELS[n / 36], LEVELS[n / 6 % 6], LEVELS[n % 6])
+    }
+
+    #[test]
+    fn test_statusline_text_colors_have_a_contrast_of_4_5_on_the_dark_background() {
+        let bg: Rgb = (0x1a, 0x1b, 0x26);
+        for c in [SAND, FG_DARK, GREEN, BLUE, TEAL, ORANGE] {
+            assert!(contrast(c, bg) >= 4.5, "{c:?} on 24-bit");
+            assert!(
+                contrast(cube_rgb(nearest_256(c)), bg) >= 4.5,
+                "{c:?} on 256"
+            );
+        }
+        assert!(contrast(DIM, bg) < 4.5, "DIM is for the separator only");
     }
 
     #[test]
@@ -785,13 +812,17 @@ mod tests {
             assert_eq!(small[0], small[1], "{name} small frames share one size");
             assert_eq!(small[0].0, 6, "{name} small has 6 rows");
             assert!(matches!(small[0].1, 10 | 12), "{name} small width");
+            let tiny = sizes(name, "tiny");
+            assert_eq!(tiny[0], tiny[1], "{name} tiny frames share one size");
+            assert_eq!(tiny[0].0, 4, "{name} tiny has 4 rows");
+            assert!(tiny[0].1 <= 8, "{name} tiny is at most 8 columns wide");
         }
     }
 
     #[test]
-    fn test_statusline_small_sieve_cells_match_the_sprite() {
+    fn test_statusline_tiny_sieve_cells_match_the_sprite() {
         let v: Value = serde_json::from_str(MASCOTS).expect("mascots.json parses");
-        let px = small_pixels("sieve", 0, &v).expect("sieve small frame");
+        let px = tiny_pixels("sieve", 0, &v).expect("sieve tiny frame");
         let rows = mascot_rows("sieve", 0, Depth::True).expect("rows");
         let fg = |c: Rgb| format!("\x1b[38;2;{};{};{}m", c.0, c.1, c.2);
         let bg = |c: Rgb| format!("\x1b[48;2;{};{};{}m", c.0, c.1, c.2);

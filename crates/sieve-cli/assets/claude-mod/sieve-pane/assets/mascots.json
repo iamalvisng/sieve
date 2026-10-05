@@ -92,6 +92,20 @@
      "..gMmMmg....",
      "..W..W..W..."
     ]
+   ],
+   "tiny": [
+    [
+     "gGGGGG.G",
+     ".MmMmMG.",
+     "..MmMm..",
+     "........"
+    ],
+    [
+     "gGGGGG.G",
+     ".MmMmMG.",
+     "..MmMm..",
+     "...W..W."
+    ]
    ]
   },
   "soya": {
@@ -147,6 +161,20 @@
      "NPnnkknnPN",
      ".NnnnrnnN.",
      "..nn..nn.."
+    ]
+   ],
+   "tiny": [
+    [
+     ".lnllnl.",
+     "NkwnnkwN",
+     "NPnrrnPN",
+     ".NnnnnN."
+    ],
+    [
+     ".lnllnl.",
+     "NkknnkkN",
+     "NPnrrnPN",
+     ".NnnrnN."
     ]
    ]
   },
@@ -204,6 +232,20 @@
      ".OWWPPWWO.",
      "..WWWWWW.."
     ]
+   ],
+   "tiny": [
+    [
+     "O......O",
+     "OPOOOOPO",
+     "OkOWWOkO",
+     ".OWPPWO."
+    ],
+    [
+     "O......O",
+     "OPOOOOPO",
+     "OOOWWOOO",
+     ".OWPPWO."
+    ]
    ]
   },
   "sifty": {
@@ -259,6 +301,20 @@
      ".mmmmmmmm.",
      ".m.m.m.m..",
      "....y..y.."
+    ]
+   ],
+   "tiny": [
+    [
+     ".ssssss.",
+     "sSkSSkSs",
+     ".mmmmmm.",
+     "..y..y.."
+    ],
+    [
+     ".ssssss.",
+     "sSSSSSSs",
+     ".mmmmmm.",
+     "...y..y."
     ]
    ]
   },
@@ -316,6 +372,20 @@
      ".pfpffpfp.",
      "..yy..yy.."
     ]
+   ],
+   "tiny": [
+    [
+     "p......p",
+     "pwkppwkp",
+     "pppyyppp",
+     ".pfppfp."
+    ],
+    [
+     "p......p",
+     "pkkppkkp",
+     "pppyyppp",
+     ".pfppfp."
+    ]
    ]
   },
   "grit": {
@@ -371,6 +441,20 @@
      ".ttddddtt.",
      "dm.mm.mm.d",
      ".dd....dd."
+    ]
+   ],
+   "tiny": [
+    [
+     "...g....",
+     "tkwttkwt",
+     "ttmmmmtt",
+     ".d.dd.d."
+    ],
+    [
+     "...o....",
+     "tkkttkkt",
+     "ttmmmmtt",
+     ".d.dd.d."
     ]
    ]
   }

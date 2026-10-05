@@ -1,1 +1,1 @@
-✗ invalid pattern "a{2,1}": Invalid regular expression: /a{2,1}/: numbers out of order in {} quantifier
+sieve: invalid pattern "a{2,1}": Invalid regular expression: /a{2,1}/: numbers out of order in {} quantifier — fix the pattern, or add --fixed

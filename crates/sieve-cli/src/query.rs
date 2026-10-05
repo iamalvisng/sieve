@@ -117,11 +117,17 @@ pub fn run_prelude(
     let context_dir = context_dir(&root, dir_override, &cwd);
     if let Some(typed) = dir_arg {
         if !root.is_dir() {
-            return Err(format!("Directory not found: {}", typed.display()));
+            return Err(format!(
+                "directory not found: {} \u{2014} check the path",
+                typed.display()
+            ));
         }
     } else if let Some(typed) = dir_override {
         if !context_dir.is_dir() {
-            return Err(format!("Directory not found: {}", typed.display()));
+            return Err(format!(
+                "directory not found: {} \u{2014} check the --dir path",
+                typed.display()
+            ));
         }
     }
     refresh_before(&root, &context_dir, no_refresh_flag);
@@ -129,12 +135,12 @@ pub fn run_prelude(
 }
 
 /// The one line every query command prints when no index exists.
-pub const NO_INDEX: &str = "No index here yet. Run `sieve build .` first.";
+pub const NO_INDEX: &str = "no index here yet \u{2014} run sieve build .";
 
 /// The line a query command prints at a workspace parent, which holds no
 /// index of its own.
 pub const WORKSPACE_PARENT: &str =
-    "This is a workspace parent. Run this command inside one repo, or give a path under one.";
+    "this is a workspace parent \u{2014} run the command inside one repo, or give a path under one";
 
 /// Runs the full query prelude and returns the repo root, the context dir,
 /// and the loaded graph.

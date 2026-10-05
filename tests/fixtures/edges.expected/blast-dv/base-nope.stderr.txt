@@ -1,2 +1,1 @@
-✗ base ref "nope" is not in this checkout.
-  In CI, fetch enough history for the merge base: actions/checkout with `fetch-depth: 0`.
+sieve: base ref nope is not in this checkout — in CI, fetch the full history (actions/checkout with fetch-depth: 0)

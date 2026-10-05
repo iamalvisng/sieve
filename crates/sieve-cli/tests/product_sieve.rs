@@ -175,14 +175,10 @@ fn rename_table_cli_check_no_graph_reports_sieve_and_no_old_name() {
 
     let output = run_sieve(&copy.path, &home.path, &["check", "."]);
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stdout.contains("sieve check: NO GRAPH"),
-        "check stdout must report sieve check: NO GRAPH, got: {stdout}"
-    );
-    assert!(
-        stdout.contains("No sieve/ graph found. Run `sieve build` first."),
-        "check stdout must name the sieve build command, got: {stdout}"
+        stderr.contains("sieve: no index here yet \u{2014} run sieve build ."),
+        "check must name the sieve build command, got: {stderr}"
     );
 }
 
@@ -360,17 +356,17 @@ fn test_p4_47_init_dry_run_plan_names_sieve_and_lists_no_shims() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "stderr={stderr}");
     for row in [
-        ".claude/skills/sieve/SKILL.md  sieve skill",
-        ".cursor/rules/sieve.mdc        sieve-owned file",
+        ".claude/skills/sieve/SKILL.md  tells the agent when to use sieve",
+        ".cursor/rules/sieve.mdc  tells the agent when to use sieve",
     ] {
         assert!(stderr.contains(row), "missing row {row:?} in: {stderr}");
     }
     assert!(!stderr.contains(".cjs"), "plan lists a shim: {stderr}");
     assert!(
-        !stderr.contains("your machine"),
+        !stderr.contains("on your machine"),
         "plan has HOME rows: {stderr}"
     );
-    assert!(stderr.ends_with("nothing was written (--dry-run)\n"));
+    assert!(stderr.ends_with("dry run \u{b7} nothing written \u{b7} nothing outside this repo\n"));
     assert_eq!(list_files(&copy.path), before, "dry run wrote a file");
     assert!(
         list_files(&home.path).is_empty(),
@@ -384,7 +380,7 @@ fn test_p4_47_init_dry_run_plan_names_sieve_and_lists_no_shims() {
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("~/.claude.json           mcpServers.sieve"),
+        stderr.contains("~/.claude.json           the sieve MCP server"),
         "missing global row in: {stderr}"
     );
 }
@@ -395,8 +391,8 @@ fn plan_paths(stderr: &str, repo: &Path, home: &Path) -> std::collections::BTree
     let mut paths = std::collections::BTreeSet::new();
     let mut global = false;
     for line in stderr.lines() {
-        if line.starts_with("would write") {
-            global = line.contains("your machine");
+        if line.starts_with("sieve would ") {
+            global = line.contains("on your machine");
         } else if let Some(row) = line.strip_prefix("  ") {
             let path = row.split("  ").next().expect("row path").trim();
             paths.insert(match path.strip_prefix("~/") {

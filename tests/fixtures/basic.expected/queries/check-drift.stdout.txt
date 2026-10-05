@@ -1,8 +1,2 @@
-deep layer: not built — wiring graph is the source of truth
-
-graph check: STALE
-
-changed (1):
+✗ sieve is behind on 1 file — run sieve build
   ~ src/util.ts
-
-Run `sieve build` to rebuild the structure, then commit sieve/.

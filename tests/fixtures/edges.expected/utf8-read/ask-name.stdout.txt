@@ -1,7 +1,6 @@
-sieve ask — "caf"  (lexical)
+ask  caf · 4 hits
 
-1. caf�Name · function  [symbol]
-   ts/latin-name.ts:L1-L3
+1  caf�Name  fn  ts/latin-name.ts:1-3
    function caf�Name(): number
 
 ```
@@ -10,8 +9,7 @@ export function caf�Name(): number {
 }
 ```
 
-2. latinString · function  [symbol]
-   ts/latin.ts:L2-L4
+2  latinString  fn  ts/latin.ts:2-4
    function latinString(): string
 
 ```
@@ -20,8 +18,7 @@ export function latinString(): string {
 }
 ```
 
-3. latinCaller · function  [symbol]
-   ts/latin.ts:L5-L7
+3  latinCaller  fn  ts/latin.ts:5-7
    function latinCaller(): number
 
 ```
@@ -30,5 +27,4 @@ export function latinCaller(): number {
 }
 ```
 
-4. latin.ts · file  [symbol]
-   ts/latin.ts
+4  latin.ts  file  ts/latin.ts

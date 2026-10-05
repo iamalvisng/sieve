@@ -1,6 +1,7 @@
-sieve skeleton — src/a.ts
-- L1-L3  function alphaAdd  function alphaAdd(a: number, b: number): number
-- L5-L7  function alphaTwice  function alphaTwice(n: number): number
-- L9-L11  function shared  function shared(): number
-- L13-L15  function useShared  function useShared(): number
-- L17-L19  function useSharedTwice  function useSharedTwice(): number
+src/a.ts · 5 symbols
+  1-3  alphaAdd  fn  (a: number, b: number): number  · 1 caller
+  5-7  alphaTwice  fn  (n: number): number
+ 9-11  shared  fn  (): number  · 1 caller
+13-15  useShared  fn  (): number  · 1 caller
+17-19  useSharedTwice  fn  (): number
+[sieve] saved ≈ 23 tokens

@@ -1,1 +1,1 @@
-error: option '--pr-author <who...>' argument missing
+sieve: --pr-author needs a value — see sieve blast --help

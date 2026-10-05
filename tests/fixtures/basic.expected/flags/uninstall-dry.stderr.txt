@@ -36,5 +36,5 @@ graph:
   - would remove: <TMP>/.gitignore (sieve/ ignore entry — deleted)
   - would remove: <TMP>/.ignore (sieve/ search re-admit entries — deleted)
 
-Dry run — nothing was touched. Re-run with -y to remove.
-· global hooks under ~ stay (pass --global to remove them)
+dry run · nothing removed · run sieve uninstall -y to remove
+global hooks under ~ stay · pass --global to remove them

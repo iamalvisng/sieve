@@ -1,1 +1,1 @@
-error: missing required argument 'pattern'
+sieve: grep needs a pattern — see sieve grep --help

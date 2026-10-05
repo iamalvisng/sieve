@@ -7,6 +7,8 @@
 use clap::Args;
 use sieve_core::product::product;
 
+use crate::ui::Ui;
+
 /// The version the product reports: the crate version.
 pub fn current_version() -> &'static str {
     env!("CARGO_PKG_VERSION")
@@ -19,7 +21,12 @@ pub struct VersionArgs;
 /// Runs `sieve version`: prints the one-line report to stdout. No nudge,
 /// no refresh, no telemetry preamble (P1-38).
 pub fn run(_args: &VersionArgs) -> Result<(), String> {
-    println!("{} {}", product().name, current_version());
+    let ui = Ui::stdout();
+    println!(
+        "{} {}",
+        ui.purple(product().name),
+        ui.green(current_version())
+    );
     Ok(())
 }
 

@@ -1,4 +1,4 @@
-"k" — 1 hits in 1 symbols across 1 files (searched 1 indexed files)
+grep "k" · 1 hit in 1 symbol across 1 file · searched 1 file
 
-src/regex-cases.ts (module level) · 0 in-edges
-  L10: // K
+regex-cases.ts  module  src/regex-cases.ts  · 0 links in
+  10: // K

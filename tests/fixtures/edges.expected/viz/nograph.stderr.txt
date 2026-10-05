@@ -1,1 +1,1 @@
-✗ no context graph at <TMP>/nograph/sieve — run `sieve build` first
+sieve: no index at <TMP>/nograph/sieve — run sieve build

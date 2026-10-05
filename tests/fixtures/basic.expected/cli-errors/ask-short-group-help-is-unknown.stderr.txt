@@ -1,1 +1,1 @@
-error: unknown option '-hx'
+sieve: ask has no -hx option — see sieve ask --help

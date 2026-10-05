@@ -1,2 +1,3 @@
 ⚠ -e ".zz": no parser registered for this extension — ignoring it.
   supported: .astro .bb .c .cc .cjs .clj .cljc .cljs .cpp .cs .cts .cxx .dart .ex .exs .go .h .hh .hpp .java .js .jsx .kt .kts .lua .mjs .ml .mli .mts .nix .php .py .pyi .r .rb .rs .sc .scala .sol .svelte .swift .ts .tsx .vue .zig
+sieve: no index here yet — run sieve build .

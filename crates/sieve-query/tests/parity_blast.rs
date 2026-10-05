@@ -160,7 +160,7 @@ fn mask_tmp(msg: &str, dir: &Path) -> String {
 
 fn last_stderr_line_without_prefix(golden: &str) -> Option<String> {
     let line = golden.lines().last()?;
-    Some(line.strip_prefix("✗ ").unwrap_or(line).to_string())
+    Some(line.strip_prefix("sieve: ").unwrap_or(line).to_string())
 }
 
 /// One unified-style diff: every differing line, want then got.

@@ -1,19 +1,19 @@
-"big" — 6 hits in 6 symbols across 1 files (searched 3 indexed files)
+grep "big" · 6 hits in 6 symbols across 1 file · searched 3 files
 
-bigOne · function · packages/big/index.ts:L1-L2 · 0 in-edges
-  L1: export function bigOne(): number {
+bigOne  fn  packages/big/index.ts:1-2  · 0 links in
+  1: export function bigOne(): number {
 
-bigTwo · function · packages/big/index.ts:L4-L5 · 0 in-edges
-  L4: export function bigTwo(): number {
+bigTwo  fn  packages/big/index.ts:4-5  · 0 links in
+  4: export function bigTwo(): number {
 
-bigThree · function · packages/big/index.ts:L7-L8 · 0 in-edges
-  L7: export function bigThree(): number {
+bigThree  fn  packages/big/index.ts:7-8  · 0 links in
+  7: export function bigThree(): number {
 
-bigFour · function · packages/big/index.ts:L10-L11 · 0 in-edges
-  L10: export function bigFour(): number {
+bigFour  fn  packages/big/index.ts:10-11  · 0 links in
+  10: export function bigFour(): number {
 
-bigFive · function · packages/big/index.ts:L13-L14 · 0 in-edges
-  L13: export function bigFive(): number {
+bigFive  fn  packages/big/index.ts:13-14  · 0 links in
+  13: export function bigFive(): number {
 
-bigSix · function · packages/big/index.ts:L16-L17 · 0 in-edges
-  L16: export function bigSix(): number {
+bigSix  fn  packages/big/index.ts:16-17  · 0 links in
+  16: export function bigSix(): number {

@@ -1,1 +1,1 @@
-error: unknown option '--bad'
+sieve: ask has no --bad option — see sieve ask --help

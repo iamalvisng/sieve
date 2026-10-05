@@ -36,9 +36,9 @@ pub struct Depth(pub Option<usize>);
 /// Every way `callers` can fail (section 2.2 to 2.4).
 #[derive(Debug, Error)]
 pub enum CallersError {
-    #[error("--direction must be \"in\" or \"out\", got \"{raw}\"")]
+    #[error("--direction must be in or out, got {raw} \u{2014} try --direction in")]
     BadDirection { raw: String },
-    #[error("--depth must be a positive number or \"all\", got \"{raw}\"")]
+    #[error("--depth must be a positive number or all, got {raw} \u{2014} try --depth 2")]
     BadDepth { raw: String },
     #[error("{}", prefix_not_indexed_message(prefix, scopes))]
     PrefixNotIndexed { prefix: String, scopes: Vec<String> },
@@ -50,7 +50,7 @@ pub enum CallersError {
 /// command.
 fn no_symbol_message(query: &str) -> String {
     format!(
-        "no symbol \"{query}\" in the graph — check spelling or run {} build",
+        "no symbol named {query} — try {} grep {query}",
         sieve_core::product().name
     )
 }
@@ -59,11 +59,14 @@ fn no_symbol_message(query: &str) -> String {
 /// (section 0).
 fn prefix_not_indexed_message(prefix: &str, scopes: &[String]) -> String {
     let clause = if scopes.len() > 1 {
-        format!(" — scopes here: {}", scopes.join(" · "))
+        format!(" (scopes here: {})", scopes.join(" · "))
     } else {
         String::new()
     };
-    format!("nothing indexed under \"{prefix}/\"{clause} (or any path prefix)")
+    format!(
+        "nothing is indexed under {prefix}/{clause} — try {} map",
+        sieve_core::product().name
+    )
 }
 
 /// Renders a scope prefix the way the `scopeLabel` does.
@@ -193,6 +196,8 @@ pub struct Hit<'a> {
     pub relation: Relation,
     pub depth: u32,
     pub node: Option<&'a Node>,
+    /// The id of the hit this one was reached through. `None` at depth 1.
+    pub parent: Option<String>,
 }
 
 /// Depth-1: a plain scan over `graph.edges` in file order, keeping every
@@ -215,6 +220,7 @@ fn depth1_scan<'a>(graph: &'a Graph, symbol: &Node, direction: Direction) -> Vec
             relation: edge.relation,
             depth: 1,
             node: by_id.get(other.as_str()).copied(),
+            parent: None,
         });
     }
     hits
@@ -265,6 +271,7 @@ fn bfs<'a>(
                     relation: *relation,
                     depth: depth as u32,
                     node: by_id.get(*other).copied(),
+                    parent: Some(current.to_string()),
                 });
                 next.push(*other);
             }
@@ -376,21 +383,45 @@ fn word_re(symbol_name: &str) -> Option<Regex> {
     Regex::new(&format!(r"(?-u:\b){}(?-u:\b)", escape_regex(symbol_name))).ok()
 }
 
-/// `<name> · <kind> · <path>:<span>` (section 2.7, `headerOf`).
+/// The row of a symbol: `name  kind  path:start-end`.
 pub(crate) fn header_of(node: &Node) -> String {
-    format!(
-        "{} · {} · {}:{}",
-        node.name,
+    sieve_core::voice::row(
+        &node.name,
         crate::ask::kind_word(node.kind),
-        node.path,
-        node.span
+        &node.path,
+        Some(&node.span),
     )
 }
 
-/// The loud, never-silent note a zero-hit symbol carries, with the
+/// The note a zero-hit symbol carries, with the ambiguity clause only when
+/// more than one symbol matched the query (section 2.7, `looseNoteFor`).
+pub(crate) fn loose_note_for(direction: Direction, name: &str, candidate_count: usize) -> String {
+    let (label, dir_word) = if direction == Direction::Out {
+        ("callees", "outgoing")
+    } else {
+        ("callers", "incoming")
+    };
+    let ambiguity = if candidate_count > 1 {
+        format!(
+            " {candidate_count} symbols share the name {name}. A caller in another file is \
+            dropped, not guessed, so this may undercount."
+        )
+    } else {
+        String::new()
+    };
+    format!(
+        "no {label} found — the index has no {dir_word} links for this symbol.{ambiguity} \
+        Check the name, or run {} grep {name}",
+        sieve_core::product().name
+    )
+}
+
+/// The note the `--json` report holds for a zero-hit symbol. The text is the
+/// same as it was before the new output voice, so `--json` stays byte-identical.
+/// The text report uses [`loose_note_for`]. The note has the
 /// ambiguity clause only when more than one symbol matched the query
 /// (section 2.7, `looseNoteFor`).
-pub(crate) fn loose_note_for(direction: Direction, name: &str, candidate_count: usize) -> String {
+fn loose_note_json(direction: Direction, name: &str, candidate_count: usize) -> String {
     let label = if direction == Direction::Out {
         "callees"
     } else {
@@ -418,33 +449,68 @@ pub(crate) fn loose_note_for(direction: Direction, name: &str, candidate_count: 
     )
 }
 
-/// `  <relation> <arrow> <label><depthTag>`, with a six-space quote line
-/// appended when `quote` is given (section 2.7, `hitLine`).
-pub(crate) fn hit_line(
-    direction: Direction,
-    hit: &Hit,
-    show_depth: bool,
-    quote: Option<(u32, String)>,
-) -> String {
-    let arrow = if direction == Direction::In {
-        "←"
-    } else {
-        "→"
+/// The count line under a symbol row, such as `2 callers · 5 within 2 hops`.
+fn summary_line(direction: Direction, hits: &[Hit]) -> String {
+    let direct = hits.iter().filter(|h| h.depth <= 1).count();
+    let deepest = hits.iter().map(|h| h.depth).max().unwrap_or(1);
+    // `in` counts callers. `out` counts what the symbol calls.
+    let head = match (direction, direct) {
+        (Direction::In, 1) => "1 caller".to_string(),
+        (Direction::In, n) => format!("{n} callers"),
+        (Direction::Out, n) => format!("calls {n}"),
     };
-    let depth_tag = if show_depth {
-        format!(" [depth {}]", hit.depth)
-    } else {
-        String::new()
-    };
-    let label = match hit.node {
-        Some(node) => format!("{} ({}:{})", node.name, node.path, node.span),
-        None => format!("{} (unresolved import)", hit.id),
-    };
-    let line = format!("  {} {arrow} {label}{depth_tag}", hit.relation.as_str());
-    match quote {
-        Some((n, text)) => format!("{line}\n      {n}: {}", js_trim(&text)),
-        None => line,
+    if deepest <= 1 {
+        return head;
     }
+    format!("{head} \u{b7} {} within {deepest} hops", hits.len())
+}
+
+/// The row of one hit, with its relation when it is not a call.
+fn hit_row(hit: &Hit) -> String {
+    let row = match hit.node {
+        Some(node) => header_of(node),
+        None => format!("{}  import", hit.id),
+    };
+    match hit.relation {
+        Relation::Calls => row,
+        other => format!("{row}  \u{b7} {}", other.as_str()),
+    }
+}
+
+/// Renders one matched symbol and its hits as a tree by hop, with `\u{251c}\u{2500}`,
+/// `\u{2514}\u{2500}` and `\u{2502}` lines. A hit at depth 1 gets its call line
+/// when `reader` is given. The text has no final newline.
+pub fn render_block(
+    symbol: &Node,
+    hits: &[Hit],
+    direction: Direction,
+    candidate_count: usize,
+    mut reader: Option<&mut FileReader>,
+) -> String {
+    let mut lines = vec![header_of(symbol)];
+    if hits.is_empty() {
+        lines.push(loose_note_for(direction, &symbol.name, candidate_count));
+        return lines.join("\n");
+    }
+    lines.push(summary_line(direction, hits));
+
+    let items: Vec<sieve_core::voice::TreeItem> = hits
+        .iter()
+        .map(|hit| {
+            let note = reader
+                .as_deref_mut()
+                .and_then(|reader| quote_for(reader, &symbol.name, hit))
+                .map(|(n, text)| format!("{n}: {}", js_trim(&text)));
+            sieve_core::voice::TreeItem {
+                id: hit.id.clone(),
+                parent: hit.parent.clone(),
+                text: hit_row(hit),
+                note,
+            }
+        })
+        .collect();
+    lines.extend(sieve_core::voice::tree_lines(&items));
+    lines.join("\n")
 }
 
 /// True for a char JavaScript `String.prototype.trim` strips: WhiteSpace
@@ -461,38 +527,24 @@ pub(crate) fn js_trim(s: &str) -> &str {
     s.trim_matches(is_js_whitespace)
 }
 
-/// Collapses a trailing run of newlines to exactly one, matching
-/// `.replace(/\n+$/, "\n")`.
-fn collapse_trailing_newlines(s: &str) -> String {
-    let trimmed = s.trim_end_matches('\n');
-    format!("{trimmed}\n")
-}
-
-/// Renders the plain-text `callers` report, without the savings header —
-/// the CLI prepends that. `reader` is the one cached file reader this
-/// whole render shares, across every matched symbol's hits (section 2.7).
+/// Renders the plain-text `callers` report, without the savings line; the
+/// CLI adds that last. `reader` is the one cached file reader this whole
+/// render shares, across every matched symbol's hits (section 2.7).
 pub fn format_callers(
     _query: &str,
     matches: &[(&Node, Vec<Hit>)],
     direction: Direction,
-    show_depth: bool,
+    _show_depth: bool,
     reader: &mut FileReader,
 ) -> String {
     let candidate_count = matches.len();
-    let mut lines: Vec<String> = Vec::new();
-    for (symbol, hits) in matches {
-        lines.push(header_of(symbol));
-        if hits.is_empty() {
-            lines.push(loose_note_for(direction, &symbol.name, candidate_count));
-        } else {
-            for hit in hits {
-                let quote = quote_for(reader, &symbol.name, hit);
-                lines.push(hit_line(direction, hit, show_depth, quote));
-            }
-        }
-        lines.push(String::new());
-    }
-    collapse_trailing_newlines(&lines.join("\n"))
+    let blocks: Vec<String> = matches
+        .iter()
+        .map(|(symbol, hits)| {
+            render_block(symbol, hits, direction, candidate_count, Some(&mut *reader))
+        })
+        .collect();
+    format!("{}\n", blocks.join("\n\n"))
 }
 
 /// The paths `callers`' tokens-saved baseline reads: each matched symbol's
@@ -588,7 +640,7 @@ pub fn to_callers_json(
                     })
                     .collect(),
                 note: if hits.is_empty() {
-                    Some(loose_note_for(direction, &symbol.name, candidate_count))
+                    Some(loose_note_json(direction, &symbol.name, candidate_count))
                 } else {
                     None
                 },
@@ -713,7 +765,7 @@ mod tests {
         let err = resolve_symbol(&g, "nope", None).expect_err("no match");
         assert_eq!(
             err.to_string(),
-            "no symbol \"nope\" in the graph — check spelling or run sieve build"
+            "no symbol named nope — try sieve grep nope"
         );
     }
 
@@ -773,7 +825,7 @@ mod tests {
         let err = resolve_symbol(&g, "nope", Some("/")).expect_err("no symbol, not bad prefix");
         assert_eq!(
             err.to_string(),
-            "no symbol \"nope\" in the graph — check spelling or run sieve build"
+            "no symbol named nope — try sieve grep nope"
         );
     }
 
@@ -839,6 +891,51 @@ mod tests {
         let dir = std::env::temp_dir();
         let mut reader = FileReader::new(&dir);
         let rendered = format_callers("double", &matches, Direction::In, false, &mut reader);
-        assert!(rendered.starts_with("double · function · util.ts:L1-L3\n  no indexed callers"));
+        assert!(rendered.starts_with("double  fn  util.ts:1-3\nno callers found"));
+    }
+
+    #[test]
+    fn a_symbol_row_keeps_the_span_end_and_a_file_keeps_its_range() {
+        let f = node(
+            "f",
+            "handleHMRUpdate",
+            Kind::Function,
+            "hmr.ts",
+            "L411-L679",
+        );
+        assert_eq!(header_of(&f), "handleHMRUpdate  fn  hmr.ts:411-679");
+        let m = node("m", "hmr.spec.ts", Kind::File, "hmr.spec.ts", "L1-L56");
+        assert_eq!(header_of(&m), "hmr.spec.ts  file  hmr.spec.ts:1-56");
+    }
+
+    #[test]
+    fn the_direction_out_header_counts_calls() {
+        let a = node("a", "a", Kind::Function, "a.ts", "L1-L2");
+        let b = node("b", "b", Kind::Function, "b.ts", "L1-L2");
+        let g = graph(vec![a, b], vec![edge("a", "b", Relation::Calls)]);
+        let hits = edge_walk(&g, &g.nodes[0], Direction::Out, Depth(Some(1)));
+        let text = render_block(&g.nodes[0], &hits, Direction::Out, 1, None);
+        assert!(text.contains("\ncalls 1\n"), "{text}");
+    }
+
+    #[test]
+    fn render_block_nests_a_deeper_hit_under_its_parent() {
+        let a = node("a", "a", Kind::Function, "a.ts", "L1-L2");
+        let b = node("b", "b", Kind::Function, "b.ts", "L1-L2");
+        let c = node("c", "c", Kind::Function, "c.ts", "L1-L2");
+        let g = graph(
+            vec![a, b, c],
+            vec![
+                edge("b", "a", Relation::Calls),
+                edge("c", "b", Relation::Calls),
+            ],
+        );
+        let hits = edge_walk(&g, &g.nodes[0], Direction::In, Depth(Some(2)));
+        let text = render_block(&g.nodes[0], &hits, Direction::In, 1, None);
+        assert_eq!(
+            text,
+            "a  fn  a.ts:1-2\n1 caller \u{b7} 2 within 2 hops\n\
+             \u{2514}\u{2500} b  fn  b.ts:1-2\n   \u{2514}\u{2500} c  fn  c.ts:1-2"
+        );
     }
 }

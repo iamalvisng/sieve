@@ -64,12 +64,13 @@ fn fixture(base: &TempDir) -> std::path::PathBuf {
     par
 }
 
-/// Builds `par` with `flags` and returns the stdout `wiring` line, the
+/// Builds `par` with `flags` and returns the stdout summary line, the
 /// sorted file-node paths and the config text, if any.
 fn build(base: &TempDir, par: &Path, flags: &[&str]) -> (String, Vec<String>, Option<String>) {
     let out = support::sieve_command()
         .arg("build")
         .args(flags)
+        .arg("--no-reuse")
         .current_dir(par)
         .env("HOME", base.path.join("home"))
         .output()
@@ -78,8 +79,8 @@ fn build(base: &TempDir, par: &Path, flags: &[&str]) -> (String, Vec<String>, Op
     let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
     let line = stdout
         .lines()
-        .find(|l| l.starts_with("✓ wiring"))
-        .expect("wiring line")
+        .find(|l| l.contains(" \u{2192} "))
+        .expect("summary line")
         .to_string();
     let wiring: serde_json::Value =
         serde_json::from_slice(&fs::read(par.join("sieve/.graph/wiring.json")).expect("wiring"))
@@ -108,9 +109,9 @@ fn case(flags: &[&str], line: &str, files: &[&str], config: Option<&str>) {
     assert_eq!(got_config.as_deref(), config, "{flags:?} config");
 }
 
-const ONE: &str = "✓ wiring: 2 nodes (1 file, 1 function), 1 edges, 1 cards [typescript]";
-const TWO: &str = "✓ wiring: 4 nodes (2 file, 2 function), 2 edges, 2 cards [typescript]";
-const THREE: &str = "✓ wiring: 6 nodes (3 file, 3 function), 3 edges, 3 cards [typescript]";
+const ONE: &str = "1 file \u{2192} 2 symbols \u{b7} 1 link";
+const TWO: &str = "2 files \u{2192} 4 symbols \u{b7} 2 links";
+const THREE: &str = "3 files \u{2192} 6 symbols \u{b7} 3 links";
 
 /// P1-69: with no flag, a submodule and a nested clone stay out.
 #[test]

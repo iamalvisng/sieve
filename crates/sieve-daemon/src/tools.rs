@@ -8,7 +8,7 @@ use serde_json::Value;
 
 use sieve_core::askindex::{ask_index_path, read_ask_index};
 use sieve_core::product;
-use sieve_core::wiring::{Graph, Kind, Meta, Node};
+use sieve_core::wiring::{Graph, Meta, Node};
 use sieve_core::workspace;
 use sieve_parse::refresh::{
     ensure_fresh_children, ensure_fresh_graph, env_truthy, refresh_note, RefreshOptions,
@@ -19,7 +19,8 @@ use sieve_parse::{
 };
 use sieve_query::ask::{ask, format_ask, AskOptions};
 use sieve_query::callers::{
-    callers_saved_paths, edge_walk, resolve_symbol, CallersError, Depth, Direction, Hit,
+    callers_saved_paths, edge_walk, render_block, resolve_symbol, CallersError, Depth, Direction,
+    Hit,
 };
 use sieve_query::grep::{
     format_grep_result, grep_graph, zero_hit_note, GrepError, GrepOptions, DEFAULT_MAX_HITS,
@@ -31,7 +32,8 @@ use sieve_query::workspace::{
     FederateAskOptions,
 };
 use sieve_savings::{
-    ask_pack_region, savings_for, sieve_header, to_tokens, utf16_len, with_savings, Savings,
+    append_line, ask_pack_region, savings_for, sieve_header, to_tokens, utf16_len, with_savings,
+    with_savings_nl, Savings,
 };
 
 use crate::names::canonical_tool_name;
@@ -169,7 +171,11 @@ fn call_workspace(
                 str_arg(args, "in"),
                 direction,
                 depth,
-                |graph, body, paths| with_savings(name, body, savings_for(graph, paths).as_ref()),
+                |graph, body, paths| {
+                    with_savings(name, body, savings_for(graph, paths).as_ref())
+                        .trim_end_matches('\n')
+                        .to_string()
+                },
             );
             Some(match fed {
                 Ok(f) => (f.text, !f.found),
@@ -227,6 +233,8 @@ fn call_workspace(
             let text = federate_map(&graphs, max_dirs, |graph, body| {
                 let saved = savings_for(graph, &map_saved_paths(graph));
                 with_savings(name, body, saved.as_ref())
+                    .trim_end_matches('\n')
+                    .to_string()
             });
             Some((text, false))
         }
@@ -454,7 +462,7 @@ fn find_code(args: &Value, root: &Path, context_dir: &Path) -> (String, bool) {
     let body = format_ask(&result);
     let paths = dedup_paths(result.hits.iter().map(|h| h.path.clone()));
     let text = match find_code_savings_line(&graph, &paths, &body) {
-        Some(line) => format!("{line}\n\n{body}"),
+        Some(line) => append_line(&body, &line),
         None => body,
     };
     (text, false)
@@ -480,7 +488,7 @@ fn file_api(args: &Value, context_dir: &Path) -> (String, bool) {
     let body = rendered.strip_suffix('\n').unwrap_or(&rendered);
     let paths = skeleton_saved_paths(&r);
     let saved = graph.as_ref().and_then(|g| savings_for(g, &paths));
-    let text = format!("{}\n", with_savings(product().name, body, saved.as_ref()));
+    let text = with_savings_nl(product().name, body, saved.as_ref());
     let is_error = r.entries.is_empty() && r.note.is_some();
     (text, is_error)
 }
@@ -492,112 +500,28 @@ fn check_freshness(root: &Path, context_dir: &Path) -> (String, bool) {
         Err(e) => return (e.to_string(), true),
     };
 
-    let mut text = format_check_report(&c);
-    if !g.missing {
-        text = format!("{text}\n\n{}", format_graph_check_report(&g));
-    }
+    // The deep-layer part shows only when a manifest exists.
+    let text = if c.missing {
+        format_graph_check_report(&g)
+    } else if g.missing {
+        format_check_report(&c)
+    } else {
+        format!(
+            "{}\n\n{}",
+            format_check_report(&c),
+            format_graph_check_report(&g)
+        )
+    };
     (text, false)
 }
 
-/// The word `trace_calls` and `map` print for a node's kind.
-/// Kept local: `sieve_query::ask::kind_word` is
-/// `pub(crate)` to that crate.
-fn kind_word(kind: Kind) -> &'static str {
-    match kind {
-        Kind::File => "file",
-        Kind::Class => "class",
-        Kind::Function => "function",
-        Kind::Method => "method",
-        Kind::Interface => "interface",
-        Kind::Type => "type",
-        Kind::Enum => "enum",
-        Kind::Struct => "struct",
-        Kind::Trait => "trait",
-        Kind::Module => "module",
-        Kind::Constant => "constant",
-        Kind::Variable => "variable",
-    }
-}
-
-fn header_of(node: &Node) -> String {
-    format!(
-        "{} · {} · {}:{}",
-        node.name,
-        kind_word(node.kind),
-        node.path,
-        node.span
-    )
-}
-
-/// The loud, never-silent note a zero-hit symbol carries (section 2.7,
-/// `looseNoteFor`). Copied from `sieve_query::callers`'s private helper of
-/// the same shape, because the MCP render skips the quote lines that
-/// helper's caller normally adds around it, not the note wording itself.
-fn loose_note_for(direction: Direction, name: &str, candidate_count: usize) -> String {
-    let label = if direction == Direction::Out {
-        "callees"
-    } else {
-        "callers"
-    };
-    let dir_word = if direction == Direction::Out {
-        "outgoing"
-    } else {
-        "incoming"
-    };
-    let ambiguity = if candidate_count > 1 {
-        format!(
-            " {candidate_count} definitions share the name \"{name}\"; a cross-file caller of \
-            an ambiguous name is dropped rather than guessed, so this may undercount."
-        )
-    } else {
-        String::new()
-    };
-    let product_name = product().name;
-    format!(
-        "  no indexed {label} — the graph has no {dir_word} call/reference edges for this \
-        symbol as written.{ambiguity} Check the name (try the bare symbol, or \"Type.method\"), \
-        or find its uses with {product_name} grep \"{name}\". Fall back to raw grep -rn only for \
-        unindexed files"
-    )
-}
-
-/// `  <relation> <arrow> <label>[depthTag]`, with no quote line
-/// (`mcp-server.md` section 4, `renderMatches`/`hitLine` with no quote
-/// argument).
-fn hit_line(direction: Direction, hit: &Hit, show_depth: bool) -> String {
-    let arrow = if direction == Direction::In {
-        "←"
-    } else {
-        "→"
-    };
-    let depth_tag = if show_depth {
-        format!(" [depth {}]", hit.depth)
-    } else {
-        String::new()
-    };
-    let label = match hit.node {
-        Some(node) => format!("{} ({}:{})", node.name, node.path, node.span),
-        None => format!("{} (unresolved import)", hit.id),
-    };
-    format!("  {} {arrow} {label}{depth_tag}", hit.relation.as_str())
-}
-
-/// Renders the `sieve_trace_calls` text: one block per matched symbol,
-/// joined by `\n\n`, with no quoted call-site lines and no trailing-
-/// newline normalization (`mcp-server.md` section 4, `renderMatches`).
-fn render_matches(matches: &[(&Node, Vec<Hit>)], direction: Direction, show_depth: bool) -> String {
+/// Renders the `sieve_trace_calls` text: one tree per matched symbol,
+/// joined by a blank line, with no quoted call-site lines.
+fn render_matches(matches: &[(&Node, Vec<Hit>)], direction: Direction) -> String {
     let candidate_count = matches.len();
     let blocks: Vec<String> = matches
         .iter()
-        .map(|(symbol, hits)| {
-            let mut lines = vec![header_of(symbol)];
-            if hits.is_empty() {
-                lines.push(loose_note_for(direction, &symbol.name, candidate_count));
-            } else {
-                lines.extend(hits.iter().map(|h| hit_line(direction, h, show_depth)));
-            }
-            lines.join("\n")
-        })
+        .map(|(symbol, hits)| render_block(symbol, hits, direction, candidate_count, None))
         .collect();
     blocks.join("\n\n")
 }
@@ -621,7 +545,7 @@ fn parse_depth_arg(args: &Value) -> Depth {
 /// the build command in backticks.
 fn unknown_symbol_text(query: &str) -> String {
     format!(
-        "no symbol \"{query}\" in the graph — check spelling or run `{} build`",
+        "no symbol named {query} — try {} grep {query}",
         product().name
     )
 }
@@ -652,14 +576,13 @@ fn trace_calls(args: &Value, context_dir: &Path) -> (String, bool) {
         Direction::In
     };
     let depth = parse_depth_arg(args);
-    let show_depth = !matches!(depth, Depth(Some(1)));
 
     let pairs: Vec<(&Node, Vec<Hit>)> = matches
         .iter()
         .map(|&symbol| (symbol, edge_walk(&graph, symbol, direction, depth)))
         .collect();
 
-    let body = render_matches(&pairs, direction, show_depth);
+    let body = render_matches(&pairs, direction);
     let paths = callers_saved_paths(&pairs);
     let saved = savings_for(&graph, &paths);
     let text = with_savings(product().name, &body, saved.as_ref());
@@ -730,7 +653,7 @@ fn repo_map(args: &Value, context_dir: &Path) -> (String, bool) {
     let body = rendered.strip_suffix('\n').unwrap_or(&rendered);
     let paths = map_saved_paths(&graph);
     let saved = savings_for(&graph, &paths);
-    let text = format!("{}\n", with_savings(product().name, body, saved.as_ref()));
+    let text = with_savings_nl(product().name, body, saved.as_ref());
     (text, false)
 }
 

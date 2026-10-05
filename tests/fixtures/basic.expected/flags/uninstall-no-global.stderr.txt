@@ -36,4 +36,4 @@ graph:
   - removed: <TMP>/.gitignore (sieve/ ignore entry — deleted)
   - removed: <TMP>/.ignore (sieve/ search re-admit entries — deleted)
 
-✓ sieve fully removed. `sieve init` re-wires from scratch.
+✓ sieve removed · run sieve init to set it up again

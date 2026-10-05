@@ -275,7 +275,7 @@ fn test_mod_dry_run_lists_the_plugin_key() {
     let out = init(&repo, &home, &["--mod", "--dry-run"]);
     assert!(out.status.success(), "{}", stderr(&out));
     assert!(
-        stderr(&out).contains("enabledPlugins.sieve-pane@skills-dir"),
+        stderr(&out).contains("hooks, the status line and the pane mod"),
         "{}",
         stderr(&out)
     );

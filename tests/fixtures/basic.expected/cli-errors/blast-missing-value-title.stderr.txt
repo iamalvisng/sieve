@@ -1,1 +1,1 @@
-error: option '--title <text>' argument missing
+sieve: --title needs a value — see sieve blast --help

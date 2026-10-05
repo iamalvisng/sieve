@@ -1,1 +1,1 @@
-✗ invalid pattern "([": Invalid regular expression: /([/: Unterminated character class
+sieve: invalid pattern "([": Invalid regular expression: /([/: Unterminated character class — fix the pattern, or add --fixed

@@ -1,5 +1,5 @@
-"{" — 2 hits in 1 symbols across 1 files (searched 1 indexed files)
+grep "{" · 2 hits in 1 symbol across 1 file · searched 1 file
 
-src/regex-cases.ts (module level) · 0 in-edges
-  L3: // {
-  L5: // p{L}
+regex-cases.ts  module  src/regex-cases.ts  · 0 links in
+  3: // {
+  5: // p{L}

@@ -1,1 +1,1 @@
-error: unknown option '--in'
+sieve: ask has no --in option — see sieve ask --help

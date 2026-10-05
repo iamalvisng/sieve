@@ -1,3 +1,4 @@
-sieve skeleton — src/a.ts
-- L1-L3  function alphaAdd  function alphaAdd(a: number, b: number): number
-- L5-L7  function alphaTwice  function alphaTwice(n: number): number
+src/a.ts · 2 symbols
+1-3  alphaAdd  fn  (a: number, b: number): number  · 1 caller
+5-7  alphaTwice  fn  (n: number): number
+[sieve] saved ≈ 7 tokens

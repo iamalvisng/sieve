@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { register, startWorker, worker, bandRender, bandInfo, bandLine, blast, blastStep, findLine, makeView, normalize, onToolCall, sieveCommand, savedTokens, treeLines, queue, step, radar, level, cut, sparkline, parseStats, statsStep, statsRun, routeOf, animStep, anim, mascotWords, packCells, mascotSvg, mood, chart, readMascot, C } from '../hooks/register'
+import { setJob, register, startWorker, worker, bandRender, bandInfo, bandLine, blast, blastStep, findLine, makeView, normalize, onToolCall, sieveCommand, savedTokens, treeLines, queue, step, radar, level, cut, sparkline, parseStats, statsStep, statsRun, routeOf, animStep, anim, mascotWords, packCells, mascotSvg, mood, chart, readMascot, C } from '../hooks/register'
 import { MASCOTS, PALETTE, DEFAULT_MASCOT } from '../hooks/mascots'
 import mascotJson from '../assets/mascots-raw'
 
@@ -80,12 +80,33 @@ const lines = (t: any) => texts(t).map(x => x.text)
 // A fake $. The process answers from `answer`. Each call is recorded in `argvs`.
 const fake = (answer: (argv: string[]) => Promise<any>, files: Record<string, string> = {}) => {
   const argvs: string[][] = []
+  const ended: string[][] = []
   const $ = {
     session: { cwd: async () => '/p' },
     fs: { read: async (f: string) => files[f] ?? Promise.reject(new Error('ENOENT')) },
-    process: { run: (argv: string[]) => (argvs.push(argv), answer(argv)) },
+    // spawn gives the answer as pieces; `ended` lists the argv whose loop ended early (the engine kills that child).
+    process: {
+      spawn: ({ argv }: { argv: string[] }) => ({
+        [Symbol.asyncIterator]() {
+          argvs.push(argv)
+          const parts: any[] = []
+          let i = 0
+          return {
+            next: async () => {
+              if (!parts.length) {
+                const r = await answer(argv).catch(() => undefined)
+                if (!r) throw new Error('ENOENT')
+                parts.push({ stream: 'stdout', text: r.stdout }, { stream: 'stderr', text: r.stderr }, { code: r.exitCode, signal: null })
+              }
+              return i < parts.length ? { done: false, value: parts[i++] } : { done: true, value: undefined }
+            },
+            return: async () => (ended.push(argv), { done: true, value: undefined }),
+          }
+        },
+      }),
+    },
   }
-  return { $: $ as never, argvs }
+  return { $: $ as never, argvs, ended }
 }
 const ok = (stdout: object) => Promise.resolve({ exitCode: 0, stdout: JSON.stringify(stdout), stderr: '' })
 const whyOut = { symbols: [{ name: 'f', decisions: [] }] }
@@ -195,75 +216,108 @@ test('step: a failing put does not reject and frees the worker', async () => {
   expect(queue.busy).toBe(false)
 })
 
-// The shape of the real `sieve skeleton --json`: { file, entries: [{ name, kind, span, signature }] }.
-const skelOf = (n: number) => ({
-  file: 'a.rs',
-  entries: Array.from({ length: n }, (_, i) => ({ name: `s${i}`, kind: 'function', span: `L${i + 1}-L${i + 2}`, signature: `function s${i}()` })),
+// The shape of the real `sieve map --json`: { dirs: [{ hubs: [{ name, path, span, inDegree }] }] }. Symbol i of a.rs has i + 1 callers.
+const mapOf = (n: number) => ({
+  dirs: [{ path: '.', hubs: [...Array.from({ length: n }, (_, i) => ({ name: `s${i}`, path: 'a.rs', span: `L${i + 1}-L${i + 2}`, inDegree: i + 1 })), { name: 'other', path: 'b.rs', span: 'L1', inDegree: 99 }] }],
 })
 const hitsOf = (n: number) => ({ matches: [{ hits: Array.from({ length: n }, () => ({ name: 'x', path: 'b.rs', span: 'L1' })) }] })
 const wholeJob = () => ({ file: 'a.rs', path: '/p/a.rs', tool: 'Read', input: { file_path: '/p/a.rs' } })
+const fileAnswer = (a: string[], n = 7) => ok(a[1] === 'map' ? mapOf(n) : a[1] === 'why' ? whyOut : hitsOf(2))
 
-test('step: a whole-file Read makes no why file:1 call, sends the -- argv, and shows the top 5 of 7 symbols', async () => {
+test('step: a whole-file Read runs 3 queries (map, why, callers) and shows the top 3 of 7 symbols', async () => {
   reset()
-  // s6 has 7 callers, s5 has 6, ... s2 has 3, s1 has 2, s0 has 1.
-  const { $, argvs } = fake(a => ok(a[1] === 'skeleton' ? skelOf(7) : a[1] === 'why' ? whyOut : hitsOf(Number(a[a.length - 1]!.slice(1)) + 1)))
+  const { $, argvs } = fake(a => fileAnswer(a))
   queue.job = wholeJob()
   const puts: any[] = []
   await step($, async v => void puts.push(v))
-  expect(argvs.some(a => a.includes('a.rs:1'))).toBe(false)
-  expect(argvs[0]).toEqual(['sieve', 'skeleton', '--json', '--', 'a.rs'])
-  expect(argvs[1]).toEqual(['sieve', 'why', '--json', '--', 'a.rs'])
-  expect(argvs[2]).toEqual(['sieve', 'callers', '--in', 'a.rs', '--json', '--', 's0'])
-  expect(puts[0].symbols.map((c: any) => `${c.name}:${c.line}:${c.n}`)).toEqual(['s6:7:7', 's5:6:6', 's4:5:5', 's3:4:4', 's2:3:3'])
+  // Before: 2 + 10 + 2 + 4 = up to 18 runs. Now: 3.
+  expect(argvs).toEqual([
+    ['sieve', 'map', '--json'],
+    ['sieve', 'why', '--json', '--', 'a.rs:7'],
+    ['sieve', 'callers', '--in', 'a.rs', '--depth', '2', '--json', '--', 'f'],
+  ])
+  expect(puts[0].symbols.map((c: any) => `${c.name}:${c.line}:${c.n}`)).toEqual(['s6:7:7', 's5:6:6', 's4:5:5'])
   const l = lines(radar(R, 60, puts[0], null, null))
   expect(l.some(x => x.includes('MOST CALLED'))).toBe(true)
   expect(l).toContain('s6:7   7 callers')
 })
 
+test('step: a whole-file view never runs more than 3 queries, also with many callers', async () => {
+  reset()
+  const many = { matches: [{ symbol: { kind: 'function', span: 'L1-L2' }, hits: ['a', 'b', 'c', 'd', 'e', 'f'].map(n => ({ id: n, name: n, path: 'b.rs', span: 'L1', depth: 1 })) }] }
+  const { $, argvs } = fake(a => (a[1] === 'callers' ? ok(many) : fileAnswer(a)))
+  queue.job = wholeJob()
+  await step($, async () => {})
+  expect(argvs.length).toBe(3)
+})
+
 test('step: 1 caller is singular', async () => {
   reset()
-  const { $ } = fake(a => ok(a[1] === 'skeleton' ? skelOf(1) : a[1] === 'why' ? whyOut : hitsOf(1)))
+  const { $ } = fake(a => fileAnswer(a, 1))
   queue.job = wholeJob()
   const puts: any[] = []
   await step($, async v => void puts.push(v))
   expect(lines(radar(R, 60, puts[0], null, null))).toContain('s0:1   1 caller')
 })
 
-test('step: an empty skeleton gives a clear note', async () => {
+test('step: a file with no hub runs 2 queries and shows the file decisions', async () => {
   reset()
-  const { $ } = fake(() => ok({ file: 'a.rs', entries: [] }))
+  const { $, argvs } = fake(a => ok(a[1] === 'map' ? { dirs: [] } : whyOut))
   queue.job = wholeJob()
   const puts: any[] = []
   await step($, async v => void puts.push(v))
-  expect(puts[0].note).toBe('no symbols indexed in this file')
+  expect(argvs.map(a => a[1])).toEqual(['map', 'why'])
+  expect(puts[0].symbols).toEqual([])
 })
 
-test('step: a failed callers call leaves that symbol out, the others stay', async () => {
+test('step: a failed map call gives its note', async () => {
   reset()
-  const { $ } = fake(a =>
-    a[1] === 'skeleton' ? ok(skelOf(3)) : a[1] === 'why' ? ok(whyOut) : a[a.length - 1] === 's1' ? Promise.resolve({ exitCode: 1, stdout: '', stderr: 'boom' }) : ok(hitsOf(2)),
-  )
+  const { $ } = fake(() => Promise.resolve({ exitCode: 1, stdout: '', stderr: 'boom' }))
   queue.job = wholeJob()
   const puts: any[] = []
   await step($, async v => void puts.push(v))
-  const l = lines(radar(R, 60, puts[0], null, null))
-  expect(l).toContain('s0:1   2 callers')
-  expect(l).toContain('s2:3   2 callers')
-  expect(l.some(x => x.includes('s1'))).toBe(false)
+  expect(puts[0].note).toBe('boom')
 })
 
-test('step: a job that arrives during the file view stops it, and the stale view is not put', async () => {
+test('step: a job that arrives during the file view ends the spawn loop, so the child is killed, and stops the view', async () => {
   reset()
-  const { $, argvs } = fake(a => {
-    if (a[1] === 'callers') queue.job = { file: 'b.rs', path: '/p/b.rs', tool: 'Read', input: { offset: 5 } } // arrives during the first callers call
-    return ok(a[1] === 'skeleton' ? skelOf(5) : a[1] === 'why' ? whyOut : hitsOf(1))
+  const { $, argvs, ended } = fake(a => {
+    if (a[1] === 'why') setJob({ file: 'b.rs', path: '/p/b.rs', tool: 'Read', input: { offset: 5 } }) // arrives while why runs
+    return fileAnswer(a)
   })
   queue.job = wholeJob()
   const puts: any[] = []
   await step($, async v => void puts.push(v))
-  expect(argvs.filter(a => a[1] === 'callers').length).toBe(1)
+  expect(argvs.map(a => a[1])).toEqual(['map', 'why']) // the callers call never starts
+  expect(ended.map(a => a[1])).toEqual(['why']) // the loop of the stale why call ended early
   expect(puts.length).toBe(0)
   expect(queue.job?.file).toBe('b.rs')
+})
+
+test('step: an end piece with a signal and no code is a failure', async () => {
+  reset()
+  const $ = { session: { cwd: async () => '/p' }, fs: {}, process: { spawn: () => ({ [Symbol.asyncIterator]: () => { let i = 0; const v = [{ stream: 'stderr', text: 'killed' }, { code: null, signal: 'SIGKILL' }]; return { next: async () => (i < v.length ? { done: false, value: v[i++] } : { done: true }), return: async () => ({ done: true }) } } }) } } as never
+  queue.job = { file: 'a.rs', path: '/p/a.rs', tool: 'Read', input: { offset: 7 } }
+  const puts: any[] = []
+  await step($, async v => void puts.push(v))
+  expect(puts[0].note).toBe('killed')
+})
+
+test('step: a spawn that throws gives the not-found note', async () => {
+  reset()
+  const { $ } = fake(() => Promise.reject(new Error('spawn sieve ENOENT')))
+  queue.job = { file: 'a.rs', path: '/p/a.rs', tool: 'Read', input: { offset: 7 } }
+  const puts: any[] = []
+  await step($, async v => void puts.push(v))
+  expect(puts[0].note).toBe('sieve not found on PATH')
+})
+
+test('step: a Read with only a limit is a partial Read, not a whole-file Read', async () => {
+  reset()
+  const { $, argvs } = fake(() => ok({ symbols: [] }))
+  queue.job = { file: 'a.rs', path: '/p/a.rs', tool: 'Read', input: { file_path: '/p/a.rs', limit: 50 } }
+  await step($, async () => {})
+  expect(argvs[0]).toEqual(['sieve', 'why', '--json', '--', 'a.rs:1'])
 })
 
 test('step: a Read with an offset still queries that line', async () => {
@@ -287,16 +341,16 @@ const blastOut = {
 const resetBlast = () => Object.assign(blast, { dirty: true, busy: false, last: -Infinity })
 
 test('band: plain words, one symbol with a count of the rest, singular caller', () => {
-  expect(bandLine(bandInfo(blastOut)!)).toBe('✎ a +2 → affects 4 callers')
-  expect(bandLine(bandInfo({ seeds: [{ name: 'a' }], impacted: [{ name: 'x', depth: 1 }] })!)).toBe('✎ a → affects 1 caller')
+  expect(bandLine(bandInfo(blastOut)!)).toBe('✎ a and 2 more changed → 4 callers affected')
+  expect(bandLine(bandInfo({ seeds: [{ name: 'a' }], impacted: [{ name: 'x', depth: 1 }] })!)).toBe('✎ a → 1 caller affected')
   expect(bandInfo(blastOut)!.hops).toBe(2)
 })
 
 test('band: " in R routes" shows only when the impacted symbols are route handlers', () => {
   const route = (p: string) => ({ name: 'POST', depth: 2, path: `apps/x/src/routes/api/v1/${p}/+server.ts` })
   const b = { seeds: [{ name: 'f' }], impacted: [route('ai/chat'), route('ai/job-fit'), { name: 'g', depth: 1, path: 'lib/g.ts' }] }
-  expect(bandLine(bandInfo(b)!)).toBe('✎ f → affects 3 callers in 2 routes')
-  expect(bandLine(bandInfo({ ...b, impacted: [route('ai/chat')] })!)).toBe('✎ f → affects 1 caller in 1 route')
+  expect(bandLine(bandInfo(b)!)).toBe('✎ f → 3 callers affected in 2 routes')
+  expect(bandLine(bandInfo({ ...b, impacted: [route('ai/chat')] })!)).toBe('✎ f → 1 caller affected in 1 route')
   expect(bandLine(bandInfo(blastOut)!)).not.toContain('route')
 })
 
@@ -332,7 +386,7 @@ test('blastStep: the argv is exact and the band text reaches putBand', async () 
   const puts: any[] = []
   await blastStep($, 5000, async t => void puts.push(t))
   expect(argvs).toEqual([['sieve', 'blast', '--format', 'json', '--no-owners']])
-  expect(puts).toEqual([{ sym: 'a +2', n: 4, hops: 2, routes: 0 }])
+  expect(puts).toEqual([{ sym: 'a', more: 2, n: 4, hops: 2, routes: 0 }])
 })
 
 test('blastStep: nothing changed and a blast failure both give a null band', async () => {
@@ -377,8 +431,8 @@ test('blastStep: an edit during the run drops the stale result', async () => {
 
 test('band: a whole-file seed shows the file name, a symbol seed wins', () => {
   const b = { seeds: [{ wholeFile: true, path: 'docs/a.md' }, { wholeFile: true, path: 'b.md' }], impacted: [{ name: 'x', depth: 1 }] }
-  expect(bandInfo(b)!.sym).toBe('a.md +1')
-  expect(bandInfo({ ...b, seeds: [...b.seeds, { wholeFile: false, name: 'f', path: 'c.rs' }] })!.sym).toBe('f +2')
+  expect(bandInfo(b)!).toMatchObject({ sym: 'a.md', more: 1 })
+  expect(bandInfo({ ...b, seeds: [...b.seeds, { wholeFile: false, name: 'f', path: 'c.rs' }] })!).toMatchObject({ sym: 'f', more: 2 })
 })
 
 test('onToolCall: Write and MultiEdit set the blast flag, a path outside the project does not', async () => {
@@ -425,7 +479,7 @@ test('bandRender: no data passes through, data draws the plain words in the leve
   const $ = { ui: { resolve: () => R } }
   for (const [n, color] of [[5, C.green], [6, C.orange], [21, C.red]] as const) {
     const tree = bandRender($ as never, e, next, { ...band6, n })
-    expect(texts(tree)).toEqual([{ text: `✎ f → affects ${n} callers`, props: { color } }])
+    expect(texts(tree)).toEqual([{ text: `✎ f → ${n} callers affected`, props: { color } }])
   }
 })
 
@@ -450,10 +504,11 @@ const sfix = { tokens: 12900, dollars: 0.04, spark: [1, 2, 5, 3, 7] }
 const draw = (v: any, b: any = null, s: any = null, w = 44) => texts(radar(R, w, v, b, s))
 const section = (t: any[], title: string) => t.find(x => x.text === title && x.props.bold)
 
-test('radar: the frame is a round Box and each section shows from the data', () => {
+test('radar: the pane has padding and no outer border, and each section shows from the data', () => {
   const tree: any = radar(R, 44, fix(), null, sfix)
   expect(tree.type).toBe('Box')
-  expect(tree.props.borderStyle).toBe('round')
+  expect(tree.props.borderStyle).toBeUndefined() // the engine's pane draws the frame
+  expect(tree.props).toMatchObject({ paddingX: 1, paddingTop: 1 })
   const t = draw(fix(), null, sfix)
   for (const name of ['WHO DEPENDS ON THIS', 'IMPACT', 'WHY IT EXISTS', 'SAVED · LAST 7 DAYS']) expect(section(t, name)).toBeTruthy()
   const l = t.map(x => x.text)
@@ -543,7 +598,7 @@ test('cut: a long name ends in an ellipsis and the line fits the pane', () => {
   expect(cut('abc', 6)).toBe('abc')
   const long = 'a'.repeat(80)
   const t = draw(fix({ symbol: long, tree: [{ d: 1, p: 0, label: long, tail: 'g.ts:1' }] }), null, null, 40)
-  for (const x of t) expect(x.text.length).toBeLessThanOrEqual(35)
+  for (const x of t) expect(x.text.length).toBeLessThanOrEqual(37) // 40 columns, less 2 of padding, less 1 free
   expect(t.some(x => x.text.endsWith('…'))).toBe(true)
 })
 
@@ -555,14 +610,13 @@ test('radar: a SUPERSEDED decision shows a red card with the warning sign and th
 
 test('radar: no decision shows a dim line, no stats hides the savings section', () => {
   const t = draw(fix({ why: [] }))
-  expect(t.find(x => x.text === 'no decision recorded')!.props.color).toBe(C.dim)
+  expect(t.find(x => x.text === 'no decision recorded')!.props.color).toBe(C.text)
   expect(section(t, 'SAVED · LAST 7 DAYS')).toBeUndefined()
 })
 
 test('radar: a whole-file Read draws the most called symbols in the same frame', () => {
   const v = { file: 'a.rs', tool: 'Read', why: [], tree: [], symbols: [{ name: 's1', line: 4, n: 7 }] }
   const tree: any = radar(R, 44, v, null, null)
-  expect(tree.props.borderStyle).toBe('round')
   const l = texts(tree).map(x => x.text)
   expect(l).toContain('s1:4   7 callers')
   expect(l).toContain('no decision recorded')
@@ -659,7 +713,7 @@ test('look: every section shows, and the colors follow the level (green, orange,
 test('look: the header names the symbol in bold and the meta in dim, the connectors are dim, depth 1 cyan, depth 2 blue', () => {
   const t = texts(radar(RR, 44, fix({ at: new Date(2026, 9, 5, 21, 58).getTime(), tool: 'Edit' }), null, null))
   expect(t[0]).toMatchObject({ text: 'checkApiKeyRateLimit', props: { bold: true, color: C.fg } })
-  const meta = t.filter(x => x.props.color === C.dim && /rate-limit|edited/.test(x.text)).map(x => x.text)
+  const meta = t.filter(x => x.props.color === C.text && /rate-limit|edited/.test(x.text)).map(x => x.text)
   expect(meta).toEqual(['rate-limit.ts:313 · fn', 'edited 9:58pm'])
   const d1 = t.find(x => x.text.includes('enforceApiKeyRateLimit'))!
   expect(d1.parts!.map(p => p.props.color)).toEqual([C.dim, C.cyan])
@@ -672,7 +726,27 @@ test('look: the stat tiles are bordered, in the order today, week, impact', () =
   expect(tiles.length).toBe(3)
   expect(tiles.map(x => texts(x).map(y => y.text))).toEqual([['SAVED TODAY', '61.7k'], ['THIS WEEK', '2.3k'], ['IMPACT', '3']])
   expect(tiles.map(x => texts(x)[1]!.props.color)).toEqual([C.green, C.blue, C.green])
-  expect(tiles.every(x => x.props.width * 3 <= 39)).toBe(true) // fits the 44-column pane
+  expect(tiles.reduce((a, x) => a + x.props.width, 0) + 2).toBeLessThanOrEqual(41) // 3 tiles and 2 gaps fit the 44-column pane, less the padding
+  expect(nodes(tree, 'Box').find(x => x.props?.gap === 1 && tileBoxes(x).length === 3)).toBeTruthy() // 1 cell between tiles
+})
+
+test('look: the tile text has a padding column on each side, and the label and the value share a left edge', () => {
+  const tree: any = radar(RR, 44, fix(), null, weekStats)
+  for (const tile of tileBoxes(tree)) {
+    expect(tile.props.paddingX).toBe(1)
+    // Draw the tile as text: the border takes 1 cell, the padding 1 cell, each side.
+    const inner = tile.props.width - 2
+    const rows = texts(tile).map(x => `│${' '.repeat(tile.props.paddingX)}${x.text.padEnd(inner - 2 * tile.props.paddingX)}${' '.repeat(tile.props.paddingX)}│`)
+    for (const r of rows) {
+      expect(r.length).toBe(tile.props.width)
+      expect(r[1]).toBe(' ') // a padding column after the left border
+      expect(r[2]).not.toBe(' ') // the text starts in column 2, the same for the label and the value
+      expect(r[r.length - 2]).toBe(' ') // a padding column before the right border
+    }
+    for (const x of texts(tile)) expect(x.text.length).toBeLessThanOrEqual(tile.props.width - 4)
+  }
+  const head = nodes(tree, 'Box').find(x => x.props?.alignItems === 'flex-start')
+  expect(head.props.gap).toBe(2) // 2 columns between the mascot and the text, both at the top
 })
 
 test('look: a non-code file animates the mascot, the savings tiles and the not-code line', () => {
@@ -702,7 +776,7 @@ test('look: the mascot option: none hides it, hoot uses the hoot palette', () =>
   const hoot = wordsOf(radar(RR, 44, fix(), null, null, { name: 'hoot', frame: 0 }))
   const soya = wordsOf(radar(RR, 44, fix(), null, null, { name: 'soya', frame: 0 }))
   const colors = (w: Uint32Array) => new Set([...w].filter((c, i) => i % 3 > 0 && c !== 0x01000000))
-  const owl = new Set([...MASCOTS.hoot!.frames.flat().join('')].filter(c => c !== '.').map(c => hex(PALETTE[c]!)))
+  const owl = new Set([...MASCOTS.hoot!.small.flat().join('')].filter(c => c !== '.').map(c => hex(PALETTE[c]!)))
   expect([...colors(hoot)].every(c => owl.has(c))).toBe(true)
   expect(colors(hoot).has(hex('#bb9af7'))).toBe(true) // hoot is purple
   expect(colors(soya).has(hex('#bb9af7'))).toBe(false)
@@ -712,15 +786,15 @@ test('look: the mascot option: none hides it, hoot uses the hoot palette', () =>
 
 test('look: the Raster cells of one frame: count, glyphs and colors', () => {
   const r = rasterOf(radar(RR, 44, fix(), null, null, { name: 'soya', frame: 0 }))
-  expect([r.props.columns, r.props.rows]).toEqual([16, 7])
+  expect([r.props.columns, r.props.rows]).toEqual([10, 3]) // the small frame: 10 x 6 pixels
   const w = decode(r.props.cells)
-  expect(w.length).toBe(16 * 7 * 3)
-  const cell = (row: number, col: number) => Array.from(w.slice((row * 16 + col) * 3, (row * 16 + col) * 3 + 3))
+  expect(w.length).toBe(10 * 3 * 3)
+  const cell = (row: number, col: number) => Array.from(w.slice((row * 10 + col) * 3, (row * 10 + col) * 3 + 3))
   expect(cell(0, 0)).toEqual([0x20, 0x01000000, 0x01000000]) // transparent: the terminal color
-  expect(cell(0, 5)).toEqual([0x2580, hex('#9c6644'), hex('#c08a5c')]) // upper pixel n over lower pixel l
-  expect(cell(3, 1)[1]).toBe(hex('#6f4628')) // pixel rows 6 and 7 at column 1: N over N
+  expect(cell(0, 2)).toEqual([0x2580, hex('#c08a5c'), hex('#9c6644')]) // upper pixel l over lower pixel n
+  expect(cell(1, 0)[1]).toBe(hex('#6f4628')) // pixel rows 2 and 3 at column 0: N over N
   const dim = mascotWords('soya', 0, true)!.words
-  expect(dim[(0 * 16 + 5) * 3 + 1]).not.toBe(hex('#9c6644'))
+  expect(dim[(0 * 10 + 2) * 3 + 1]).not.toBe(hex('#c08a5c'))
   expect(packCells(mascotWords('soya', 1)!.words)).not.toBe(r.props.cells) // frame 1 differs
 })
 
@@ -812,7 +886,7 @@ test('anim: the worker tick runs the animation step', async () => {
   resetAnim()
   const blits: any[] = []
   let tick = async () => {}
-  const $ = { clock: { every: (_: number, f: any) => void (tick = f), now: async () => 0 }, process: { run: () => Promise.resolve({ exitCode: 1, stdout: '', stderr: '' }) }, fs: {}, state: {}, ui: { panes: async () => [{ id: 'sieve' }], blit: async (a: any) => (blits.push(a), {}), invalidate: () => {} } }
+  const $ = { clock: { every: (_: number, f: any) => void (tick = f), now: async () => 0 }, process: { spawn: () => ({ [Symbol.asyncIterator]: () => ({ next: async () => ({ done: false, value: { code: 1, signal: null } }), return: async () => ({ done: true }) }) }) }, fs: {}, state: {}, ui: { panes: async () => [{ id: 'sieve' }], blit: async (a: any) => (blits.push(a), {}), invalidate: () => {} } }
   queue.job = undefined
   Object.assign(blast, { dirty: false })
   startWorker($ as never, async () => {}, async () => {})
@@ -898,6 +972,7 @@ test('mascots.ts equals assets/mascots.json', () => {
   for (const k of Object.keys(j.mascots)) {
     expect(MASCOTS[k]!.name).toBe(j.mascots[k].name)
     expect(MASCOTS[k]!.frames).toEqual(j.mascots[k].frames)
+    expect(MASCOTS[k]!.small).toEqual(j.mascots[k].small)
     expect(MASCOTS[k]!.frames.length).toBe(2)
     const [h, w] = [14, 16]
     for (const f of MASCOTS[k]!.frames) expect([f.length, ...new Set(f.map(r => r.length))]).toEqual([h, w])
@@ -907,9 +982,9 @@ test('mascots.ts equals assets/mascots.json', () => {
 
 test('mascot: the Raster size follows the frame size', () => {
   const s = mascotWords('sieve', 0)!
-  expect([s.columns, s.rows, s.words.length]).toEqual([16, 7, 16 * 7 * 3])
-  expect(mascotSvg('sieve', 0)).toContain('viewBox="0 0 16 14"')
-  Object.assign(MASCOTS, { odd: { name: 'odd', frames: [Array(22).fill('a'.repeat(28))] } })
+  expect([s.columns, s.rows, s.words.length]).toEqual([12, 3, 12 * 3 * 3]) // the pane draws the small frame: 12 x 6 pixels
+  expect(mascotSvg('sieve', 0)).toContain('viewBox="0 0 12 6"')
+  Object.assign(MASCOTS, { odd: { name: 'odd', frames: [], small: [Array(22).fill('a'.repeat(28))] } })
   expect([mascotWords('odd', 0)!.columns, mascotWords('odd', 0)!.rows]).toEqual([28, 11]) // 28x22 gives 28 columns x 11 rows
   delete MASCOTS.odd
 })
@@ -1055,6 +1130,7 @@ test('onToolCall: an MCP call reads the real argument names and maps the tool na
   for (const [tool, input, sub, arg] of [
     ['mcp__sieve__find_code', { pattern: 'how x' }, 'ask', 'how x'],
     ['mcp__sieve__trace_calls', { symbol: 'diff' }, 'callers', 'diff'],
+    ['mcp__sieve__sieve_trace_calls', { symbol: 'diff' }, 'callers', 'diff'],
     ['mcp__sieve__find_all', { query: 'q' }, 'grep', 'q'],
     ['mcp__sieve__file_api', { file: 'a.rs' }, 'skeleton', 'a.rs'],
   ] as const) {
@@ -1074,9 +1150,127 @@ test('onToolCall: a throwing session.cwd still returns the result of a sieve cal
 test('step: a query job runs no findLine and shows the query', async () => {
   reset()
   const { $, argvs } = fake(() => ok({}))
-  queue.job = { file: 'diff', path: '/p/diff', tool: 'callers', input: {}, query: { sub: 'callers', arg: 'diff', saved: 5 }, isFile: false }
+  queue.job = { file: 'diff', path: '/p/diff', tool: 'blast', input: {}, query: { sub: 'blast', arg: 'diff', saved: 5 }, isFile: false }
   const puts: any[] = []
   await step($, async v => void puts.push(v))
   expect(argvs).toEqual([])
   expect(puts[0].query.saved).toBe(5)
+})
+
+// The WCAG contrast ratio of two #rrggbb colors.
+const luma = (h: string) => {
+  const v = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255).map(c => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4))
+  return 0.2126 * v[0]! + 0.7152 * v[1]! + 0.0722 * v[2]!
+}
+const contrast = (a: string, b: string) => (Math.max(luma(a), luma(b)) + 0.05) / (Math.min(luma(a), luma(b)) + 0.05)
+
+test('band: "and N more changed" shows for 1 or more other symbols, singular for 1', () => {
+  expect(bandLine({ sym: 'f', more: 1, n: 1, hops: 1, routes: 0 })).toBe('✎ f and 1 more changed → 1 caller affected')
+  expect(bandLine({ sym: 'f', more: 0, n: 2, hops: 1, routes: 0 })).toBe('✎ f → 2 callers affected')
+})
+
+test('colors: every text color has a contrast of 4.5 or more on the pane background', () => {
+  const bg = '#1a1b26'
+  for (const [name, c] of Object.entries(C)) {
+    if (name === 'dim' || name === 'border') continue // the dim color is for borders and bar tracks, not text
+    expect(contrast(c, bg)).toBeGreaterThanOrEqual(4.5)
+  }
+  expect(contrast(C.dim, bg)).toBeLessThan(4.5) // the old dim text color failed: it stays for borders only
+})
+
+// The symbol view of a query job: the same tree, impact and why as the edit view.
+const symOut = { matches: [{ symbol: { name: 'double', kind: 'function', path: 'src/calc.ts', span: 'L3-L5' }, hits: [{ name: 'alpha', path: 'src/calc.ts', span: 'L17-L19', depth: 1, id: 'a' }] }] }
+const symAnswer = (a: string[]) => ok(a[1] === 'why' ? { symbols: [{ name: 'double', decisions: [{ heading: 'doubles n', date: '2026-01-01' }] }] } : a[1] === 'ask' ? { hits: [{ kind: 'symbol', pointer: 'src/calc.ts:L3-L5' }] } : symOut)
+const seeTree = (v: any) => {
+  const l = lines(radar(R, 60, v, null, null))
+  expect(l).toContain('WHO DEPENDS ON THIS')
+  expect(l).toContain('◉ double')
+  expect(l.some(x => x.startsWith('└─● alpha'))).toBe(true)
+  expect(l).toContain('IMPACT')
+  expect(l).toContain('WHY IT EXISTS')
+  expect(l.some(x => x.includes('doubles n'))).toBe(true)
+}
+
+test('step: a whole-file Read shows 3 symbols, then the tree, impact and why of the most called symbol', async () => {
+  reset()
+  const { $, argvs } = fake(a => (a[1] === 'map' ? ok({ dirs: [{ hubs: [{ name: 'double', path: 'a.rs', span: 'L3-L5', inDegree: 1 }] }] }) : symAnswer(a)))
+  queue.job = wholeJob()
+  const puts: any[] = []
+  await step($, async v => void puts.push(v))
+  expect(argvs.some(a => a[1] === 'why' && a[4] === 'a.rs:3')).toBe(true)
+  expect(puts[0].symbols.length).toBe(1)
+  const l = lines(radar(R, 60, puts[0], null, null))
+  expect(l.indexOf('MOST CALLED SYMBOLS')).toBeLessThan(l.indexOf('WHO DEPENDS ON THIS'))
+  expect(l[0]).toBe('a.rs')
+  seeTree(puts[0])
+})
+
+test('step: `sieve callers <symbol>` shows the symbol view, resolved with sieve callers then sieve why', async () => {
+  reset()
+  const { $, argvs } = fake(symAnswer)
+  queue.job = { file: 'double', path: '/p/double', tool: 'callers', input: {}, query: { sub: 'callers', arg: 'double', saved: 3 }, isFile: false }
+  const puts: any[] = []
+  await step($, async v => void puts.push(v))
+  expect(argvs[0]).toEqual(['sieve', 'callers', '--json', '--', 'double'])
+  expect(argvs[1]).toEqual(['sieve', 'why', '--json', '--', 'src/calc.ts:3'])
+  expect(puts[0]).toMatchObject({ file: 'src/calc.ts', symbol: 'double', query: { sub: 'callers', saved: 3 } })
+  seeTree(puts[0])
+})
+
+test('step: an MCP sieve_trace_calls call shows the symbol view', async () => {
+  reset()
+  const { $ } = fake(symAnswer)
+  await onToolCall($, { tool: 'mcp__sieve__sieve_trace_calls', symbol: 'double' }, async () => ({ text: '' }))
+  const puts: any[] = []
+  await step($, async v => void puts.push(v))
+  seeTree(puts[0])
+})
+
+test('step: `sieve ask` shows the symbol view of the top hit; a top hit that is not a symbol gives a note', async () => {
+  reset()
+  const { $, argvs } = fake(symAnswer)
+  queue.job = { file: 'how to double', path: '/p/x', tool: 'ask', input: {}, query: { sub: 'ask', arg: 'how to double', saved: 0 }, isFile: false }
+  const puts: any[] = []
+  await step($, async v => void puts.push(v))
+  expect(argvs[0]).toEqual(['sieve', 'ask', '--json', '--', 'how to double'])
+  expect(argvs[1]).toEqual(['sieve', 'why', '--json', '--', 'src/calc.ts:3'])
+  seeTree(puts[0])
+  const doc = fake(() => ok({ hits: [{ kind: 'doc', pointer: 'README.md:L1' }] }))
+  queue.job = { file: 'q', path: '/p/q', tool: 'ask', input: {}, query: { sub: 'ask', arg: 'q', saved: 0 }, isFile: false }
+  await step(doc.$, async v => void puts.push(v))
+  expect(puts[1].note).toBe('the top hit is not a symbol')
+})
+
+test('radar: 1 blank row sits before each section, and the subtitle never repeats the file name', () => {
+  const l = draw(fix(), null, sfix).map(x => x.text)
+  for (const name of ['WHO DEPENDS ON THIS', 'IMPACT', 'WHY IT EXISTS', 'SAVED · LAST 7 DAYS']) expect(l[l.lastIndexOf(name) - 1]).toBe(' ')
+  expect(l[1]).toBe('rate-limit.ts:313 · fn · read') // a symbol view keeps the file name and the line
+  const file = draw({ file: 'src/lib/a.rs', tool: 'Read', why: [], tree: [], symbols: [{ name: 's', line: 1, n: 1 }] }).map(x => x.text)
+  expect(file.slice(0, 2)).toEqual(['a.rs', 'src/lib · read'])
+})
+
+test('onToolCall: only `sieve skeleton` of a code file starts the file view; grep and map do not', async () => {
+  for (const [command, isFile] of [['sieve skeleton src/x.ts', true], ['sieve grep src/x.ts', false], ['sieve map src/x.ts', false], ['sieve callers src/x.ts', false]] as const) {
+    reset()
+    const { $ } = fake(() => ok({}))
+    await onToolCall($, { tool: 'Bash', command }, async () => ({ text: SAVED }))
+    expect(queue.job?.isFile).toBe(isFile)
+  }
+})
+
+test('onToolCall: the MCP tools sieve_why, sieve_repo_map and sieve_check_freshness map to why, map and check', async () => {
+  for (const [tool, input, sub, arg] of [
+    ['mcp__sieve__sieve_why', { symbol: 'f' }, 'why', 'f'],
+    ['mcp__sieve__sieve_repo_map', {}, 'map', ''],
+    ['mcp__sieve__sieve_check_freshness', {}, 'check', ''],
+    ['mcp__sieve__why', { symbol: 'f' }, 'why', 'f'],
+    ['mcp__sieve__repo_map', {}, 'map', ''],
+    ['mcp__sieve__check_freshness', {}, 'check', ''],
+  ] as const) {
+    reset()
+    const { $ } = fake(() => ok({}))
+    await onToolCall($, { tool, ...input }, async () => ({ text: '' }))
+    expect(queue.job?.query).toMatchObject({ sub, arg })
+    expect(queue.job?.isFile).toBe(false)
+  }
 })

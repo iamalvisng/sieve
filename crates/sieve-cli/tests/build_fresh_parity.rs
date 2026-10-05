@@ -281,7 +281,7 @@ fn test_p2_01_unreadable_file_is_reported_not_fatal_like_golden() {
 }
 
 /// P2-01: with no git, an unreadable dir fails the build with Node's
-/// `EACCES` `scandir` line, no `✗` prefix, and exit 1.
+/// `EACCES` `scandir` line, in the error shape, and exit 1.
 #[cfg(unix)]
 #[test]
 fn test_p2_01_unreadable_dir_with_no_git_fails_like_golden() {

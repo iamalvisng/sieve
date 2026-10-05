@@ -1,1 +1,1 @@
-error: unknown option '--bad'
+sieve: skeleton has no --bad option — see sieve skeleton --help

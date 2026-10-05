@@ -1,11 +1,12 @@
-sieve skeleton — rust/lib.rs
-- L6-L6  constant MAX_NAME_LEN  pub const MAX_NAME_LEN: usize = 32;
-- L7-L7  constant DEFAULT_NAME  pub static DEFAULT_NAME: &str = "sieve";
-- L9-L12  enum Level  pub enum Level
-- L14-L16  interface Greeter  pub trait Greeter
-- L15-L15  function greet  fn greet(&self) -> String;
-- L18-L20  struct App  pub struct App
-- L23-L25  function greet  fn greet(&self) -> String
-- L29-L31  function fmt  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
-- L34-L38  module util  pub mod util
-- L35-L37  function run  pub fn run(app: &super::App) -> String
+rust/lib.rs · 10 symbols
+  6-6  MAX_NAME_LEN  const  : usize = 32;
+  7-7  DEFAULT_NAME  const  : &str = "sieve";
+ 9-12  Level  enum
+14-16  Greeter  iface
+15-15  greet  fn  (&self) -> String;
+18-20  App  struct
+23-25  greet  fn  (&self) -> String
+29-31  fmt  fn  (&self, f: &mut fmt::Formatter) -> fmt::Result
+34-38  util  module  mod util
+35-37  run  fn  (app: &super::App) -> String
+[sieve] saved ≈ 43 tokens

@@ -1,31 +1,24 @@
-sieve ask — "big function"  (lexical)
+ask  big function · 7 hits
 
-1. [packages/big/] bigFive · function  [symbol]
-   packages/big/index.ts:L13-L14
+1  [packages/big/] bigFive  fn  packages/big/index.ts:13-14
    function bigFive(): number
 
-2. [packages/big/] bigFour · function  [symbol]
-   packages/big/index.ts:L10-L11
+2  [packages/big/] bigFour  fn  packages/big/index.ts:10-11
    function bigFour(): number
 
-3. [packages/big/] bigOne · function  [symbol]
-   packages/big/index.ts:L1-L2
+3  [packages/big/] bigOne  fn  packages/big/index.ts:1-2
    function bigOne(): number
 
-4. [packages/big/] bigSix · function  [symbol]
-   packages/big/index.ts:L16-L17
+4  [packages/big/] bigSix  fn  packages/big/index.ts:16-17
    function bigSix(): number
 
-5. [packages/big/] bigThree · function  [symbol]
-   packages/big/index.ts:L7-L8
+5  [packages/big/] bigThree  fn  packages/big/index.ts:7-8
    function bigThree(): number
 
-6. [packages/big/] bigTwo · function  [symbol]
-   packages/big/index.ts:L4-L5
+6  [packages/big/] bigTwo  fn  packages/big/index.ts:4-5
    function bigTwo(): number
 
-7. [packages/big/] index.ts · file  [symbol]
-   packages/big/index.ts
+7  [packages/big/] index.ts  file  packages/big/index.ts
 
 matched in: packages/big/ (7)
 also matched: (root) — narrow with --in (root)

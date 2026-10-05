@@ -7,7 +7,7 @@ use std::sync::OnceLock;
 use regex::Regex;
 use sieve_core::collate::collate;
 
-use super::{scope_label, AskMode, AskResult};
+use super::{scope_label, AskHit, AskMode, AskResult};
 
 /// The word a mode serializes to in the header and in JSON.
 fn mode_word(mode: AskMode) -> &'static str {
@@ -18,17 +18,27 @@ fn mode_word(mode: AskMode) -> &'static str {
     }
 }
 
+/// Swaps the words the text report does not use for plain ones. The JSON
+/// report keeps the note as it is.
+fn plain_words(line: &str) -> String {
+    line.replace("no matching nodes", "no matching symbols")
+        .replace("outgoing edges from", "outgoing links from")
+        .replace("precise edges", "exact links")
+        .replace("workspace repo(s)", "workspace repos")
+}
+
 /// The note block: every line starting `structural index:` gets a `⚠ `
 /// marker; a benign structural note prints plain (section 6.4).
 fn note_block(note: &Option<String>) -> String {
     match note {
         Some(note) => note
             .split('\n')
+            .map(plain_words)
             .map(|line| {
                 if line.starts_with("structural index:") {
                     format!("⚠ {line}")
                 } else {
-                    line.to_string()
+                    line
                 }
             })
             .collect::<Vec<_>>()
@@ -96,13 +106,28 @@ fn scope_footer_lines(r: &AskResult) -> Vec<String> {
     out
 }
 
+/// The row of one hit: `name  kind  path:start-end`. A concept hit shows
+/// its sources in place of a path.
+fn row_of(h: &AskHit) -> String {
+    let (name, kind) = sieve_core::voice::split_title(&h.title);
+    let pointer = sieve_core::voice::pointer(&h.pointer);
+    // A structural hit has no kind in its title: it shows `caller` or
+    // `callee`, from the hit kind.
+    let kind = sieve_core::voice::short_kind(kind.unwrap_or(&h.kind));
+    format!("{name}  {kind}  {pointer}")
+}
+
 /// Renders an [`AskResult`] as the plain-text `ask` report.
 pub fn format_ask(r: &AskResult) -> String {
+    let count = r.hits.len();
+    let mode = match r.mode {
+        AskMode::Lexical => String::new(),
+        other => format!(" \u{b7} {}", mode_word(other)),
+    };
     let head = format!(
-        "{} ask — \"{}\"  ({})",
-        sieve_core::product().name,
+        "ask  {} \u{b7} {count} {}{mode}",
         r.query,
-        mode_word(r.mode)
+        if count == 1 { "hit" } else { "hits" },
     );
     let note_block = note_block(&r.note);
 
@@ -129,7 +154,7 @@ pub fn format_ask(r: &AskResult) -> String {
             } else {
                 format!(" — {}", h.snippet)
             };
-            lines.push(format!("- {}  {}  ({relation}){tail}", h.title, h.pointer));
+            lines.push(format!("{}  \u{b7} {relation}{tail}", row_of(h)));
             if let Some(code) = &h.code {
                 lines.push(String::new());
                 lines.push("```".to_string());
@@ -144,8 +169,7 @@ pub fn format_ask(r: &AskResult) -> String {
                 (Some(_), Some(scope)) if !scope.is_empty() => format!("[{scope}/] "),
                 _ => String::new(),
             };
-            lines.push(format!("{}. {label}{}  [{}]", i + 1, h.title, h.kind));
-            lines.push(format!("   {}", h.pointer));
+            lines.push(format!("{}  {label}{}", i + 1, row_of(h)));
             if !h.snippet.is_empty() {
                 lines.push(format!("   {}", h.snippet));
             }
@@ -243,6 +267,25 @@ mod tests {
         assert!(json.starts_with("{\n  \"query\": \"q\",\n  \"mode\": \"structural\",\n  \"subject\": \"one\",\n  \"hits\": ["));
         assert!(!json.contains("coverage"));
         assert!(json.ends_with("  \"note\": \"n\",\n  \"saved\": {\n    \"files\": 1,\n    \"baselineChars\": 76\n  }\n}\n"));
+    }
+
+    #[test]
+    fn the_text_report_uses_plain_words_and_the_row_grammar() {
+        let r = empty_result(
+            AskMode::Empty,
+            vec![],
+            Some("no matching nodes".to_string()),
+        );
+        assert!(format_ask(&r).contains("no matching symbols"));
+
+        let mut h = hit("run \u{b7} function");
+        h.pointer = "a.ts:L4-L9".to_string();
+        let r = empty_result(AskMode::Lexical, vec![h; 4], None);
+        let text = format_ask(&r);
+        assert!(
+            text.starts_with("ask  q \u{b7} 4 hits\n\n1  run  fn  a.ts:4-9\n"),
+            "{text}"
+        );
     }
 
     #[test]

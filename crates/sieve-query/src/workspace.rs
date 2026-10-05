@@ -18,8 +18,7 @@ use crate::ask::{
     Ranking, ScopeMeta, PARTICIPATION_RATIO,
 };
 use crate::callers::{
-    edge_walk, header_of, hit_line, loose_note_for, resolve_symbol, CallersError, Depth, Direction,
-    Hit,
+    edge_walk, render_block, resolve_symbol, CallersError, Depth, Direction, Hit,
 };
 use crate::grep::{grep_graph, GrepError, GrepGroup, GrepOptions, GrepResult, GrepTruncated};
 use crate::map::{build_repo_map, format_repo_map, MapOptions};
@@ -231,7 +230,6 @@ pub fn federate_callers(
     depth: Depth,
     render: impl Fn(&Graph, &str, &[String]) -> String,
 ) -> Result<FederatedCallers, CallersError> {
-    let show_depth = !matches!(depth, Depth(Some(n)) if n <= 1);
     let mut blocks = Vec::new();
     for ChildGraph { child, graph, .. } in &graphs.loaded {
         let matches = match resolve_symbol(graph, symbol, in_prefix) {
@@ -245,14 +243,7 @@ pub fn federate_callers(
             .collect();
         let mut lines = vec![format!("## {child}/")];
         for (sym, hits) in &results {
-            lines.push(header_of(sym));
-            if hits.is_empty() {
-                lines.push(loose_note_for(direction, &sym.name, matches.len()));
-            } else {
-                for h in hits {
-                    lines.push(hit_line(direction, h, show_depth, None));
-                }
-            }
+            lines.push(render_block(sym, hits, direction, matches.len(), None));
         }
         let paths = crate::callers::callers_saved_paths(&results);
         blocks.push(render(graph, &lines.join("\n"), &paths));
@@ -260,7 +251,7 @@ pub fn federate_callers(
     let cov = coverage_note(graphs);
     if blocks.is_empty() {
         let base = format!(
-            "no symbol \"{symbol}\" in any of the {} workspace repo(s) — check spelling or run {} build",
+            "no symbol named {symbol} in any of the {} workspace repos — try {} grep {symbol}",
             graphs.loaded.len(),
             sieve_core::product().name
         );
@@ -297,7 +288,7 @@ pub struct FederateAskOptions {
 #[derive(Debug, Error)]
 pub enum FederateAskError {
     /// The first `--in` segment names no workspace child.
-    #[error("no workspace repo \"{name}\" - repos: {repos}")]
+    #[error("no workspace repo named {name} \u{2014} use one of: {repos}")]
     UnknownChild {
         /// The first `--in` segment.
         name: String,
@@ -1109,14 +1100,14 @@ mod tests {
             Depth(Some(2)),
             |_, body, paths| {
                 assert_eq!(paths, ["a.ts", "a.ts"]);
-                format!("[saved]\n\n{body}")
+                format!("{body}\n[saved]")
             },
         )
         .expect("resolves");
         assert!(fed.found);
         assert_eq!(
             fed.text,
-            "[saved]\n\n## alpha/\nshared · function · a.ts:L1-L3\n  calls ← useShared (a.ts:L5-L7) [depth 1]\n\n\
+            "## alpha/\nshared  fn  a.ts:1-3\n1 caller\n\u{2514}\u{2500} useShared  fn  a.ts:5-7\n[saved]\n\n\
              2 of 3 workspace repos have graphs; run sieve build to cover gamma"
         );
 
@@ -1132,7 +1123,7 @@ mod tests {
         assert!(!miss.found);
         assert_eq!(
             miss.text,
-            "no symbol \"zzz\" in any of the 2 workspace repo(s) — check spelling or run sieve build\n\
+            "no symbol named zzz in any of the 2 workspace repos — try sieve grep zzz\n\
              2 of 3 workspace repos have graphs; run sieve build to cover gamma"
         );
     }
@@ -1380,7 +1371,7 @@ mod tests {
         let err = federate_ask(&graphs, "q", &opts("zzz/sub//")).expect_err("unknown child");
         assert_eq!(
             err.to_string(),
-            "no workspace repo \"zzz\" - repos: alpha, beta"
+            "no workspace repo named zzz \u{2014} use one of: alpha, beta"
         );
         // A missing child passes the name check and gives the empty note.
         let result = federate_ask(&graphs, "q", &opts("alpha/")).expect("known child");

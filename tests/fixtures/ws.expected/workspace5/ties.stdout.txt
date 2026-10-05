@@ -1,73 +1,55 @@
-sieve ask — "parse config"  (lexical)
+ask  parse config · 18 hits
 
-1. [gamma/] parseConfigRb · function  [symbol]
-   gamma/src/root2.ts:L1-L3
+1  [gamma/] parseConfigRb  fn  gamma/src/root2.ts:1-3
    function parseConfigRb(): number
 
-2. [gamma/] parseConfigRa · function  [symbol]
-   gamma/src/root.ts:L1-L3
+2  [gamma/] parseConfigRa  fn  gamma/src/root.ts:1-3
    function parseConfigRa(): number
 
-3. [gamma/packages/x/] parseConfigXA · function  [symbol]
-   gamma/packages/x/src/parse-config.ts:L1-L3
+3  [gamma/packages/x/] parseConfigXA  fn  gamma/packages/x/src/parse-config.ts:1-3
    function parseConfigXA(): number
 
-4. [gamma/packages/y/] configY · function  [symbol]
-   gamma/packages/y/src/parse/y.ts:L1-L3
+4  [gamma/packages/y/] configY  fn  gamma/packages/y/src/parse/y.ts:1-3
    function configY(): number
 
-5. [gamma/] parseTail · function  [symbol]
-   gamma/src/root2.ts:L5-L7
+5  [gamma/] parseTail  fn  gamma/src/root2.ts:5-7
    function parseTail(): number
 
-6. [gamma/packages/x/] parseConfigXB · function  [symbol]
-   gamma/packages/x/src/parse-config.ts:L5-L7
+6  [gamma/packages/x/] parseConfigXB  fn  gamma/packages/x/src/parse-config.ts:5-7
    function parseConfigXB(): number
 
-7. [gamma/packages/y/] y.ts · file  [symbol]
-   gamma/packages/y/src/parse/y.ts
+7  [gamma/packages/y/] y.ts  file  gamma/packages/y/src/parse/y.ts
 
-8. [gamma/packages/x/] parseConfigXC · function  [symbol]
-   gamma/packages/x/src/parse-config.ts:L9-L11
+8  [gamma/packages/x/] parseConfigXC  fn  gamma/packages/x/src/parse-config.ts:9-11
    function parseConfigXC(): number
 
-9. [gamma/packages/y/] yFour · function  [symbol]
-   gamma/packages/y/src/parse/y.ts:L17-L19
+9  [gamma/packages/y/] yFour  fn  gamma/packages/y/src/parse/y.ts:17-19
    function yFour(): number
 
-10. [gamma/packages/x/] parseConfigXD · function  [symbol]
-   gamma/packages/x/src/parse-config.ts:L13-L15
+10  [gamma/packages/x/] parseConfigXD  fn  gamma/packages/x/src/parse-config.ts:13-15
    function parseConfigXD(): number
 
-11. [gamma/packages/y/] yOne · function  [symbol]
-   gamma/packages/y/src/parse/y.ts:L5-L7
+11  [gamma/packages/y/] yOne  fn  gamma/packages/y/src/parse/y.ts:5-7
    function yOne(): number
 
-12. [gamma/packages/x/] parseConfigXE · function  [symbol]
-   gamma/packages/x/src/parse-config.ts:L17-L19
+12  [gamma/packages/x/] parseConfigXE  fn  gamma/packages/x/src/parse-config.ts:17-19
    function parseConfigXE(): number
 
-13. [gamma/packages/y/] yThree · function  [symbol]
-   gamma/packages/y/src/parse/y.ts:L13-L15
+13  [gamma/packages/y/] yThree  fn  gamma/packages/y/src/parse/y.ts:13-15
    function yThree(): number
 
-14. [gamma/packages/x/] parseConfigXF · function  [symbol]
-   gamma/packages/x/src/parse-config.ts:L21-L23
+14  [gamma/packages/x/] parseConfigXF  fn  gamma/packages/x/src/parse-config.ts:21-23
    function parseConfigXF(): number
 
-15. [gamma/packages/y/] yTwo · function  [symbol]
-   gamma/packages/y/src/parse/y.ts:L9-L11
+15  [gamma/packages/y/] yTwo  fn  gamma/packages/y/src/parse/y.ts:9-11
    function yTwo(): number
 
-16. [gamma/packages/x/] parseConfigXG · function  [symbol]
-   gamma/packages/x/src/parse-config.ts:L25-L27
+16  [gamma/packages/x/] parseConfigXG  fn  gamma/packages/x/src/parse-config.ts:25-27
    function parseConfigXG(): number
 
-17. [gamma/packages/x/] parseConfigXH · function  [symbol]
-   gamma/packages/x/src/parse-config.ts:L29-L31
+17  [gamma/packages/x/] parseConfigXH  fn  gamma/packages/x/src/parse-config.ts:29-31
    function parseConfigXH(): number
 
-18. [gamma/packages/x/] parse-config.ts · file  [symbol]
-   gamma/packages/x/src/parse-config.ts
+18  [gamma/packages/x/] parse-config.ts  file  gamma/packages/x/src/parse-config.ts
 
 matched in: gamma/packages/x/ (9) · gamma/packages/y/ (6) · gamma/ (3)

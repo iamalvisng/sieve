@@ -1,1 +1,1 @@
-✗ no symbol "zzz" in any of the 2 workspace repo(s) — check spelling or run sieve build
+sieve: no symbol named zzz in any of the 2 workspace repos — try sieve grep zzz

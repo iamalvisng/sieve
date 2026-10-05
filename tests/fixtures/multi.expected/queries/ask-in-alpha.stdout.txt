@@ -1,24 +1,18 @@
-sieve ask — "render"  (lexical)
+ask  render · 6 hits
 
-1. renderPage · function  [symbol]
-   packages/alpha/src/render.ts:L1-L3
+1  renderPage  fn  packages/alpha/src/render.ts:1-3
    function renderPage(): string
 
-2. renderMenu · function  [symbol]
-   packages/alpha/src/layout.ts:L1-L3
+2  renderMenu  fn  packages/alpha/src/layout.ts:1-3
    function renderMenu(): string
 
-3. renderFooter · function  [symbol]
-   packages/alpha/src/render.ts:L9-L11
+3  renderFooter  fn  packages/alpha/src/render.ts:9-11
    function renderFooter(): string
 
-4. layoutGrid · function  [symbol]
-   packages/alpha/src/layout.ts:L5-L7
+4  layoutGrid  fn  packages/alpha/src/layout.ts:5-7
    function layoutGrid(): string
 
-5. renderHeader · function  [symbol]
-   packages/alpha/src/render.ts:L5-L7
+5  renderHeader  fn  packages/alpha/src/render.ts:5-7
    function renderHeader(): string
 
-6. render.ts · file  [symbol]
-   packages/alpha/src/render.ts
+6  render.ts  file  packages/alpha/src/render.ts

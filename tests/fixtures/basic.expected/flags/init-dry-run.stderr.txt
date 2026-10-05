@@ -1,21 +1,41 @@
-would write — this repo:
-  .claude/settings.json            sieve statusline + hook blocks
-  .claude/skills/sieve/SKILL.md    sieve skill
-  .mcp.json                        mcpServers.sieve
-  AGENTS.md                        fenced sieve section
-  .adal/skills/sieve/SKILL.md      sieve-owned file
-  .cursor/rules/sieve.mdc          sieve-owned file
-  .cursor/mcp.json                 mcpServers.sieve
-  .cursor/hooks.json               postToolUse / afterMCPExecution / sessionEnd
-  GEMINI.md                        fenced sieve section
-  .gemini/settings.json            mcpServers.sieve
-  .grok/skills/sieve/SKILL.md      sieve-owned file
-  .grok/config.toml                [mcp_servers.sieve]
-  AGENTS.md                        fenced sieve section
-  AGENTS.md                        fenced sieve section
-  .github/copilot-instructions.md  fenced sieve section
-  .kiro/steering/sieve.md          sieve-owned file
-  .kiro/settings/mcp.json          mcpServers.sieve
-  .windsurf/rules/sieve.md         sieve-owned file
+sieve would set up Claude Code in this repo
+  .claude/settings.json          hooks and the status line
+  .claude/skills/sieve/SKILL.md  tells the agent when to use sieve
+  .mcp.json                      the sieve MCP server
 
-nothing was written (--dry-run)
+sieve would set up AGENTS.md in this repo
+  AGENTS.md  adds a sieve section
+
+sieve would set up AdaL in this repo
+  .adal/skills/sieve/SKILL.md  tells the agent when to use sieve
+
+sieve would set up Cursor in this repo
+  .cursor/rules/sieve.mdc  tells the agent when to use sieve
+  .cursor/mcp.json         the sieve MCP server
+  .cursor/hooks.json       hooks that count what sieve saves
+
+sieve would set up Gemini CLI in this repo
+  GEMINI.md              adds a sieve section
+  .gemini/settings.json  the sieve MCP server
+
+sieve would set up Grok in this repo
+  .grok/skills/sieve/SKILL.md  tells the agent when to use sieve
+  .grok/config.toml            the sieve MCP server
+
+sieve would set up Hermes in this repo
+  AGENTS.md  adds a sieve section
+
+sieve would set up Antigravity in this repo
+  AGENTS.md  adds a sieve section
+
+sieve would set up GitHub Copilot in this repo
+  .github/copilot-instructions.md  adds a sieve section
+
+sieve would set up Kiro in this repo
+  .kiro/steering/sieve.md  tells the agent when to use sieve
+  .kiro/settings/mcp.json  the sieve MCP server
+
+sieve would set up Windsurf in this repo
+  .windsurf/rules/sieve.md  tells the agent when to use sieve
+
+dry run · nothing written · nothing outside this repo

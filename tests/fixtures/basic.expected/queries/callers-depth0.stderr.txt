@@ -1,1 +1,1 @@
-✗ --depth must be a positive number or "all", got "0"
+sieve: --depth must be a positive number or all, got 0 — try --depth 2

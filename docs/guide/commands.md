@@ -8,10 +8,10 @@ A `[dir]` argument defaults to the nearest ancestor folder with a `sieve/` index
 
 ```
 $ sieve build .
-...
-  parsed: 0 of 1583 files (1583 replayed from cache)
-...
-  sieve/ is git-ignored (added automatically) — a local cache; teammates run `sieve build` to get their own.
+sieve sifted vite-new in 1.6 s
+1,583 files → 4,866 symbols · 10,055 links
+astro · javascript · jsx · svelte · tsx · typescript · vue
+index in ./sieve · git-ignored · stays on this machine
 ```
 
 Flags: `-e`, `--no-reuse`, `--lsp`, `--include-dir`, `--only-dir`, `--no-gitignore`,
@@ -20,12 +20,16 @@ Flags: `-e`, `--no-reuse`, `--lsp`, `--include-dir`, `--only-dir`, `--no-gitigno
 ## ask
 
 ```
-$ sieve ask "how does the dev server handle hot module replacement" --source
-[sieve] saved ≈ 30,366 tokens
-...
-1. [packages/vite/] createServerModuleRunner · function  [symbol]
-   packages/vite/src/node/ssr/runtime/serverModuleRunner.ts:L143-L160
+$ sieve ask "how does the dev server handle hot module replacement"
+ask  how does the dev server handle hot module replacement · 8 hits
+
+1  [packages/vite/] createServerModuleRunner  fn  packages/vite/src/node/ssr/runtime/serverModuleRunner.ts:143-160
    function createServerModuleRunner( environment: DevEnvironment, options: ServerModuleRunnerOptions = {}, ): ModuleRunner
+
+2  [packages/vite/] handleHMRUpdate  fn  packages/vite/src/node/server/hmr.ts:411-679
+   async function handleHMRUpdate( type: 'create' | 'delete' | 'update', file: string, server: ViteDevServer, ): Promise<void>
+
+3  [packages/vite/] _createServer  fn  packages/vite/src/node/server/index.ts:513-1148
 ...
 ```
 
@@ -35,16 +39,16 @@ Flags: `-n/--limit`, `--source`, `--full`, `--in <path>`, `--json`, `--no-refres
 
 ```
 $ sieve callers handleHMRUpdate --depth 2
-[sieve] saved ≈ 20,269 tokens
-
-handleHMRUpdate · function · packages/vite/src/node/server/hmr.ts:L411-L679
-  calls ← testRestartDuringHotUpdate (packages/vite/src/node/server/__tests__/hmr.spec.ts:L6-L40) [depth 1]
-      34: handleHMRUpdate(
-  calls ← onHMRUpdate (packages/vite/src/node/server/index.ts:L908-L915) [depth 1]
-      913: await handleHMRUpdate(type, file, server)
-  calls ← hmr.spec.ts (packages/vite/src/node/server/__tests__/hmr.spec.ts:L1-L56) [depth 2]
-  calls ← onFileAddUnlink (packages/vite/src/node/server/index.ts:L917-L953) [depth 2]
-...
+handleHMRUpdate  fn  packages/vite/src/node/server/hmr.ts:411-679
+2 callers · 5 within 2 hops
+├─ testRestartDuringHotUpdate  fn  packages/vite/src/node/server/__tests__/hmr.spec.ts:6-40
+│  │  34: handleHMRUpdate(
+│  └─ hmr.spec.ts  file  packages/vite/src/node/server/__tests__/hmr.spec.ts:1-56
+└─ onHMRUpdate  fn  packages/vite/src/node/server/index.ts:908-915
+   │  913: await handleHMRUpdate(type, file, server)
+   ├─ onFileAddUnlink  fn  packages/vite/src/node/server/index.ts:917-953
+   └─ onFileChange  fn  packages/vite/src/node/server/index.ts:955-969
+[sieve] saved ≈ 20,282 tokens
 ```
 
 Each edge has a confidence, Extracted or Inferred. See
@@ -56,12 +60,15 @@ Flags: `--direction <in|out>` (`out` lists callees), `-d/--depth <n|all>`, `--in
 
 ```
 $ sieve grep "handleHMRUpdate"
-[sieve] saved ≈ 20,230 tokens
+grep "handleHMRUpdate" · 5 hits in 5 symbols across 3 files · searched 1583 files
+
+handleHMRUpdate  fn  packages/vite/src/node/server/hmr.ts:411-679  · 2 links in
+  411: export async function handleHMRUpdate(
+
+_createServer.onHMRUpdate  fn  packages/vite/src/node/server/index.ts:908-915  · 2 links in
+  913: await handleHMRUpdate(type, file, server)
+
 ...
-"handleHMRUpdate" — 5 hits in 5 symbols across 3 files (searched 1583 indexed files)
-...
-handleHMRUpdate · function · packages/vite/src/node/server/hmr.ts:L411-L679 · 2 in-edges
-  L411: export async function handleHMRUpdate(
 ```
 
 Flags: `-i/--ignore-case`, `--fixed`, `--in <path>`, `--json`, `--no-refresh`.
@@ -70,8 +77,16 @@ Flags: `-i/--ignore-case`, `--fixed`, `--in <path>`, `--json`, `--no-refresh`.
 
 ```
 $ sieve map
-...
-repo map — 1583 files · 3283 symbols · 10055 edges · javascript, jsx, tsx, typescript
+map · 1583 files · 3283 symbols · 10055 links · javascript, jsx, tsx, typescript
+
+## playground/environment-react-ssr/
+playground/environment-react-ssr/vite.config.ts1 file · 8 symbols   hubs: importWithRetry (vite.config.ts, 2←), vitePluginSsrMiddleware (vite.config.ts, 1←)
+playground/environment-react-ssr/src/3 files · 4 symbols   hubs: importHtml (entry-server.tsx, 1←), main (entry-client.tsx, 1←)
+playground/environment-react-ssr/__tests__/1 file · 0 symbols
+
+## playground/optimize-missing-deps/
+playground/optimize-missing-deps/__test__/2 files · 2 symbols
+playground/optimize-missing-deps/server.js1 file · 2 symbols   hubs: createServer (server.js, 1←), resolve (server.js, 1←)
 ...
 ```
 
@@ -81,9 +96,14 @@ Flags: `--max-dirs <n>` (default 16), `--json`, `--no-refresh`.
 
 ```
 $ sieve skeleton packages/vite/src/node/server/index.ts
-[sieve] saved ≈ 10,282 tokens
-...
-- L241-L268  interface FileSystemServeOptions  interface FileSystemServeOptions
+packages/vite/src/node/server/hmr.ts · 42 symbols
+    48-56  WsOptions  iface
+    58-88  HmrOptions  iface
+    90-97  HotUpdateOptions  iface
+   99-105  HmrContext  iface
+  107-111  PropagationBoundary  iface
+  113-115  HotChannelClient  iface
+  117-120  HotChannelListener  type  <T extends string = string> = ( data: InferCustomEventPayload<T>, client: HotChannelClient, ) => void
 ...
 ```
 
@@ -95,13 +115,15 @@ This sample ran after one edited line in `handleHMRUpdate` (`hmr.ts`).
 
 ```
 $ sieve blast
-blast radius — working tree vs HEAD (depth 2)
-  changed: 2 files in 1 area, 1 seed symbol
-  impacted: 3 symbols in 1 area
-...
-⚠ handleHMRUpdate — 1 changed file, 1/1 reached by a test
-...
-  calls ← onHMRUpdate (packages/vite/src/node/server/index.ts:L908-L915) [depth 1]
+your diff changes handleHMRUpdate · 1 symbol in 2 files · 1 of 1 reached by a test · working tree vs HEAD
+3 callers affected within 2 hops
+└─ onHMRUpdate  fn  packages/vite/src/node/server/index.ts:908-915
+   ├─ onFileAddUnlink  fn  packages/vite/src/node/server/index.ts:917-953
+   └─ onFileChange  fn  packages/vite/src/node/server/index.ts:955-969
+1 test suite also references this code (not listed)
+tests for handleHMRUpdate were not updated
+ask for review  翠 (80 commits, 11d ago) · btea (4 commits, 28d ago)
+not indexed  1 file: .gitignore
 ```
 
 Flags: `--base <ref>`, `-d/--depth`, `--format text|markdown|mermaid|json`,
@@ -111,7 +133,7 @@ Flags: `--base <ref>`, `-d/--depth`, `--format text|markdown|mermaid|json`,
 
 ```
 $ sieve stats
-sieve stats: no session recorded yet — use sieve in an agent session, then look again.
+no saved tokens yet — they appear after an agent session uses sieve
 ```
 
 ## why

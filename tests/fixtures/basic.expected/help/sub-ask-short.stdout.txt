@@ -1,7 +1,7 @@
 Usage: sieve ask [options] <query> [dir]
 
-Query the sieve/ graph — returns ranked nodes + exact file:line, routed to prose
-or wiring ($0, no key)
+Query the sieve/ graph — returns ranked symbols + exact file:line, routed to prose
+or code ($0, no key)
 
 Arguments:
   query            what you want to understand, in plain words
@@ -14,7 +14,7 @@ Options:
                    pack IS the answer, no need to re-open files)
   --full           with --source: inline whole definition spans instead of the
                    default ≤8-line crux excerpts
-  --in <path>      narrow to nodes under this path prefix, filtered before
+  --in <path>      narrow to symbols under this path prefix, filtered before
                    scoring (segment-aware, like scopeOf)
   --json           output the result as JSON
   --no-graph-rank  rank by lexical relevance only, without the

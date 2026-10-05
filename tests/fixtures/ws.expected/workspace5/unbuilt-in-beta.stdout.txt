@@ -1,6 +1,6 @@
-sieve ask — "parse config"  (empty)
+ask  parse config · 0 hits · empty
 
-no matching nodes across 2 workspace repo(s) — try different words, or `sieve build` at a child
+no matching symbols across 2 workspace repos — try different words, or `sieve build` at a child
 2 of 3 workspace repos have graphs; run sieve build to cover beta
 
 [sieve] no hits — don't re-ask with new wording; switch tool: `sieve grep "<literal>"` for every occurrence · `sieve skeleton <file>` for a file's full API · `sieve callers <symbol>` for who-uses.

@@ -1,4 +1,4 @@
-[sieve] saved ≈ 41 tokens
-
-café · function · src/uni.ts:L1-L3
-  calls ← drinkCoffee (src/uni.ts:L9-L11)
+café  fn  src/uni.ts:1-3
+1 caller
+└─ drinkCoffee  fn  src/uni.ts:9-11
+[sieve] saved ≈ 42 tokens

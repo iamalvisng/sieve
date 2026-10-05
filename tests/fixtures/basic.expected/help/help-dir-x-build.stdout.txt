@@ -1,6 +1,6 @@
 Usage: sieve build [options] [dir]
 
-Build sieve/ from your code — wiring graph + per-file cards ($0, no key).
+Build sieve/ from your code — symbol graph + per-file pages ($0, no key).
 
 Arguments:
   dir                         repository root (default: ".")
@@ -11,7 +11,7 @@ Options:
                               that lists the supported set
   --no-reuse                  re-parse every file instead of replaying unchanged
                               ones from the extraction cache
-  --lsp                       add compiler-grade call edges via a language
+  --lsp                       add compiler-grade call links via a language
                               server if one is installed (opt-in, slower; e.g.
                               rust-analyzer, clangd)
   --follow-submodules         include initialized Git submodules recursively;
@@ -31,7 +31,7 @@ Options:
                               hooks/refresh path) include it without the flag;
                               dot-dirs are never overridable (default: [])
   --only-dir <path>           only index files under this repo-relative path —
-                              repeatable; the wiring walk honors it. Recorded in
+                              repeatable; the file walk honors it. Recorded in
                               the graph fingerprint so a later build (and the
                               hooks/refresh path) walks the same set; everything
                               outside the list is skipped (default: [])

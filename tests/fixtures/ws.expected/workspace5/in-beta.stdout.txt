@@ -1,7 +1,6 @@
-sieve ask — "parse config"  (lexical)
+ask  parse config · 1 hit
 
-1. [beta/] render · function  [symbol]
-   beta/src/b.ts:L1-L4
+1  [beta/] render  fn  beta/src/b.ts:1-4
    function render(view: string): string
 
 matched in: beta/ (1)

@@ -10,7 +10,7 @@ Arguments:
 Options:
   --base <ref>          diff against this ref's merge base with HEAD (e.g.
                         origin/main); default: the working tree vs HEAD
-  -d, --depth <n>       hops to walk over incoming edges, or "all" for the full
+  -d, --depth <n>       hops to walk over incoming links, or "all" for the full
                         closure (default 2)
   --format <fmt>        text (default) | markdown | mermaid | json
   --export-viz <dir>    also write the interactive page for this radius (one

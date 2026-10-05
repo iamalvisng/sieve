@@ -52,6 +52,10 @@ pub struct GraphCheck {
     pub pending_ids: Vec<String>,
     /// Committed nodes in total, the denominator behind the pending share.
     pub nodes: usize,
+    /// How many files the committed graph holds. The text report shows it.
+    /// The JSON report does not.
+    #[serde(skip)]
+    pub files: usize,
 }
 
 /// One source file whose recorded content hash no longer matches the file
@@ -102,6 +106,7 @@ pub fn check_graph(root: &Path, context_dir: &Path) -> io::Result<GraphCheck> {
             pending: 0,
             pending_ids: Vec::new(),
             nodes: 0,
+            files: 0,
         });
     };
     let committed: Graph = serde_json::from_slice(&bytes).map_err(io::Error::other)?;
@@ -116,6 +121,7 @@ pub fn check_graph(root: &Path, context_dir: &Path) -> io::Result<GraphCheck> {
         no_reuse: false,
         // Nothing writes a file at all (P1-35).
         read_only: true,
+        progress: None,
     };
     let report = build_graph_cached_with(root, context_dir, &opts)?;
     let current: HashMap<&str, &str> = report
@@ -177,6 +183,10 @@ pub fn check_graph(root: &Path, context_dir: &Path) -> io::Result<GraphCheck> {
         pending,
         pending_ids,
         nodes: committed_by_id.len(),
+        files: committed_by_id
+            .values()
+            .filter(|n| n.kind == sieve_core::wiring::Kind::File)
+            .count(),
     })
 }
 
@@ -304,77 +314,54 @@ fn short_hash(hash: &str) -> String {
     hash.chars().take(8).collect()
 }
 
-/// Renders a [`GraphCheck`] as a human-readable report.
-/// `formatGraphCheckReport`.
-pub fn format_graph_check_report(g: &GraphCheck) -> String {
-    if g.missing {
-        let name = sieve_core::product().name;
-        return format!(
-            "graph check: NO GRAPH\n\nNo {name}/.graph/wiring.json found. Run `{name} build` first."
-        );
-    }
-    if g.ok {
-        let note = if g.pending > 0 {
-            format!(" ({})", pending_note(g))
-        } else {
-            String::new()
-        };
-        return format!("graph check: OK — the wiring graph is in sync with the code.{note}");
-    }
-
-    let mut lines = vec!["graph check: STALE".to_string(), String::new()];
-    if !g.changed.is_empty() {
-        lines.push(format!("changed ({}):", g.changed.len()));
-        lines.extend(g.changed.iter().map(|id| format!("  ~ {id}")));
-    }
-    if !g.added.is_empty() {
-        lines.push(format!("added ({}):", g.added.len()));
-        lines.extend(g.added.iter().map(|id| format!("  + {id}")));
-    }
-    if !g.removed.is_empty() {
-        lines.push(format!("removed ({}):", g.removed.len()));
-        lines.extend(g.removed.iter().map(|id| format!("  - {id}")));
-    }
-    if !g.stale.is_empty() {
-        lines.push(format!("stale summaries ({}):", g.stale.len()));
-        lines.extend(g.stale.iter().map(|id| format!("  ! {id}")));
-    }
-    lines.push(String::new());
-    let structural = !g.changed.is_empty() || !g.added.is_empty() || !g.removed.is_empty();
-    let name = sieve_core::product().name;
-    if structural {
-        lines.push(format!(
-            "Run `{name} build` to rebuild the structure, then commit {name}/."
-        ));
-    }
-    if !g.stale.is_empty() {
-        lines.push(format!("Run `{name} build` to refresh stale summaries."));
-    }
-    lines.join("\n")
+/// The number of files a graph check names as out of date: the files of the
+/// changed, added, removed and stale ids, each counted once. An id is a file
+/// path, or a file path, `#` and a symbol name.
+pub fn behind_files(g: &GraphCheck) -> usize {
+    g.changed
+        .iter()
+        .chain(&g.added)
+        .chain(&g.removed)
+        .chain(&g.stale)
+        .map(|id| id.split('#').next().unwrap_or(id))
+        .collect::<HashSet<&str>>()
+        .len()
 }
 
-/// The pending-coverage note the OK report appends in parens, matching
-fn pending_note(g: &GraphCheck) -> String {
-    let pct = if g.nodes > 0 {
-        ((g.nodes - g.pending) as f64 / g.nodes as f64 * 100.0).round() as u64
-    } else {
-        0
-    };
-    let sample = &g.pending_ids[..g.pending_ids.len().min(PENDING_SAMPLE)];
-    let more = if g.pending_ids.len() > PENDING_SAMPLE {
-        format!(", … +{} more", g.pending_ids.len() - PENDING_SAMPLE)
-    } else {
-        String::new()
-    };
-    let named = if sample.is_empty() {
-        String::new()
-    } else {
-        format!(": {}{more}", sample.join(", "))
-    };
-    format!(
-        "meaning tier {pct}% complete — {} of {} node(s) pending{named}.",
-        g.pending, g.nodes
-    )
+/// How many changed ids the stale report lists.
+const BEHIND_LISTED: usize = 8;
+
+/// Renders a [`GraphCheck`] as a short report. An index in sync gives one
+/// line. An index behind the code gives one line, then the first ids that
+/// changed (`~`), arrived (`+`) or left (`-`).
+pub fn format_graph_check_report(g: &GraphCheck) -> String {
+    let name = sieve_core::product().name;
+    if g.missing {
+        return format!("no index here yet \u{2014} run {name} build .");
+    }
+    if g.ok {
+        let files = g.files;
+        return format!("{name} is in sync with the code \u{b7} {files} files");
+    }
+    let n = behind_files(g);
+    let noun = if n == 1 { "file" } else { "files" };
+    let mut lines = vec![format!(
+        "{name} is behind on {n} {noun} \u{2014} run {name} build"
+    )];
+    let ids: Vec<String> = g
+        .changed
+        .iter()
+        .map(|id| format!("  ~ {id}"))
+        .chain(g.added.iter().map(|id| format!("  + {id}")))
+        .chain(g.removed.iter().map(|id| format!("  - {id}")))
+        .chain(g.stale.iter().map(|id| format!("  ! {id}")))
+        .collect();
+    let hidden = ids.len().saturating_sub(BEHIND_LISTED);
+    lines.extend(ids.into_iter().take(BEHIND_LISTED));
+    if hidden > 0 {
+        lines.push(format!("  \u{2026} +{hidden} more"));
+    }
+    lines.join("\n")
 }
 
 /// Renders a [`ContextCheck`] as a human-readable report.
@@ -713,12 +700,12 @@ mod tests {
         assert!(!g.ok);
         assert!(g.changed.contains(&"a.ts".to_string()));
         let report_text = format_graph_check_report(&g);
-        assert!(report_text.starts_with("graph check: STALE"));
+        assert!(report_text.starts_with("sieve is behind on 1 file \u{2014} run sieve build"));
         assert!(report_text.contains("  ~ a.ts"));
     }
 
     #[test]
-    fn format_graph_check_report_ok_with_pending_caps_the_sample_at_eight() {
+    fn format_graph_check_report_is_one_line_when_in_sync() {
         let g = GraphCheck {
             ok: true,
             missing: false,
@@ -729,12 +716,33 @@ mod tests {
             pending: 10,
             pending_ids: (0..10).map(|i| format!("f{i}.ts")).collect(),
             nodes: 10,
+            files: 4,
         };
+        assert_eq!(
+            format_graph_check_report(&g),
+            "sieve is in sync with the code \u{b7} 4 files"
+        );
+    }
+
+    #[test]
+    fn behind_files_counts_each_file_once_and_the_report_lists_eight_ids() {
+        let g = GraphCheck {
+            ok: false,
+            missing: false,
+            added: Vec::new(),
+            removed: Vec::new(),
+            changed: (0..10).map(|i| format!("a.ts#f{i}")).collect(),
+            stale: vec!["b.ts".to_string()],
+            pending: 0,
+            pending_ids: Vec::new(),
+            nodes: 12,
+            files: 2,
+        };
+        assert_eq!(behind_files(&g), 2);
         let text = format_graph_check_report(&g);
-        assert!(text.contains("meaning tier 0% complete"));
-        assert!(text.contains("f0.ts, f1.ts, f2.ts, f3.ts, f4.ts, f5.ts, f6.ts, f7.ts"));
-        assert!(text.contains(", … +2 more"));
-        assert!(!text.contains("f8.ts"));
+        assert!(text.starts_with("sieve is behind on 2 files \u{2014} run sieve build\n"));
+        assert!(text.contains("  ~ a.ts#f7") && !text.contains("a.ts#f8"));
+        assert!(text.ends_with("  \u{2026} +3 more"));
     }
 
     #[test]

@@ -1,1 +1,1 @@
-error: unknown option '--zzzzzzzz'
+sieve: ask has no --zzzzzzzz option — see sieve ask --help

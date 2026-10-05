@@ -8,7 +8,7 @@ use serde::Serialize;
 
 use sieve_core::workspace;
 use sieve_query::map::{build_repo_map, format_repo_map, map_saved_paths, MapOptions};
-use sieve_savings::{savings_for, with_savings};
+use sieve_savings::{savings_for, with_savings, with_savings_nl};
 
 use crate::query;
 
@@ -78,7 +78,7 @@ fn parse_max_dirs(raw: &str) -> Result<usize, String> {
     match value {
         Some(n) if n > 0 => Ok(n as usize),
         _ => Err(format!(
-            "--max-dirs must be a positive integer, got \"{raw}\""
+            "--max-dirs must be a positive integer, got {raw} \u{2014} try --max-dirs 20"
         )),
     }
 }
@@ -119,9 +119,9 @@ pub fn run(args: &MapArgs, dir_override: Option<&Path>) -> Result<(), String> {
     let body = rendered.strip_suffix('\n').unwrap_or(&rendered);
     let saved_paths = map_saved_paths(&graph);
     let saved = savings_for(&graph, &saved_paths);
-    println!(
+    print!(
         "{}",
-        with_savings(sieve_core::product().name, body, saved.as_ref())
+        with_savings_nl(sieve_core::product().name, body, saved.as_ref())
     );
     Ok(())
 }
@@ -133,6 +133,8 @@ fn run_workspace(root: &Path, context_dir: &Path, max_dirs: Option<usize>) -> Re
     let text = sieve_query::workspace::federate_map(&graphs, max_dirs, |graph, body| {
         let saved = savings_for(graph, &map_saved_paths(graph));
         with_savings(sieve_core::product().name, body, saved.as_ref())
+            .trim_end_matches('\n')
+            .to_string()
     });
     print!("{text}");
     Ok(())

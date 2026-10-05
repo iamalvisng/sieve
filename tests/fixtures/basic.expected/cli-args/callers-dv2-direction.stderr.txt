@@ -1,1 +1,1 @@
-✗ no symbol "zzz_nope" in the graph — check spelling or run sieve build
+sieve: no symbol named zzz_nope — try sieve grep zzz_nope

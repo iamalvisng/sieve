@@ -1,4 +1,4 @@
-✓ wiring: 21 nodes (9 function, 7 file, 3 method, 2 class), 23 edges, 7 cards [javascript, python, tsx, typescript]
-  parsed: 1 of 7 files (6 replayed from cache)
-  → <TMP>/sieve
-  sieve/ is git-ignored (added automatically) — a local cache; teammates run `sieve build` to get their own.
+sieve sifted repo in 0.0 s
+7 files → 21 symbols · 23 links
+javascript · python · tsx · typescript
+index in ./sieve · git-ignored · stays on this machine

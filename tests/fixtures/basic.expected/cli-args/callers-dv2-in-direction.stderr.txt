@@ -1,1 +1,1 @@
-✗ nothing indexed under "nope/" (or any path prefix)
+sieve: nothing is indexed under nope/ — try sieve map

@@ -1,3 +1,0 @@
-sieve skeleton — nope.ts
-
-no definitions indexed for this file

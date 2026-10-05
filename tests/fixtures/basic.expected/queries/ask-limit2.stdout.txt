@@ -1,11 +1,9 @@
-sieve ask — "double"  (lexical)
+ask  double · 2 hits
 
-1. double · function  [symbol]
-   src/util.ts:L1-L3
+1  double  fn  src/util.ts:1-3
    function double(n: number): number
 
-2. run · method  [symbol]
-   src/app.ts:L11-L13
+2  run  method  src/app.ts:11-13
    run(n: number): number
 
 [sieve] only 2 hits — don't re-ask with new wording; switch tool: `sieve grep "<literal>"` for every occurrence · `sieve skeleton <file>` for a file's full API · `sieve callers <symbol>` for who-uses.

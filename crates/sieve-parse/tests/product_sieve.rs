@@ -61,10 +61,7 @@ fn rename_table_parse_check_error_names_sieve_graph_path() {
     let check = check_graph(&dir.path, &context_dir).expect("check_graph should not error");
     let report = format_graph_check_report(&check);
 
-    assert_eq!(
-        report,
-        "graph check: NO GRAPH\n\nNo sieve/.graph/wiring.json found. Run `sieve build` first."
-    );
+    assert_eq!(report, "no index here yet \u{2014} run sieve build .");
 }
 
 #[test]

@@ -93,6 +93,20 @@ export default {
      "..gMmMmg....",
      "..W..W..W..."
     ]
+   ],
+   "tiny": [
+    [
+     "gGGGGG.G",
+     ".MmMmMG.",
+     "..MmMm..",
+     "........"
+    ],
+    [
+     "gGGGGG.G",
+     ".MmMmMG.",
+     "..MmMm..",
+     "...W..W."
+    ]
    ]
   },
   "soya": {
@@ -148,6 +162,20 @@ export default {
      "NPnnkknnPN",
      ".NnnnrnnN.",
      "..nn..nn.."
+    ]
+   ],
+   "tiny": [
+    [
+     ".lnllnl.",
+     "NkwnnkwN",
+     "NPnrrnPN",
+     ".NnnnnN."
+    ],
+    [
+     ".lnllnl.",
+     "NkknnkkN",
+     "NPnrrnPN",
+     ".NnnrnN."
     ]
    ]
   },
@@ -205,6 +233,20 @@ export default {
      ".OWWPPWWO.",
      "..WWWWWW.."
     ]
+   ],
+   "tiny": [
+    [
+     "O......O",
+     "OPOOOOPO",
+     "OkOWWOkO",
+     ".OWPPWO."
+    ],
+    [
+     "O......O",
+     "OPOOOOPO",
+     "OOOWWOOO",
+     ".OWPPWO."
+    ]
    ]
   },
   "sifty": {
@@ -260,6 +302,20 @@ export default {
      ".mmmmmmmm.",
      ".m.m.m.m..",
      "....y..y.."
+    ]
+   ],
+   "tiny": [
+    [
+     ".ssssss.",
+     "sSkSSkSs",
+     ".mmmmmm.",
+     "..y..y.."
+    ],
+    [
+     ".ssssss.",
+     "sSSSSSSs",
+     ".mmmmmm.",
+     "...y..y."
     ]
    ]
   },
@@ -317,6 +373,20 @@ export default {
      ".pfpffpfp.",
      "..yy..yy.."
     ]
+   ],
+   "tiny": [
+    [
+     "p......p",
+     "pwkppwkp",
+     "pppyyppp",
+     ".pfppfp."
+    ],
+    [
+     "p......p",
+     "pkkppkkp",
+     "pppyyppp",
+     ".pfppfp."
+    ]
    ]
   },
   "grit": {
@@ -372,6 +442,20 @@ export default {
      ".ttddddtt.",
      "dm.mm.mm.d",
      ".dd....dd."
+    ]
+   ],
+   "tiny": [
+    [
+     "...g....",
+     "tkwttkwt",
+     "ttmmmmtt",
+     ".d.dd.d."
+    ],
+    [
+     "...o....",
+     "tkkttkkt",
+     "ttmmmmtt",
+     ".d.dd.d."
     ]
    ]
   }

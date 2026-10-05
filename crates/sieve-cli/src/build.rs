@@ -2,11 +2,13 @@
 //! prints the Tier-1 build report (P2-26 to P2-32).
 
 use std::collections::BTreeMap;
+use std::io::IsTerminal;
 use std::path::{Component, Path, PathBuf};
 
 use clap::Args;
 
 use crate::ojson::{OJson, OMap};
+use crate::ui::{self, Ui};
 
 use sieve_core::askindex::{ask_index_path, build_ask_index, write_ask_index};
 use sieve_core::cards::{write_cards, write_index};
@@ -17,7 +19,6 @@ use sieve_core::lock::{self, LockGuard};
 use sieve_core::product::product;
 use sieve_core::workspace;
 use sieve_core::write_graph;
-use sieve_core::{Kind, Node};
 use sieve_parse::refresh::env_truthy;
 use sieve_parse::{build_graph_cached_with, BuildOptions};
 
@@ -230,6 +231,7 @@ fn patch_build_config(
 /// this function too, and `init` stays silent. `main`'s `Command::Build`
 /// arm prints the nudge before this runs.
 pub fn run(args: &BuildArgs, context_dir_override: Option<&Path>) -> Result<(), String> {
+    let started = std::time::Instant::now();
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
     let root = resolve_abs(&cwd, &args.root_dir);
 
@@ -247,13 +249,17 @@ pub fn run(args: &BuildArgs, context_dir_override: Option<&Path>) -> Result<(), 
         .filter(|p| !p.is_empty())
         .collect();
     if !args.only_dir.is_empty() && only_dirs.is_empty() {
-        return Err("--only-dir: expected a non-empty repo-relative path".to_string());
+        return Err(
+            "--only-dir needs a non-empty repo path \u{2014} try --only-dir packages/app"
+                .to_string(),
+        );
     }
 
     if !root.is_dir() {
         return Err(format!(
-            "ENOENT: no such file or directory, scandir '{}'",
-            root.display()
+            "directory not found: {} \u{2014} check the path, or run {} build . inside the repo",
+            root.display(),
+            product().name
         ));
     }
 
@@ -288,46 +294,132 @@ pub fn run(args: &BuildArgs, context_dir_override: Option<&Path>) -> Result<(), 
         true,
     )?;
 
-    println!(
-        "✓ wiring: {} nodes ({}), {} edges, {} cards [{}]",
-        built.nodes, built.by_kind, built.edges, built.cards, built.languages,
-    );
-    println!(
-        "  parsed: {} of {} files ({} replayed from cache)",
-        built.parsed, built.files, built.reused,
-    );
-    // Print a `--dir` value as typed.
-    let shown = context_dir_override.unwrap_or(&context_dir);
-    println!("  → {}", shown.display());
-
     for error in &built.errors {
-        eprintln!("✗ {error}");
+        ui::print_error(&error.to_string());
     }
 
     let rel = relative_path(&cwd, &context_dir);
-    let rel = if rel.is_empty() {
-        product().context_dir_name().to_string()
-    } else {
-        rel
+    let index = match context_dir_override {
+        // Print a `--dir` value as typed.
+        Some(dir) => dir.display().to_string(),
+        None if rel.is_empty() => format!("./{}", product().context_dir_name()),
+        None if rel.starts_with("..") => rel,
+        None => format!("./{rel}"),
     };
-    if skip_gitignore {
-        println!("  {rel}/ is a local cache — add it to your gitignore if you want it untracked.");
-    } else {
-        println!(
-            "  {rel}/ is git-ignored (added automatically) — a local cache; teammates run `{} build` to get their own.",
-            product().name
-        );
+    let summary = Summary {
+        name: repo_label(&root),
+        elapsed: elapsed_text(started.elapsed()),
+        files: built.files,
+        symbols: built.nodes,
+        links: built.edges,
+        languages: built
+            .languages
+            .split(", ")
+            .filter(|l| !l.is_empty())
+            .map(str::to_string)
+            .collect(),
+        index,
+        ignored: !skip_gitignore,
+        unchanged: built.files > 0
+            && built.parsed == 0
+            && built.reused == built.files
+            && built.errors.is_empty(),
+    };
+    let ui = Ui::stdout();
+    let lines = summary_lines(&ui, &summary);
+    match ui::mascot_rows(&root, ui.depth) {
+        Some(mascot) => print!("{}", ui::beside_mascot(&mascot, &lines)),
+        None => lines.iter().for_each(|l| println!("{l}")),
     }
-
     Ok(())
+}
+
+/// What the build summary says.
+struct Summary {
+    name: String,
+    elapsed: String,
+    files: usize,
+    symbols: usize,
+    links: usize,
+    languages: Vec<String>,
+    index: String,
+    ignored: bool,
+    /// True when no file changed since the last build.
+    unchanged: bool,
+}
+
+/// The repo name in the build summary: the name of the root dir. A run with
+/// the test clock set (`SIEVE_TEST_NOW`) prints `repo`, because a test repo
+/// lives in a dir with a random name.
+fn repo_label(root: &Path) -> String {
+    if std::env::var_os("SIEVE_TEST_NOW").is_some() {
+        return "repo".to_string();
+    }
+    root.file_name().map_or_else(
+        || root.display().to_string(),
+        |n| n.to_string_lossy().into_owned(),
+    )
+}
+
+/// The elapsed time, such as `1.8 s`. A run with the test clock set
+/// (`SIEVE_TEST_NOW`) prints `0.0 s`, so a golden stays the same.
+pub(crate) fn elapsed_text(elapsed: std::time::Duration) -> String {
+    if std::env::var_os("SIEVE_TEST_NOW").is_some() {
+        return "0.0 s".to_string();
+    }
+    format!("{:.1} s", elapsed.as_secs_f64())
+}
+
+/// The lines of the build summary, with color when `ui` takes color.
+fn summary_lines(ui: &Ui, s: &Summary) -> Vec<String> {
+    use sieve_savings::format_thousands as n;
+    let name = product().name;
+    if s.unchanged {
+        return vec![format!(
+            "{} {} {} {}",
+            ui.green(&format!("{name} is up to date")),
+            ui.dim("\u{b7}"),
+            ui.dim(&format!(
+                "{} {} unchanged",
+                n(s.files as u64),
+                if s.files == 1 { "file" } else { "files" }
+            )),
+            ui.dim(&format!("\u{b7} {}", s.elapsed)),
+        )];
+    }
+    let keep = if s.ignored {
+        "git-ignored \u{b7} stays on this machine"
+    } else {
+        "not git-ignored \u{b7} add it to your gitignore to keep it out of commits"
+    };
+    vec![
+        format!(
+            "{} sifted {} in {}",
+            ui.fg(name),
+            ui.purple(&s.name),
+            ui.green(&s.elapsed)
+        ),
+        format!(
+            "{} {} \u{2192} {} {} \u{b7} {} {}",
+            ui.blue(&n(s.files as u64)),
+            if s.files == 1 { "file" } else { "files" },
+            ui.blue(&n(s.symbols as u64)),
+            if s.symbols == 1 { "symbol" } else { "symbols" },
+            ui.blue(&n(s.links as u64)),
+            if s.links == 1 { "link" } else { "links" }
+        ),
+        ui.dim(&s.languages.join(" \u{b7} ")),
+        ui.dim(&format!("index in {} \u{b7} {keep}", s.index)),
+    ]
+    .into_iter()
+    .filter(|l| !l.is_empty())
+    .collect()
 }
 
 /// The counts one repo's build report prints.
 struct Built {
     nodes: usize,
-    by_kind: String,
     edges: usize,
-    cards: usize,
     languages: String,
     parsed: usize,
     files: usize,
@@ -354,21 +446,24 @@ fn build_repo(
     // lock held waits up to `lock::LOCK_WAIT_MS`, then gives up.
     let _build_lock = acquire_build_lock(context_dir)
         .map_err(|e| e.to_string())?
-        .ok_or_else(|| "a graph rebuild is already in flight".to_string())?;
+        .ok_or_else(|| {
+            "a graph rebuild is already in flight \u{2014} wait, then run sieve build again"
+                .to_string()
+        })?;
 
     // `build_graph_cached` walks the repo, excludes the context dir, and
     // reads and hashes every claimed file exactly once. The CLI reuses
     // that walk order and those prints instead of reading the repo again.
+    // The progress line shows only on a terminal.
+    let live = progress && progress_wanted();
     let build_opts = BuildOptions {
         only_dirs: only_dirs.clone(),
         no_reuse: args.no_reuse,
         read_only: false,
+        progress: live.then_some(show_progress as fn(usize, usize, &str)),
     };
     let mut report =
         build_graph_cached_with(root, context_dir, &build_opts).map_err(|e| e.to_string())?;
-    if progress {
-        print_progress(&report.claimed);
-    }
 
     // The LSP layer is opt-in (P2-23): `--lsp` only, never on by
     // default. Any failure — no server on `PATH`, a timeout, an early
@@ -376,12 +471,12 @@ fn build_repo(
     // resolver built it.
     if args.lsp {
         let lsp = sieve_parse::enrich_with_lsp_report(root, &mut report.graph);
-        if progress {
+        if live {
             eprint!("{}", lsp_progress(&lsp));
         }
     }
-    if progress {
-        eprintln!();
+    if live {
+        eprint!("\r\x1b[2K");
     }
 
     let graph = &report.graph;
@@ -420,9 +515,7 @@ fn build_repo(
 
     Ok(Built {
         nodes: graph.nodes.len(),
-        by_kind: fmt_by_kind(&graph.nodes),
         edges: graph.edges.len(),
-        cards: card_stats.written,
         languages: graph.meta.languages.join(", "),
         parsed: report.parsed,
         files: report.files,
@@ -471,8 +564,8 @@ fn run_workspace(
     // refuses before any child build and before any delete.
     if let Some(path) = context_dir_covers_repos(root, context_dir, &children) {
         return Err(format!(
-            "refusing to build: the context dir {} contains the workspace root or a child repo — \
-             a workspace build deletes the context dir; pass --dir a path outside the repos",
+            "the context dir {} holds the workspace root or a child repo, and a workspace build deletes \
+             the context dir \u{2014} pass --dir with a path outside the repos",
             path.display()
         ));
     }
@@ -501,11 +594,13 @@ fn run_workspace(
             false,
         )?;
         println!(
-            "✓ {child}/: {} nodes, {} edges, {} cards [{}]",
-            built.nodes, built.edges, built.cards, built.languages
+            "sifted {child}/ \u{b7} {} \u{2192} {} \u{b7} {}",
+            sieve_core::voice::count(built.files, "file"),
+            sieve_core::voice::count(built.nodes, "symbol"),
+            sieve_core::voice::count(built.edges, "link")
         );
         for error in &built.errors {
-            eprintln!("✗ {child}/: {error}");
+            crate::ui::print_error(&format!("{child}/: {error}"));
         }
     }
 
@@ -520,11 +615,12 @@ fn run_workspace(
     ensure_gitignored(root, context_dir, skip_gitignore).map_err(|e| e.to_string())?;
 
     println!(
-        "✓ workspace: {} repos federated → {name}/workspace.json",
+        "{} sifted {} workspace repos \u{b7} index in {name}/workspace.json",
+        product().name,
         children.len()
     );
     println!(
-        "  {name}/ is git-ignored — each teammate runs `{} build` to regenerate it locally.",
+        "{name}/ is git-ignored \u{b7} each teammate runs {} build to make it locally",
         product().name
     );
     Ok(())
@@ -587,14 +683,28 @@ pub(crate) fn write_build_fingerprint(
     write_fingerprint(&path, &fingerprint)
 }
 
-/// Writes one `\r`-overwritten progress line per claimed file to stderr.
-/// The caller writes the closing `\n`, after the `--lsp` line if any.
-fn print_progress(claimed: &[String]) {
-    let total = claimed.len();
-    for (i, file) in claimed.iter().enumerate() {
-        let field = progress_field(file);
-        eprint!("\rparsing {}/{total}: {field}", i + 1);
+/// True when stderr is a terminal that takes a line that rewrites itself.
+fn progress_wanted() -> bool {
+    std::io::stderr().is_terminal() && std::env::var("TERM").map_or(true, |t| t != "dumb")
+}
+
+/// Draws the one progress line, such as `sifting 812 / 1,583 · src/a.ts`. The
+/// line rewrites itself. It redraws every 8 files and at the end.
+fn show_progress(done: usize, total: usize, path: &str) {
+    use sieve_savings::format_thousands as n;
+    if !done.is_multiple_of(8) && done != total {
+        return;
     }
+    let ui = Ui::stderr();
+    let field = progress_field(path);
+    eprint!(
+        "\r\x1b[2K{} {} / {} {} {}",
+        ui.fg("sifting"),
+        ui.blue(&n(done as u64)),
+        ui.blue(&n(total as u64)),
+        ui.dim("\u{b7}"),
+        ui.dim(field.trim_end())
+    );
 }
 
 /// The one `--lsp` progress line: `summarizing {added+1}/{queried}:
@@ -690,79 +800,51 @@ fn normal_parts(path: &Path) -> Vec<String> {
         .collect()
 }
 
-/// Returns `{count} {kind}` per node kind, most-common first, ties broken
-/// by first appearance in `nodes`.
-fn fmt_by_kind(nodes: &[Node]) -> String {
-    let mut counts: Vec<(Kind, usize)> = Vec::new();
-    for node in nodes {
-        match counts.iter_mut().find(|(kind, _)| *kind == node.kind) {
-            Some(entry) => entry.1 += 1,
-            None => counts.push((node.kind, 1)),
-        }
-    }
-    counts.sort_by_key(|entry| std::cmp::Reverse(entry.1));
-    counts
-        .iter()
-        .map(|(kind, n)| format!("{n} {}", kind_label(*kind)))
-        .collect::<Vec<_>>()
-        .join(", ")
-}
-
-/// The lowercase, snake_case label `wiring.json` uses for a node kind.
-fn kind_label(kind: Kind) -> &'static str {
-    match kind {
-        Kind::File => "file",
-        Kind::Class => "class",
-        Kind::Function => "function",
-        Kind::Method => "method",
-        Kind::Interface => "interface",
-        Kind::Type => "type",
-        Kind::Enum => "enum",
-        Kind::Struct => "struct",
-        Kind::Trait => "trait",
-        Kind::Module => "module",
-        Kind::Constant => "constant",
-        Kind::Variable => "variable",
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sieve_core::{Crux, Origin, SummaryState};
 
-    fn node(kind: Kind) -> Node {
-        Node {
-            id: "a".to_string(),
-            name: "a".to_string(),
-            kind,
-            path: "a.ts".to_string(),
-            span: "L1-L1".to_string(),
-            signature: None,
-            exported: true,
-            origin: Origin::Ast,
-            body_hash: "0".repeat(64),
-            chars: None,
-            body_text: None,
-            summary_state: SummaryState::Pending,
-            summary: None,
-            crux: None::<Crux>,
-            owner: None,
-            arity: None,
-            variadic: None,
+    fn summary(unchanged: bool) -> Summary {
+        Summary {
+            name: "vite".to_string(),
+            elapsed: "1.8 s".to_string(),
+            files: 1583,
+            symbols: 4866,
+            links: 10055,
+            languages: vec!["typescript".to_string(), "javascript".to_string()],
+            index: "./sieve".to_string(),
+            ignored: true,
+            unchanged,
         }
     }
 
     #[test]
-    fn fmt_by_kind_sorts_by_count_descending_ties_by_first_appearance() {
-        let nodes = vec![
-            node(Kind::File),
-            node(Kind::Method),
-            node(Kind::Function),
-            node(Kind::Function),
-            node(Kind::Method),
-        ];
-        assert_eq!(fmt_by_kind(&nodes), "2 method, 2 function, 1 file");
+    fn the_summary_names_the_repo_and_counts_with_commas() {
+        let lines = summary_lines(&Ui::plain(), &summary(false));
+        assert_eq!(
+            lines,
+            [
+                "sieve sifted vite in 1.8 s",
+                "1,583 files \u{2192} 4,866 symbols \u{b7} 10,055 links",
+                "typescript \u{b7} javascript",
+                "index in ./sieve \u{b7} git-ignored \u{b7} stays on this machine",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_warm_build_with_no_change_says_so_in_one_line() {
+        let lines = summary_lines(&Ui::plain(), &summary(true));
+        assert_eq!(
+            lines,
+            ["sieve is up to date \u{b7} 1,583 files unchanged \u{b7} 1.8 s"]
+        );
+    }
+
+    #[test]
+    fn the_summary_has_no_escape_code_without_color() {
+        let text = summary_lines(&Ui::plain(), &summary(false)).join("\n");
+        assert!(!text.contains('\x1b'));
     }
 
     #[test]

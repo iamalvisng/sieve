@@ -1,1 +1,1 @@
-error: unknown option '--bad'
+sieve: map has no --bad option — see sieve map --help

@@ -1,7 +1,7 @@
 Usage: sieve map [options] [dir]
 
 Token-budgeted repo orientation — directory clusters, per-directory hubs, and
-global hotspots from the wiring graph ($0, no LLM)
+global hotspots from the symbol graph ($0, no LLM)
 
 Arguments:
   dir             repository root (default: nearest ancestor with a sieve/

@@ -8,7 +8,7 @@
 /// active product's name replaces `sieve` (P2 rename).
 pub const HELP_TEXT: &str = r#"Usage: sieve [options] [command]
 
-Index a repo into a symbol graph with call edges, for coding agents.
+Index a repo into a symbol graph with call links, for coding agents.
 
 Options:
   -v, --version                     output the version number
@@ -20,13 +20,13 @@ Commands:
   telemetry [action]                Show that Sieve sends no usage data. The
                                     command records nothing.
   version                           Print the installed version
-  build [options] [dir]             Build sieve/ from your code — wiring graph +
-                                    per-file cards ($0, no key).
+  build [options] [dir]             Build sieve/ from your code — symbol graph +
+                                    per-file pages ($0, no key).
   ask [options] <query> [dir]       Query the sieve/ graph — returns ranked
-                                    nodes + exact file:line, routed to prose or
-                                    wiring ($0, no key)
+                                    symbols + exact file:line, routed to prose or
+                                    code ($0, no key)
   skeleton [options] <file> [dir]   Signatures-only view of one file from the
-                                    wiring graph — the cheapest way to see a
+                                    symbol graph — the cheapest way to see a
                                     file's API surface
   check [options] [dir]             Fail if sieve/ is stale relative to the code
                                     (for CI)
@@ -52,7 +52,7 @@ Commands:
                                     coupling ($0, no LLM)
   map [options] [dir]               Token-budgeted repo orientation — directory
                                     clusters, per-directory hubs, and global
-                                    hotspots from the wiring graph ($0, no LLM)
+                                    hotspots from the symbol graph ($0, no LLM)
   why [options] [symbol] [dir]      Show the decision entries that explain a
                                     symbol
   init [options] [dir]              Wire Sieve into the AI coding agents used
@@ -103,7 +103,7 @@ Options:
         "build",
         r#"Usage: sieve build [options] [dir]
 
-Build sieve/ from your code — wiring graph + per-file cards ($0, no key).
+Build sieve/ from your code — symbol graph + per-file pages ($0, no key).
 
 Arguments:
   dir                         repository root (default: ".")
@@ -114,7 +114,7 @@ Options:
                               that lists the supported set
   --no-reuse                  re-parse every file instead of replaying unchanged
                               ones from the extraction cache
-  --lsp                       add compiler-grade call edges via a language
+  --lsp                       add compiler-grade call links via a language
                               server if one is installed (opt-in, slower; e.g.
                               rust-analyzer, clangd)
   --follow-submodules         include initialized Git submodules recursively;
@@ -134,7 +134,7 @@ Options:
                               hooks/refresh path) include it without the flag;
                               dot-dirs are never overridable (default: [])
   --only-dir <path>           only index files under this repo-relative path —
-                              repeatable; the wiring walk honors it. Recorded in
+                              repeatable; the file walk honors it. Recorded in
                               the graph fingerprint so a later build (and the
                               hooks/refresh path) walks the same set; everything
                               outside the list is skipped (default: [])
@@ -149,8 +149,8 @@ Options:
         "ask",
         r#"Usage: sieve ask [options] <query> [dir]
 
-Query the sieve/ graph — returns ranked nodes + exact file:line, routed to prose
-or wiring ($0, no key)
+Query the sieve/ graph — returns ranked symbols + exact file:line, routed to prose
+or code ($0, no key)
 
 Arguments:
   query            what you want to understand, in plain words
@@ -163,7 +163,7 @@ Options:
                    pack IS the answer, no need to re-open files)
   --full           with --source: inline whole definition spans instead of the
                    default ≤8-line crux excerpts
-  --in <path>      narrow to nodes under this path prefix, filtered before
+  --in <path>      narrow to symbols under this path prefix, filtered before
                    scoring (segment-aware, like scopeOf)
   --json           output the result as JSON
   --no-graph-rank  rank by lexical relevance only, without the
@@ -176,7 +176,7 @@ Options:
         "skeleton",
         r#"Usage: sieve skeleton [options] <file> [dir]
 
-Signatures-only view of one file from the wiring graph — the cheapest way to see
+Signatures-only view of one file from the symbol graph — the cheapest way to see
 a file's API surface
 
 Arguments:
@@ -271,11 +271,11 @@ Arguments:
                         index)
 
 Options:
-  --direction <in|out>  edge direction: "in" = callers (default), "out" =
+  --direction <in|out>  link direction: "in" = callers (default), "out" =
                         callees
   -d, --depth <n>       walk transitively up to N hops for blast radius, or
                         "all" for the full connected closure (default 1)
-  --in <path>           narrow matches to nodes at or under this path prefix
+  --in <path>           narrow matches to symbols at or under this path prefix
   --json                output as JSON
   --no-refresh          skip the freshness check — answer from the graph as-is
   -h, --help            display help for command
@@ -295,7 +295,7 @@ Arguments:
 Options:
   --base <ref>          diff against this ref's merge base with HEAD (e.g.
                         origin/main); default: the working tree vs HEAD
-  -d, --depth <n>       hops to walk over incoming edges, or "all" for the full
+  -d, --depth <n>       hops to walk over incoming links, or "all" for the full
                         closure (default 2)
   --format <fmt>        text (default) | markdown | mermaid | json
   --export-viz <dir>    also write the interactive page for this radius (one
@@ -337,7 +337,7 @@ Options:
         r#"Usage: sieve map [options] [dir]
 
 Token-budgeted repo orientation — directory clusters, per-directory hubs, and
-global hotspots from the wiring graph ($0, no LLM)
+global hotspots from the symbol graph ($0, no LLM)
 
 Arguments:
   dir             repository root (default: nearest ancestor with a sieve/
@@ -367,7 +367,7 @@ Options:
                      hermes, antigravity, copilot, kiro, windsurf, claude)
   --all-agents       write instruction files for every known agent, detected or
                      not
-  --no-agents        Claude Code wiring only; skip other agents
+  --no-agents        Claude Code only; skip other agents
   --list-agents      list known agent ids and exit
   --no-mcp           skip MCP server registration for other agents
   --no-hooks         skip hook installation for other agents
@@ -397,7 +397,7 @@ Arguments:
 Options:
   -y, --yes     actually remove (without this, prints what it would remove and
                 exits)
-  --keep-cache  keep sieve/ and the .gitignore entries — wiring only
+  --keep-cache  keep sieve/ and the .gitignore entries — remove agent files only
   --no-global   leave out-of-repo files alone (~/.codex, ~/.gemini)
   -h, --help    display help for command
 "#,

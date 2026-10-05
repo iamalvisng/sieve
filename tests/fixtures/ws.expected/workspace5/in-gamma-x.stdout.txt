@@ -1,26 +1,20 @@
-sieve ask — "parse config"  (lexical)
+ask  parse config · 6 hits
 
-1. [gamma/packages/x/] parseConfigX · function  [symbol]
-   gamma/packages/x/src/parse-config.ts:L1-L3
+1  [gamma/packages/x/] parseConfigX  fn  gamma/packages/x/src/parse-config.ts:1-3
    function parseConfigX(text: string): string
 
-2. [gamma/packages/x/] loadConfigX · function  [symbol]
-   gamma/packages/x/src/parse-config.ts:L5-L7
+2  [gamma/packages/x/] loadConfigX  fn  gamma/packages/x/src/parse-config.ts:5-7
    function loadConfigX(path: string): string
 
-3. [gamma/packages/x/] parse-config.ts · file  [symbol]
-   gamma/packages/x/src/parse-config.ts
+3  [gamma/packages/x/] parse-config.ts  file  gamma/packages/x/src/parse-config.ts
 
-4. [gamma/packages/x/] xOne · function  [symbol]
-   gamma/packages/x/src/parse-config.ts:L9-L11
+4  [gamma/packages/x/] xOne  fn  gamma/packages/x/src/parse-config.ts:9-11
    function xOne(): number
 
-5. [gamma/packages/x/] xThree · function  [symbol]
-   gamma/packages/x/src/parse-config.ts:L17-L19
+5  [gamma/packages/x/] xThree  fn  gamma/packages/x/src/parse-config.ts:17-19
    function xThree(): number
 
-6. [gamma/packages/x/] xTwo · function  [symbol]
-   gamma/packages/x/src/parse-config.ts:L13-L15
+6  [gamma/packages/x/] xTwo  fn  gamma/packages/x/src/parse-config.ts:13-15
    function xTwo(): number
 
 matched in: gamma/packages/x/ (6)

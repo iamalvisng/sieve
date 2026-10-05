@@ -47,13 +47,11 @@ fn tokenize(args: &str) -> Vec<String> {
 }
 
 fn strip_savings_header(golden: &str) -> &str {
-    if golden.starts_with("[sieve]") {
-        match golden.find("\n\n") {
-            Some(idx) => &golden[idx + 2..],
-            None => golden,
-        }
-    } else {
-        golden
+    // The saving is the last line of a golden. Keep the newline before it.
+    let body = golden.strip_suffix('\n').unwrap_or(golden);
+    match body.rfind('\n') {
+        Some(i) if body[i + 1..].starts_with("[sieve] saved") => &golden[..=i],
+        _ => golden,
     }
 }
 
@@ -202,6 +200,17 @@ fn test_p1_17_18_p3_32_33_skeleton_matches_golden() {
 
             let mut json = false;
             let got = run_skeleton_case(&graph, &args, &mut json);
+            // A file that is not in the index exits 1 in the CLI, with an
+            // error line on stderr and nothing on stdout. The library gives
+            // the note instead, which has no entries.
+            let exit_path = expected_dir.join("queries").join(format!("{id}.exit.txt"));
+            let exit_golden = fs::read_to_string(&exit_path).unwrap_or_default();
+            if exit_golden.trim() == "1" && !json {
+                if !stdout_golden.is_empty() || got.trim().is_empty() {
+                    failures.push(format!("{fixture}/{id}: want an error with no stdout"));
+                }
+                continue;
+            }
             let want = strip_savings_header(stdout_golden.trim_end_matches('\n'));
             let got = got.trim_end_matches('\n');
             let want = want.trim_end_matches('\n');
@@ -337,7 +346,7 @@ fn test_p1_19_to_23_p3_20_to_25_callers_matches_golden() {
             match (exit, run) {
                 (1, CallersRun::Error(got)) => {
                     let want_line = last_stderr_line(&expected_dir, &id);
-                    let want = want_line.strip_prefix("✗ ").unwrap_or(&want_line);
+                    let want = want_line.strip_prefix("sieve: ").unwrap_or(&want_line);
                     if got != want {
                         failures.push(format!(
                             "{fixture}/{id}: error mismatch\n  want: {want}\n  got:  {got}"

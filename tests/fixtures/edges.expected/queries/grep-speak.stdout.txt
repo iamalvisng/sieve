@@ -1,14 +1,14 @@
-"speak" — 5 hits in 4 symbols across 2 files (searched 12 indexed files)
+grep "speak" · 5 hits in 4 symbols across 2 files · searched 12 files
 
-Dog.speak · method · py/derived.py:L7-L8 · 2 in-edges
-  L7: def speak(self):
-  L8: return super().speak() + "woof"
+Dog.speak  method  py/derived.py:7-8  · 2 links in
+  7: def speak(self):
+  8: return super().speak() + "woof"
 
-Animal.speak · method · py/base.py:L2-L3 · 0 in-edges
-  L2: def speak(self):
+Animal.speak  method  py/base.py:2-3  · 0 links in
+  2: def speak(self):
 
-Dog.twice · method · py/derived.py:L10-L11 · 0 in-edges
-  L11: return self.speak() * 2
+Dog.twice  method  py/derived.py:10-11  · 0 links in
+  11: return self.speak() * 2
 
-make · function · py/derived.py:L14-L16 · 0 in-edges
-  L16: return d.speak()
+make  fn  py/derived.py:14-16  · 0 links in
+  16: return d.speak()

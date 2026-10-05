@@ -15,6 +15,7 @@ pub mod product;
 pub mod session;
 #[cfg(test)]
 mod test_support;
+pub mod voice;
 pub mod walk;
 pub mod wiring;
 pub mod workspace;

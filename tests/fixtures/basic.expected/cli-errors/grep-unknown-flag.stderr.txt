@@ -1,2 +1,1 @@
-error: unknown option '--fixd'
-(Did you mean --fixed?)
+sieve: grep has no --fixd option — did you mean --fixed, or see sieve grep --help

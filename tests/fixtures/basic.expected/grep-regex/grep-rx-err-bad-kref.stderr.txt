@@ -1,1 +1,1 @@
-✗ invalid pattern "(?<n>a)\k<zz>": Invalid regular expression: /(?<n>a)\k<zz>/: Invalid named capture referenced
+sieve: invalid pattern "(?<n>a)\k<zz>": Invalid regular expression: /(?<n>a)\k<zz>/: Invalid named capture referenced — fix the pattern, or add --fixed

@@ -1,3 +1,1 @@
-deep layer: not built — wiring graph is the source of truth
-
-graph check: OK — the wiring graph is in sync with the code. (meaning tier 0% complete — 27 of 27 node(s) pending: packages/alpha/src/layout.ts, packages/alpha/src/layout.ts#layoutGrid, packages/alpha/src/layout.ts#paintCanvas, packages/alpha/src/layout.ts#renderMenu, packages/alpha/src/render.ts, packages/alpha/src/render.ts#renderFooter, packages/alpha/src/render.ts#renderHeader, packages/alpha/src/render.ts#renderPage, … +19 more.)
+✓ sieve is in sync with the code · 7 files · checked in 0.0 s

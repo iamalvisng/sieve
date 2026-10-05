@@ -1,35 +1,27 @@
-sieve ask — "render"  (lexical)
+ask  render · 8 hits
 
-1. [packages/alpha/] renderPage · function  [symbol]
-   packages/alpha/src/render.ts:L1-L3
+1  [packages/alpha/] renderPage  fn  packages/alpha/src/render.ts:1-3
    function renderPage(): string
 
-2. [packages/beta/] renderReport · function  [symbol]
-   packages/beta/src/render.ts:L1-L3
+2  [packages/beta/] renderReport  fn  packages/beta/src/render.ts:1-3
    function renderReport(): string
 
-3. [packages/beta/] renderTable · function  [symbol]
-   packages/beta/src/format.ts:L1-L3
+3  [packages/beta/] renderTable  fn  packages/beta/src/format.ts:1-3
    function renderTable(): string
 
-4. [packages/alpha/] renderMenu · function  [symbol]
-   packages/alpha/src/layout.ts:L1-L3
+4  [packages/alpha/] renderMenu  fn  packages/alpha/src/layout.ts:1-3
    function renderMenu(): string
 
-5. [packages/alpha/] renderFooter · function  [symbol]
-   packages/alpha/src/render.ts:L9-L11
+5  [packages/alpha/] renderFooter  fn  packages/alpha/src/render.ts:9-11
    function renderFooter(): string
 
-6. [packages/beta/] renderChart · function  [symbol]
-   packages/beta/src/render.ts:L5-L7
+6  [packages/beta/] renderChart  fn  packages/beta/src/render.ts:5-7
    function renderChart(): string
 
-7. [packages/beta/] formatRow · function  [symbol]
-   packages/beta/src/format.ts:L5-L7
+7  [packages/beta/] formatRow  fn  packages/beta/src/format.ts:5-7
    function formatRow(): string
 
-8. [packages/alpha/] layoutGrid · function  [symbol]
-   packages/alpha/src/layout.ts:L5-L7
+8  [packages/alpha/] layoutGrid  fn  packages/alpha/src/layout.ts:5-7
    function layoutGrid(): string
 
 matched in: packages/alpha/ (4) · packages/beta/ (4)

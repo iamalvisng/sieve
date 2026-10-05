@@ -31,5 +31,5 @@ claude:
   - removed: <TMP>/.claude/skills/sieve/SKILL.md (sieve skill — deleted)
   - removed: <TMP>/.mcp.json (mcpServers.sieve — deleted)
 
-✓ sieve fully removed. `sieve init` re-wires from scratch.
-· skipped global hooks under ~ (pass --global to remove them)
+✓ sieve removed · run sieve init to set it up again
+skipped global hooks under ~ · pass --global to remove them

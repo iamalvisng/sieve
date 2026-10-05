@@ -1,1 +1,1 @@
-error: option '--agents <ids...>' argument missing
+sieve: --agents needs a value — see sieve init --help

@@ -182,7 +182,7 @@ fn build_exits_1_on_a_missing_dir() {
     assert_eq!(
         drop_update_nudge(&stderr),
         format!(
-            "ENOENT: no such file or directory, scandir '{}'\n",
+            "sieve: directory not found: {} \u{2014} check the path, or run sieve build . inside the repo\n",
             missing.display()
         )
     );
@@ -541,7 +541,7 @@ fn test_p2_35_a_second_build_replays_every_file_from_cache() {
     let (code2, stdout2, _) = run_build(&temp.path, &[], &[]);
     assert_eq!(code2, Some(0), "second build exit code");
     assert!(
-        stdout2.contains("parsed: 0 of 7 files (7 replayed from cache)"),
+        stdout2.contains("sieve is up to date \u{b7} 7 files unchanged"),
         "second build stdout: {stdout2}"
     );
 
@@ -641,7 +641,7 @@ fn test_p2_34_a_held_lock_makes_build_wait_then_fail() {
     assert_eq!(code, Some(1));
     assert_eq!(
         drop_update_nudge(&stderr),
-        "✗ a graph rebuild is already in flight\n"
+        "sieve: a graph rebuild is already in flight \u{2014} wait, then run sieve build again\n"
     );
     assert!(elapsed >= std::time::Duration::from_secs(2));
 }
@@ -661,11 +661,9 @@ fn build_prints_the_zero_files_report() {
 
     let masked = mask_tmp(&stdout, &tmp_body);
     let expected = concat!(
-        "✓ wiring: 0 nodes (), 0 edges, 0 cards []\n",
-        "  parsed: 0 of 0 files (0 replayed from cache)\n",
-        "  → <TMP>/sieve\n",
-        "  <TMP>/sieve/ is git-ignored (added automatically) — a local cache; ",
-        "teammates run `sieve build` to get their own.\n",
+        "sieve sifted repo in 0.0 s\n",
+        "0 files \u{2192} 0 symbols \u{b7} 0 links\n",
+        "index in <TMP>/sieve \u{b7} git-ignored \u{b7} stays on this machine\n",
     );
     assert_eq!(masked, expected);
 }
@@ -698,14 +696,13 @@ fn test_p2_32_ignore_edits_are_idempotent_and_gated() {
     let (code, stdout, _) = run_build(&no_gitignore_temp.path, &["--no-gitignore"], &[]);
     assert_eq!(code, Some(0));
     assert!(!no_gitignore_temp.path.join(".gitignore").exists());
-    assert!(
-        stdout.contains("is a local cache — add it to your gitignore if you want it untracked.")
-    );
-    assert!(!stdout.contains("is git-ignored (added automatically)"));
+    assert!(stdout
+        .contains("not git-ignored \u{b7} add it to your gitignore to keep it out of commits"));
+    assert!(!stdout.contains("git-ignored \u{b7} stays on this machine"));
 }
 
-/// Sieve prints a `--dir` value as typed on the `→` line;
-/// without `--dir` it prints the absolute `<root>/sieve`.
+/// Sieve prints a `--dir` value as typed on the `index in` line;
+/// without `--dir` it prints the path of `sieve/` relative to the cwd.
 /// The expected lines are recorded output for the same commands. The
 /// stdout golden of the build tree test sits under P2-32 (DV11 names the
 /// same `--dir tools/ctx` case).
@@ -721,15 +718,19 @@ fn test_p2_32_build_prints_the_dir_flag_as_typed_like_golden() {
     for typed in ["tools/ctx", "./tools/ctx", "../up", absolute] {
         let output = support::sieve_command()
             .current_dir(&root)
-            .args(["--dir", typed, "build", "."])
+            .args(["--dir", typed, "build", ".", "--no-reuse"])
             .output()
             .expect("run sieve build");
         assert_eq!(output.status.code(), Some(0), "{typed}: exit code");
         let stdout = String::from_utf8(output.stdout).expect("utf-8 stdout");
         let line = stdout
             .lines()
-            .find(|l| l.contains('→'))
-            .expect("arrow line");
-        assert_eq!(line, format!("  → {typed}"), "{typed}");
+            .find(|l| l.starts_with("index in "))
+            .expect("index line");
+        assert_eq!(
+            line,
+            format!("index in {typed} \u{b7} git-ignored \u{b7} stays on this machine"),
+            "{typed}"
+        );
     }
 }

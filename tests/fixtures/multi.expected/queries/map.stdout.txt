@@ -1,20 +1,30 @@
-[sieve] saved ≈ 40 tokens
-
-repo map — 7 files · 20 symbols · 33 edges · typescript
+map · 7 files · 20 symbols · 33 links · typescript
 
 ## packages/alpha/
-packages/alpha/src/layout.ts1 files · 3 symbols   hubs: layoutGrid (layout.ts, 1←), paintCanvas (layout.ts, 1←)
-packages/alpha/src/render.ts1 files · 3 symbols   hubs: renderFooter (render.ts, 1←), renderHeader (render.ts, 1←), renderPage (render.ts, 1←)
+packages/alpha/src/layout.ts1 file · 3 symbols   hubs: layoutGrid (layout.ts, 1←), paintCanvas (layout.ts, 1←)
+packages/alpha/src/render.ts1 file · 3 symbols   hubs: renderFooter (render.ts, 1←), renderHeader (render.ts, 1←), renderPage (render.ts, 1←)
 
 ## packages/gamma/
-packages/gamma/src/data.ts1 files · 3 symbols   hubs: sortItems (data.ts, 1←)
-packages/gamma/src/util.ts1 files · 3 symbols
+packages/gamma/src/data.ts1 file · 3 symbols   hubs: sortItems (data.ts, 1←)
+packages/gamma/src/util.ts1 file · 3 symbols
 
 ## packages/beta/
-packages/beta/src/format.ts1 files · 3 symbols   hubs: formatCell (format.ts, 1←), formatRow (format.ts, 1←)
-packages/beta/src/render.ts1 files · 3 symbols   hubs: exportPdf (render.ts, 1←), renderChart (render.ts, 1←), renderReport (render.ts, 1←)
+packages/beta/src/format.ts1 file · 3 symbols   hubs: formatCell (format.ts, 1←), formatRow (format.ts, 1←)
+packages/beta/src/render.ts1 file · 3 symbols   hubs: exportPdf (render.ts, 1←), renderChart (render.ts, 1←), renderReport (render.ts, 1←)
 
 ## (root)
-src/index.ts        1 files · 2 symbols
+src/index.ts        1 file · 2 symbols
 
-hotspots: exportPdf · function · packages/beta/src/render.ts:L9-L11 · 1←  formatCell · function · packages/beta/src/format.ts:L9-L11 · 1←  formatRow · function · packages/beta/src/format.ts:L5-L7 · 1←  layoutGrid · function · packages/alpha/src/layout.ts:L5-L7 · 1←  paintCanvas · function · packages/alpha/src/layout.ts:L10-L12 · 1←  renderChart · function · packages/beta/src/render.ts:L5-L7 · 1←  renderFooter · function · packages/alpha/src/render.ts:L9-L11 · 1←  renderHeader · function · packages/alpha/src/render.ts:L5-L7 · 1←  renderPage · function · packages/alpha/src/render.ts:L1-L3 · 1←  renderReport · function · packages/beta/src/render.ts:L1-L3 · 1←  sortItems · function · packages/gamma/src/data.ts:L5-L7 · 1←
+hotspots
+exportPdf  fn  packages/beta/src/render.ts:9-11  · 1 link in
+formatCell  fn  packages/beta/src/format.ts:9-11  · 1 link in
+formatRow  fn  packages/beta/src/format.ts:5-7  · 1 link in
+layoutGrid  fn  packages/alpha/src/layout.ts:5-7  · 1 link in
+paintCanvas  fn  packages/alpha/src/layout.ts:10-12  · 1 link in
+renderChart  fn  packages/beta/src/render.ts:5-7  · 1 link in
+renderFooter  fn  packages/alpha/src/render.ts:9-11  · 1 link in
+renderHeader  fn  packages/alpha/src/render.ts:5-7  · 1 link in
+renderPage  fn  packages/alpha/src/render.ts:1-3  · 1 link in
+renderReport  fn  packages/beta/src/render.ts:1-3  · 1 link in
+sortItems  fn  packages/gamma/src/data.ts:5-7  · 1 link in
+[sieve] saved ≈ 51 tokens

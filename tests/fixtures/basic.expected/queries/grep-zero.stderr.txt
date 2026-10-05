@@ -1,1 +1,1 @@
-no hits for "zzzz_no_such" in 7 indexed files. The pattern may be too specific — retry sieve grep with a bare symbol name or short substring (drop the receiver, full signature, and regex anchors). All indexed code was searched; use raw grep -rn only for genuinely unindexed files (docs, configs, brand-new files)
+no hits for "zzzz_no_such" in 7 indexed files — try a bare symbol name or a short substring, or run sieve ask "<question>". Use raw grep -rn only for files the index does not hold

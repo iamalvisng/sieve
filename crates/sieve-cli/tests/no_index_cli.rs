@@ -7,7 +7,7 @@ use std::fs;
 
 use support::TempDir;
 
-const LINE: &str = "No index here yet. Run `sieve build .` first.";
+const LINE: &str = "sieve: no index here yet \u{2014} run sieve build .";
 
 /// Runs one query command in an empty dir and checks the line, the exit
 /// code and that the query makes no folder.
@@ -113,7 +113,7 @@ fn test_no_index_missing_dir_says_directory_not_found() {
     ] {
         let (code, all) = run_in(&temp.path, args);
         assert_eq!(code, Some(1), "{args:?}: {all}");
-        assert!(all.contains("Directory not found: nope"), "{args:?}: {all}");
+        assert!(all.contains("directory not found: nope"), "{args:?}: {all}");
         assert!(!all.contains(LINE), "{args:?}: {all}");
     }
 }

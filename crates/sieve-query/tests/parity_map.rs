@@ -60,13 +60,11 @@ fn parse_map_query(args: &str) -> (MapOptions, bool) {
 }
 
 fn strip_savings_header(golden: &str) -> &str {
-    if golden.starts_with("[sieve]") {
-        match golden.find("\n\n") {
-            Some(idx) => &golden[idx + 2..],
-            None => golden,
-        }
-    } else {
-        golden
+    // The saving is the last line of a golden. Keep the newline before it.
+    let body = golden.strip_suffix('\n').unwrap_or(golden);
+    match body.rfind('\n') {
+        Some(i) if body[i + 1..].starts_with("[sieve] saved") => &golden[..=i],
+        _ => golden,
     }
 }
 

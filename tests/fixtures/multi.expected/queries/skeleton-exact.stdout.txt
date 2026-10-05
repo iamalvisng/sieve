@@ -1,4 +1,5 @@
-sieve skeleton — packages/alpha/src/render.ts
-- L1-L3  function renderPage  function renderPage(): string
-- L5-L7  function renderHeader  function renderHeader(): string
-- L9-L11  function renderFooter  function renderFooter(): string
+packages/alpha/src/render.ts · 3 symbols
+ 1-3  renderPage  fn  (): string  · 1 caller
+ 5-7  renderHeader  fn  (): string  · 1 caller
+9-11  renderFooter  fn  (): string  · 1 caller
+[sieve] saved ≈ 7 tokens

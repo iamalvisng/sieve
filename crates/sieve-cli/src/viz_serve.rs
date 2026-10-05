@@ -74,7 +74,7 @@ fn err_json(msg: &str) -> Reply {
 /// and `meta.version` is 1.
 fn code_graph(context_dir: &Path) -> Reply {
     let Ok(bytes) = std::fs::read(context_dir.join(".graph").join("wiring.json")) else {
-        return err_json("no wiring graph in this context dir — run `sieve build` first");
+        return err_json("no index in this context dir — run `sieve build` first");
     };
     let Ok(value) = serde_json::from_slice::<Value>(&bytes) else {
         return err_json("wiring.json is unreadable — regenerate with `sieve build`");
@@ -259,7 +259,7 @@ pub(crate) fn bind(port: u16) -> Result<(TcpListener, u16), String> {
         }
     }
     Err(format!(
-        "no free port in {port}–{}",
+        "no free port in {port}\u{2013}{} \u{2014} try --port with another number",
         u32::from(port) + u32::from(PORT_ATTEMPTS) - 1
     ))
 }
@@ -332,7 +332,7 @@ mod tests {
         assert_eq!((st, ct), (404, JSON));
         assert_eq!(
             String::from_utf8_lossy(&body),
-            "{\"error\":\"no wiring graph in this context dir — run `sieve build` first\"}"
+            "{\"error\":\"no index in this context dir — run `sieve build` first\"}"
         );
         let (st, _, body) = respond("/api/context-graph", &s);
         assert_eq!(st, 200);

@@ -27,7 +27,7 @@ export type SievePaneView = {
   note?: string
 }
 /** The blast of the working diff: the band text and the impact bar read it. */
-export type Band = { sym: string; n: number; hops: number; routes: number }
+export type Band = { sym: string; more?: number; n: number; hops: number; routes: number }
 /** The savings numbers. `spark` holds the last 7 days of tokens, oldest first. */
 export type Stats = { tokens: number; dollars: number | null; spark: number[] }
 

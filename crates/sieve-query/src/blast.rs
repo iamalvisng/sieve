@@ -53,15 +53,17 @@ pub struct BlastOptions {
 /// Every way `blast` can fail (section 3.1 to 3.2).
 #[derive(Debug, Error)]
 pub enum BlastError {
-    #[error("could not read a diff in {0} — is this a git repository?")]
+    #[error("could not read a diff in {0} \u{2014} run it inside a git repository")]
     NotGit(String),
     #[error(
-        "base ref \"{0}\" is not in this checkout.\n  In CI, fetch enough history for the merge base: actions/checkout with `fetch-depth: 0`."
+        "base ref {0} is not in this checkout \u{2014} in CI, fetch the full history (actions/checkout with fetch-depth: 0)"
     )]
     BadBase(String),
-    #[error("--format must be text, markdown, mermaid or json, got \"{0}\"")]
+    #[error(
+        "--format must be text, markdown, mermaid or json, got {0} \u{2014} try --format text"
+    )]
     BadFormat(String),
-    #[error("--depth must be a positive number or \"all\", got \"{0}\"")]
+    #[error("--depth must be a positive number or all, got {0} \u{2014} try --depth 2")]
     BadDepth(String),
     /// Raised by the caller that loads the graph, not by [`blast`] itself —
     /// `blast` is handed an already-loaded [`Graph`].
@@ -73,7 +75,7 @@ pub enum BlastError {
 /// command.
 fn no_graph_message(path: &str) -> String {
     format!(
-        "no graph found at {path} — run `{} build` first",
+        "no index at {path} \u{2014} run {} build",
         sieve_core::product().name
     )
 }
@@ -430,6 +432,10 @@ pub struct Impacted {
     pub span: String,
     pub relation: Relation,
     pub depth: u32,
+    /// The id of the symbol the walk came through. The text report uses it
+    /// to draw the tree. The JSON report does not hold it.
+    #[serde(skip)]
+    pub parent: Option<String>,
 }
 
 fn span_bounds(span: &str) -> Option<(u32, u32)> {
@@ -478,6 +484,7 @@ struct EdgeHit<'a> {
     node: Option<&'a Node>,
     relation: Relation,
     depth: u32,
+    parent: String,
 }
 
 /// BFS over incoming walk-relation edges from every seed at once, each
@@ -522,6 +529,7 @@ fn impact_of_many<'a>(graph: &'a Graph, seeds: &[&Node], max_depth: Depth) -> Ve
                     node: by_id.get(*other).copied(),
                     relation: *relation,
                     depth: depth as u32,
+                    parent: current.to_string(),
                 });
                 next.push(*other);
             }
@@ -1163,6 +1171,7 @@ fn blast_radius(
                 span: node.span.clone(),
                 relation: h.relation,
                 depth: h.depth,
+                parent: Some(h.parent.clone()),
             };
             match merged.get_mut(&h.id) {
                 None => {
@@ -1270,69 +1279,128 @@ fn depth_label(depth: Option<u32>) -> String {
     }
 }
 
-const MAX_MODULE_SYMBOLS: usize = 25;
+/// The most changed symbols the text report lists.
+const MAX_SEEDS: usize = 12;
 
-/// The plain-text report the terminal path prints, with no savings
-/// header (section 3.7).
+/// The most dependents the text report lists.
+const MAX_LISTED: usize = 40;
+
+/// A count and the first names of some files: `2 files: a.ts, b.ts`.
+fn file_list(files: &[String]) -> String {
+    let shown: Vec<&str> = files.iter().take(5).map(String::as_str).collect();
+    let more = match files.len().saturating_sub(5) {
+        0 => String::new(),
+        n => format!(" +{n} more"),
+    };
+    format!(
+        "{}: {}{more}",
+        plural(files.len(), "file"),
+        shown.join(", ")
+    )
+}
+
+/// The row of one dependent, with its relation when it is not a call.
+fn impacted_row(s: &Impacted) -> String {
+    let row = sieve_core::voice::row(
+        &s.name,
+        crate::ask::kind_word(s.kind),
+        &s.path,
+        Some(&s.span),
+    );
+    match s.relation {
+        Relation::Calls => row,
+        other => format!("{row}  \u{b7} {}", other.as_str()),
+    }
+}
+
+/// The plain-text report the terminal path prints, with no savings line
+/// (section 3.7). It names the changed symbols, counts the dependents, and
+/// draws them as a tree by hop.
 pub fn format_blast_text(r: &BlastReport) -> String {
-    let symbols: usize = r.modules.iter().map(|m| m.symbols.len()).sum();
-    let mut lines: Vec<String> = vec![
-        format!("blast radius — {} ({})", r.basis, depth_label(r.depth)),
-        format!(
-            "  changed: {} in {}, {}",
-            plural(r.changed.len(), "file"),
-            plural(r.areas.len(), "area"),
-            plural(r.seeds.len(), "seed symbol")
-        ),
-        format!(
-            "  impacted: {} in {}",
-            plural(symbols, "symbol"),
-            plural(r.modules.len(), "area")
-        ),
-        String::new(),
-    ];
-
-    for a in &r.areas {
-        lines.push(format!(
-            "{} {} — {}, {}/{} reached by a test",
-            a.tests.glyph(),
-            a.label,
-            plural(a.files.len(), "changed file"),
-            a.reached,
-            a.behavioural
-        ));
+    let mut lines: Vec<String> = Vec::new();
+    let mut names: Vec<&str> = Vec::new();
+    for seed in &r.seeds {
+        if !names.contains(&seed.name.as_str()) {
+            names.push(seed.name.as_str());
+        }
     }
-    if !r.areas.is_empty() {
-        lines.push(String::new());
-    }
+    let shown = names.iter().take(2).copied().collect::<Vec<_>>().join(", ");
+    let more = names.len().saturating_sub(2);
+    let shown = match (shown.is_empty(), more) {
+        (true, _) => "nothing in the index".to_string(),
+        (false, 0) => shown,
+        (false, n) => format!("{shown} and {n} more"),
+    };
+    let reached: u32 = r.areas.iter().map(|a| a.reached).sum();
+    let behavioural: u32 = r.areas.iter().map(|a| a.behavioural).sum();
+    let tested = if behavioural > 0 {
+        format!(" \u{b7} {reached} of {behavioural} reached by a test")
+    } else {
+        String::new()
+    };
+    lines.push(format!(
+        "your diff changes {shown} \u{b7} {} in {}{tested} \u{b7} {}",
+        plural(r.seeds.len(), "symbol"),
+        plural(r.changed.len(), "file"),
+        r.basis
+    ));
 
-    for m in &r.modules {
-        lines.push(format!(
-            "{} — {} in {}",
-            m.label,
-            plural(m.symbols.len(), "symbol"),
-            plural(m.files.len(), "file")
-        ));
-        for s in m.symbols.iter().take(MAX_MODULE_SYMBOLS) {
+    // More than one changed symbol: one row for each, with its range.
+    if r.seeds.len() > 1 {
+        for seed in r.seeds.iter().take(MAX_SEEDS) {
             lines.push(format!(
-                "  {} ← {} ({}:{}) [depth {}]",
-                s.relation.as_str(),
-                s.name,
-                s.path,
-                s.span,
-                s.depth
+                "  {}",
+                sieve_core::voice::row(
+                    &seed.name,
+                    crate::ask::kind_word(seed.kind),
+                    &seed.path,
+                    Some(&seed.span)
+                )
             ));
         }
-        let hidden = m.symbols.len().saturating_sub(MAX_MODULE_SYMBOLS);
-        if hidden > 0 {
-            lines.push(format!("  …{}", plural(hidden, "more symbol")));
+        if r.seeds.len() > MAX_SEEDS {
+            lines.push(format!(
+                "  \u{2026} {} not shown",
+                plural(r.seeds.len() - MAX_SEEDS, "more symbol")
+            ));
         }
-        lines.push(String::new());
     }
-    if symbols == 0 {
-        lines.push("no indexed dependents outside the changed files themselves".to_string());
-        lines.push(String::new());
+
+    // The dependents, minus the test-only modules, in module order.
+    let listed: Vec<&Impacted> = r.modules.iter().flat_map(|m| m.symbols.iter()).collect();
+    let deepest = listed.iter().map(|s| s.depth).max().unwrap_or(1);
+    let reach = if deepest > 1 {
+        format!(" within {deepest} hops")
+    } else {
+        String::new()
+    };
+    if listed.is_empty() {
+        lines.push("no callers affected outside the changed files".to_string());
+    } else {
+        lines.push(format!(
+            "{} affected{reach}",
+            plural(listed.len(), "caller")
+        ));
+        let items: Vec<sieve_core::voice::TreeItem> = listed
+            .iter()
+            .map(|s| sieve_core::voice::TreeItem {
+                id: s.id.clone(),
+                parent: s.parent.clone(),
+                text: impacted_row(s),
+                note: None,
+            })
+            .collect();
+        let tree = sieve_core::voice::tree_lines(&items);
+        let hidden = tree.len().saturating_sub(MAX_LISTED);
+        lines.extend(tree.into_iter().take(MAX_LISTED));
+        if hidden > 0 {
+            lines.push(format!(
+                "\u{2026} {} not shown",
+                plural(hidden, "more caller")
+            ));
+        }
     }
+
     if !r.test_modules.is_empty() {
         let files: HashSet<&str> = r
             .test_modules
@@ -1345,42 +1413,45 @@ pub fn format_blast_text(r: &BlastReport) -> String {
             "reference"
         };
         lines.push(format!(
-            "{} also {} this code (not listed)",
-            plural(files.len(), "test suite"),
-            verb
+            "{} also {verb} this code (not listed)",
+            plural(files.len(), "test suite")
         ));
-        lines.push(String::new());
+    }
+    for a in &r.areas {
+        match a.tests {
+            TestSignal::None => lines.push(format!("no test reaches {}", a.label)),
+            TestSignal::Stale => lines.push(format!("tests for {} were not updated", a.label)),
+            TestSignal::Changed | TestSignal::Na => {}
+        }
     }
     if let Some(reviewers) = &r.reviewers {
         if !reviewers.is_empty() {
             let now = owners::now_ms();
-            lines.push("who to tag".to_string());
-            for p in reviewers.iter().take(MAX_REVIEWERS) {
-                let why = if p.areas.len() >= 3 {
-                    format!("{} areas", p.areas.len())
-                } else {
-                    p.areas.join(", ")
-                };
-                lines.push(format!(
-                    "  {} — {why} · {}, last {}",
-                    owners::mention(&p.name, p.handle.as_deref()),
-                    plural(p.commits as usize, "commit"),
-                    owners::since_label(p.last, now)
-                ));
-            }
-            lines.push(String::new());
+            let who: Vec<String> = reviewers
+                .iter()
+                .take(MAX_REVIEWERS)
+                .map(|p| {
+                    format!(
+                        "{} ({}, {})",
+                        owners::mention(&p.name, p.handle.as_deref()),
+                        plural(p.commits as usize, "commit"),
+                        owners::since_label(p.last, now)
+                    )
+                })
+                .collect();
+            lines.push(format!("ask for review  {}", who.join(" \u{b7} ")));
         }
     }
-    // The markdown glyph carries a variation selector; the terminal one
-    // does not.
-    for caveat in caveat_lines(r) {
-        lines.push(caveat.replacen("⚠️ ", "⚠ ", 1));
-        lines.push(String::new());
+    if !r.deleted.is_empty() {
+        lines.push(format!(
+            "deleted  {} \u{b7} their callers cannot be found from this index",
+            file_list(&r.deleted)
+        ));
     }
-
-    let joined = lines.join("\n");
-    let trimmed = joined.trim_end_matches('\n');
-    format!("{trimmed}\n")
+    if !r.unindexed.is_empty() {
+        lines.push(format!("not indexed  {}", file_list(&r.unindexed)));
+    }
+    format!("{}\n", lines.join("\n"))
 }
 
 fn caveat_lines(r: &BlastReport) -> Vec<String> {
@@ -1521,8 +1592,86 @@ mod tests {
             reviewers: None,
         };
         let text = format_blast_text(&report);
-        assert!(text.contains("no indexed dependents outside the changed files themselves"));
+        assert!(text.contains("no callers affected outside the changed files"));
         assert!(text.ends_with('\n') && !text.ends_with("\n\n"));
+    }
+
+    #[test]
+    fn format_blast_text_lists_every_changed_symbol_with_its_range() {
+        let seed = |n: &str, span: &str| Seed {
+            id: n.to_string(),
+            name: n.to_string(),
+            kind: Kind::Function,
+            path: "a.ts".to_string(),
+            span: span.to_string(),
+            whole_file: false,
+        };
+        let report = BlastReport {
+            basis: "working tree vs HEAD".to_string(),
+            depth: Some(2),
+            changed: Vec::new(),
+            unindexed: Vec::new(),
+            deleted: Vec::new(),
+            seeds: vec![seed("a", "L1-L4"), seed("b", "L6-L9"), seed("c", "L11-L12")],
+            impacted: Vec::new(),
+            modules: Vec::new(),
+            test_modules: Vec::new(),
+            areas: Vec::new(),
+            reviewers: None,
+        };
+        let text = format_blast_text(&report);
+        assert!(
+            text.starts_with("your diff changes a, b and 1 more \u{b7} 3 symbols"),
+            "{text}"
+        );
+        assert!(
+            text.contains("\n  a  fn  a.ts:1-4\n  b  fn  a.ts:6-9\n  c  fn  a.ts:11-12\n"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn format_blast_text_draws_the_dependents_as_a_tree_by_hop() {
+        let dep = |id: &str, depth: u32, parent: &str| Impacted {
+            id: id.to_string(),
+            name: id.to_string(),
+            kind: Kind::Function,
+            path: format!("{id}.ts"),
+            span: "L1-L4".to_string(),
+            relation: Relation::Calls,
+            depth,
+            parent: Some(parent.to_string()),
+        };
+        let symbols = vec![dep("a", 1, "seed"), dep("b", 2, "a")];
+        let report = BlastReport {
+            basis: "working tree vs HEAD".to_string(),
+            depth: Some(2),
+            changed: Vec::new(),
+            unindexed: vec![".gitignore".to_string()],
+            deleted: Vec::new(),
+            seeds: Vec::new(),
+            impacted: symbols.clone(),
+            modules: vec![ImpactedModule {
+                label: "m".to_string(),
+                label_source: LabelSource::Symbol,
+                key: "m".to_string(),
+                files: Vec::new(),
+                symbols,
+                from: Vec::new(),
+                owners: None,
+            }],
+            test_modules: Vec::new(),
+            areas: Vec::new(),
+            reviewers: None,
+        };
+        let text = format_blast_text(&report);
+        assert_eq!(
+            text,
+            "your diff changes nothing in the index \u{b7} 0 symbols in 0 files \u{b7} working tree vs HEAD\n\
+             2 callers affected within 2 hops\n\
+             \u{2514}\u{2500} a  fn  a.ts:1-4\n   \u{2514}\u{2500} b  fn  b.ts:1-4\n\
+             not indexed  1 file: .gitignore\n"
+        );
     }
 
     #[test]
@@ -1653,12 +1802,16 @@ mod tests {
             .join("../../tests/fixtures/edges.expected/blast-label")
             .join(format!("{slug}.stdout.txt"));
         let text = fs::read_to_string(&path).unwrap_or_else(|_| panic!("read {}", path.display()));
-        let line = text
-            .lines()
-            .find(|l| l.starts_with("✗ "))
-            .expect("a ✗ line in the golden");
-        let (label, _) = line[4..].split_once(" — ").expect("label before the dash");
-        label.to_string()
+        // An older golden has a `✗ <label> — ...` line. A golden from the
+        // current text has a `no test reaches <label>` line.
+        if let Some(line) = text.lines().find(|l| l.starts_with("✗ ")) {
+            let (label, _) = line[4..].split_once(" — ").expect("label before the dash");
+            return label.to_string();
+        }
+        text.lines()
+            .find_map(|l| l.strip_prefix("no test reaches "))
+            .expect("a label line in the golden")
+            .to_string()
     }
 
     /// P1-25: JS `length` and `slice` count UTF-16 units. A byte slice at
@@ -1745,12 +1898,16 @@ mod tests {
             .join("../../tests/fixtures/edges.expected/blast-dv")
             .join(format!("{id}.stdout.txt"));
         let text = fs::read_to_string(&path).unwrap_or_else(|_| panic!("read {}", path.display()));
-        let line = text
-            .lines()
-            .find(|l| l.starts_with("✗ "))
-            .expect("a ✗ line in the golden");
-        let (label, _) = line[4..].split_once(" — ").expect("label before the dash");
-        label.to_string()
+        // An older golden has a `✗ <label> — ...` line. A golden from the
+        // current text has a `no test reaches <label>` line.
+        if let Some(line) = text.lines().find(|l| l.starts_with("✗ ")) {
+            let (label, _) = line[4..].split_once(" — ").expect("label before the dash");
+            return label.to_string();
+        }
+        text.lines()
+            .find_map(|l| l.strip_prefix("no test reaches "))
+            .expect("a label line in the golden")
+            .to_string()
     }
 
     /// DV12: JS `\s` and `trim` take U+FEFF.
@@ -1789,6 +1946,7 @@ mod tests {
                 span: n.span.clone(),
                 relation: Relation::Calls,
                 depth: 1,
+                parent: None,
             });
         }
         let changed: HashSet<&str> = [seed.path.as_str()].into_iter().collect();

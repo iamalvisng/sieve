@@ -278,7 +278,7 @@ fn test_p1_65_viz_serves_the_golden_routes() {
     assert_eq!(
         live.line,
         format!(
-            "sieve viz → http://127.0.0.1:{}  (ctrl-c to stop)\n",
+            "sieve viz serves http://127.0.0.1:{} \u{b7} press ctrl-c to stop\n",
             live.port
         )
     );
@@ -335,7 +335,7 @@ fn test_p1_65_viz_code_graph_404_and_events_stream() {
     assert_eq!(content_type(&headers), "application/json; charset=utf-8");
     assert_eq!(
         String::from_utf8_lossy(&body),
-        "{\"error\":\"no wiring graph in this context dir — run `sieve build` first\"}"
+        "{\"error\":\"no index in this context dir — run `sieve build` first\"}"
     );
     let mut s = std::net::TcpStream::connect(("127.0.0.1", live.port)).expect("connect");
     s.set_read_timeout(Some(std::time::Duration::from_secs(10)))
@@ -372,7 +372,7 @@ fn test_p1_65_viz_bad_port_is_an_error_not_a_panic() {
         let stderr = String::from_utf8_lossy(&out.stderr);
         assert_eq!(out.status.code(), Some(1), "{port}: {stderr}");
         assert!(
-            stderr.contains(&format!("✗ invalid port \"{port}\"")),
+            stderr.contains(&format!("sieve: invalid port \"{port}\"")),
             "{port}: {stderr}"
         );
         assert!(!stderr.contains("panicked"), "{port}: {stderr}");
@@ -393,7 +393,7 @@ fn test_p1_65_viz_busy_port_takes_the_next_one() {
     assert_eq!(
         live.line,
         format!(
-            "sieve viz → http://127.0.0.1:{}  (ctrl-c to stop)\n",
+            "sieve viz serves http://127.0.0.1:{} \u{b7} press ctrl-c to stop\n",
             live.port
         )
     );
@@ -419,7 +419,7 @@ fn test_p1_65_viz_export_under_the_sieve_name() {
     assert_eq!(out.status.code(), Some(1));
     assert_eq!(
         normalize_stderr(&mask_tmp(&String::from_utf8_lossy(&out.stderr), &temp)),
-        "✗ no context graph at <TMP>/edges/sieve — run `sieve build` first\n"
+        "sieve: no index at <TMP>/edges/sieve \u{2014} run sieve build\n"
     );
     let sieve_golden = fixtures_dir().join("edges.expected");
     copy_dir(&sieve_golden.join("sieve"), &root.join("sieve"));
@@ -433,7 +433,7 @@ fn test_p1_65_viz_export_under_the_sieve_name() {
     assert_eq!(out.status.code(), Some(0));
     assert_eq!(
         support::mask_kb(&mask_tmp(&String::from_utf8_lossy(&out.stdout), &temp)),
-        "sieve viz → <TMP>/edges/out/index.html (<KB> kB, 1 concept nodes, 36 code nodes)\n"
+        "sieve viz wrote <TMP>/edges/out/index.html \u{b7} <KB> kB \u{b7} 1 concepts \u{b7} 36 symbols\n"
     );
     let page = fs::read(root.join("out/index.html")).expect("read page");
     let want = fs::read(sieve_golden.join("viz/export.index.html")).expect("read golden");

@@ -1,35 +1,27 @@
-sieve ask — "function"  (lexical)
+ask  function · 8 hits
 
-1. [libs/core/] coreFive · function  [symbol]
-   libs/core/src/c.ts:L13-L14
+1  [libs/core/] coreFive  fn  libs/core/src/c.ts:13-14
    function coreFive(): number
 
-2. deepFive · function  [symbol]
-   deep/x/y/src/d.ts:L13-L14
+2  deepFive  fn  deep/x/y/src/d.ts:13-14
    function deepFive(): number
 
-3. otherFive · function  [symbol]
-   libs/other/src/o.ts:L13-L14
+3  otherFive  fn  libs/other/src/o.ts:13-14
    function otherFive(): number
 
-4. [apps/web/] webFive · function  [symbol]
-   apps/web/src/w.ts:L13-L14
+4  [apps/web/] webFive  fn  apps/web/src/w.ts:13-14
    function webFive(): number
 
-5. [libs/core/] coreFour · function  [symbol]
-   libs/core/src/c.ts:L10-L11
+5  [libs/core/] coreFour  fn  libs/core/src/c.ts:10-11
    function coreFour(): number
 
-6. deepFour · function  [symbol]
-   deep/x/y/src/d.ts:L10-L11
+6  deepFour  fn  deep/x/y/src/d.ts:10-11
    function deepFour(): number
 
-7. otherFour · function  [symbol]
-   libs/other/src/o.ts:L10-L11
+7  otherFour  fn  libs/other/src/o.ts:10-11
    function otherFour(): number
 
-8. [apps/web/] webFour · function  [symbol]
-   apps/web/src/w.ts:L10-L11
+8  [apps/web/] webFour  fn  apps/web/src/w.ts:10-11
    function webFour(): number
 
 matched in: (root) (4) · apps/web/ (2) · libs/core/ (2)

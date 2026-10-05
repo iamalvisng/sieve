@@ -808,12 +808,9 @@ mod tests {
         let d = graph_fixture();
         let text = answer(&d.0, &d.0.join("sieve"), &read_intent_for(&d, "src/lib.rs"))
             .expect("skeleton is cached");
-        assert!(text.starts_with("sieve skeleton — src/lib.rs\n"), "{text}");
-        assert!(
-            text.contains("L1-L3") && text.contains("fn alpha"),
-            "{text}"
-        );
-        assert!(text.contains("fn beta"), "{text}");
+        assert!(text.starts_with("src/lib.rs \u{b7} 2 symbols\n"), "{text}");
+        assert!(text.contains("alpha  fn  () -> u32"), "{text}");
+        assert!(text.contains("beta  fn"), "{text}");
         assert_eq!(
             last_line(&text),
             "[sieve] F1 narrowed this Read to 5 of 5 lines of src/lib.rs. Read a span with \

@@ -33,11 +33,11 @@ const SCRIPT_TAG: &str = r#"<script type="module" src="/app.js"></script>"#;
 pub enum VizError {
     /// `index.html` no longer carries the two tags the exporter rewrites.
     #[error(
-        "viz export: viewer/index.html no longer matches the asset tags this exporter rewrites"
+        "the viewer page does not match the tags the exporter rewrites \u{2014} rebuild sieve from source"
     )]
     TagsMissing,
     /// A graph did not serialize.
-    #[error("viz export: {0}")]
+    #[error("the viz export failed: {0} \u{2014} run sieve viz again")]
     Json(#[from] serde_json::Error),
 }
 

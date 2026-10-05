@@ -94,32 +94,67 @@ export function makeView(file: string, tool: string, why: Json, callers?: Json, 
 
 const firstLine = (s: string) => s.split('\n').find(l => l.trim()) ?? ''
 
-/** Runs `sieve <argv>`. It never throws. */
-async function sieve($: Pick<Engine, 'process'>, argv: string[]): Promise<{ json?: Json; note?: string }> {
-  const run = await $.process.run(['sieve', ...argv], { timeoutMs: 20000 }).catch(() => undefined)
-  if (!run || run.exitCode === 127) return { note: 'sieve not found on PATH' }
-  if (run.exitCode !== 0) {
-    const line = firstLine(run.stderr || run.stdout)
-    return { note: /no graph/.test(line) ? 'no Sieve graph in this project; run sieve build' : line }
+const LIMIT_MS = 20000
+const TICK_MS = 100
+const TICK = Symbol('tick')
+
+/**
+ * Runs `sieve <argv>`. It never throws. It uses `$.process.spawn`, because leaving the `for await` loop kills the child.
+ * The loop ends early when `stale()` says a newer job waits, or after 20 s. The result is then `{ cancelled: true }`.
+ * A piece is `{ stream, text }`; the last piece is `{ code, signal }`. A signal with no code counts as a failure.
+ */
+async function sieve($: Pick<Engine, 'process'>, argv: string[], stale: () => boolean = () => !!queue.job): Promise<{ json?: Json; note?: string; cancelled?: boolean }> {
+  let out = ''
+  let err = ''
+  let code: number | undefined
+  const started = Date.now()
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    const it = ($.process as Json).spawn({ argv: ['sieve', ...argv] })[Symbol.asyncIterator]()
+    let next = it.next()
+    for (;;) {
+      const r: any = await Promise.race([next, new Promise(res => (timer = setTimeout(() => res(TICK), TICK_MS)))])
+      clearTimeout(timer)
+      if (stale() || Date.now() - started > LIMIT_MS) {
+        await it.return?.() // ends the loop: the engine kills the child
+        return { cancelled: true, note: 'sieve was cancelled' }
+      }
+      if (r === TICK) continue
+      if (r.done) break
+      next = it.next()
+      const x = r.value
+      if ('code' in x || 'signal' in x) code = typeof x.code === 'number' ? x.code : 1
+      else if (x.stream === 'stderr') err += String(x.text ?? '')
+      else out += String(x.text ?? '')
+    }
+  } catch {
+    return { note: 'sieve not found on PATH' }
+  }
+  if (code === 127) return { note: 'sieve not found on PATH' }
+  if (code !== undefined && code !== 0) {
+    const line = firstLine(err || out)
+    // The CLI error line is `sieve: <what> — <what to run>`.
+    return { note: /no (graph|index)/.test(line) ? 'no Sieve graph in this project; run sieve build' : line.replace(/^sieve: /, '') }
   }
   try {
-    return { json: JSON.parse(run.stdout) }
+    return { json: JSON.parse(out) }
   } catch {
     return { note: 'sieve gave output that is not JSON' }
   }
 }
 
 // `--` ends the flags, so a name or a path that starts with `-` stays an argument.
-async function query($: Pick<Engine, 'process'>, file: string, tool: string, line: number): Promise<SievePaneView | undefined> {
+async function query($: Pick<Engine, 'process'>, file: string, tool: string, line: number, deep = true): Promise<SievePaneView | undefined> {
   const why = await sieve($, ['why', '--json', '--', `${file}:${line}`])
   if (!why.json) return { file, tool, why: [], tree: [], note: why.note }
+  if (queue.job) return undefined // a newer job waits: stop, the view is stale
   const name: string | undefined = why.json.symbols?.[0]?.name
   const callers = name ? (await sieve($, ['callers', '--in', file, '--depth', '2', '--json', '--', name])).json : undefined
   const hits: Json[] = (callers?.matches ?? []).flatMap((x: Json) => x.hits ?? [])
   const d1 = hits.filter(h => h.depth === 1)
   const kids = new Map<string, Json[]>()
   if (d1.length === 1) kids.set(d1[0].id, rowsOf(hits))
-  else {
+  else if (deep) {
     // Several depth-1 callers: ask each shown one for its own callers, to find who owns which depth-2 hit.
     const d2 = new Set(rowsOf(hits).map(h => h.id))
     for (const h of d1.slice(0, 4)) {
@@ -132,24 +167,48 @@ async function query($: Pick<Engine, 'process'>, file: string, tool: string, lin
   return makeView(file, tool, why.json, callers, kids)
 }
 
-/** The file view: the file's decisions and its 5 most called symbols. It runs 2 + at most 10 queries, in sequence. */
+/**
+ * The file view: its 3 most called symbols, then the symbol view of the most called one. It runs at most 3 queries:
+ * `map` (the hubs of the file, with their caller counts), `why` and `callers`. A file with no hub runs `map` and `why` only.
+ * ponytail: `map` lists the top hubs of each directory, so a symbol that is not a hub is not counted. Upgrade: a per-file counts query in the CLI.
+ */
 export async function fileView($: Pick<Engine, 'process'>, file: string): Promise<SievePaneView | undefined> {
-  const skel = await sieve($, ['skeleton', '--json', '--', file])
-  if (!skel.json) return { file, tool: 'Read', why: [], tree: [], note: skel.note }
-  const entries: Json[] = (skel.json.entries ?? []).slice(0, 10) // ponytail: 10 symbols, one callers call each
-  if (!entries.length) return { file, tool: 'Read', why: [], tree: [], note: 'no symbols indexed in this file' }
-  const why = await sieve($, ['why', '--json', '--', file])
-  const counted: { name: string; line: number; n: number }[] = []
-  for (const e of entries) {
-    if (queue.job) return undefined // a newer job waits: stop, the view is stale
-    if (!e.name) continue
-    const c = await sieve($, ['callers', '--in', file, '--json', '--', e.name])
-    if (!c.json) continue // a failed call is not "0 callers"
-    const n = ((c.json.matches ?? []) as Json[]).flatMap(m => m.hits ?? []).length
-    counted.push({ name: e.name, line: Number(lineOf(e.span)), n })
+  const map = await sieve($, ['map', '--json'])
+  if (!map.json) return { file, tool: 'Read', why: [], tree: [], note: map.note }
+  if (queue.job) return undefined // a newer job waits: stop, the view is stale
+  const hubs: Json[] = ((map.json.dirs ?? []) as Json[]).flatMap(d => d.hubs ?? []).filter(h => h.path === file)
+  const symbols = hubs
+    .map(h => ({ name: String(h.name), line: Number(lineOf(h.span)), n: Number(h.inDegree) || 0 }))
+    .sort((x, y) => y.n - x.n)
+    .slice(0, 3)
+  if (!symbols.length) {
+    const why = await sieve($, ['why', '--json', '--', file])
+    return { file, tool: 'Read', why: why.json ? whyCards(why.json) : [], tree: [], symbols }
   }
-  const symbols = counted.sort((a, b) => b.n - a.n).slice(0, 5)
-  return { file, tool: 'Read', why: why.json ? whyCards(why.json) : [], tree: [], symbols }
+  // Below the short list: the full symbol view of the most called symbol.
+  const top = await query($, file, 'Read', symbols[0]!.line, false)
+  return top && { ...top, symbols }
+}
+
+/** The symbol view of a name, from `sieve callers`. The first match gives the file and the line, as the edit view finds them with `sieve why`. */
+export async function symbolView($: Pick<Engine, 'process'>, name: string, tool: string): Promise<SievePaneView | undefined> {
+  if (!name) return { file: name, tool, why: [], tree: [] }
+  const found = await sieve($, ['callers', '--json', '--', name])
+  const sym = found.json?.matches?.[0]?.symbol
+  if (!sym?.path) return { file: name, tool, why: [], tree: [], note: found.note ?? `no symbol named ${name}` }
+  if (queue.job) return undefined // a newer job waits: stop, the view is stale
+  return query($, String(sym.path), tool, Number(lineOf(sym.span)) || 1, false)
+}
+
+/** The symbol view of the top hit of `sieve ask`. A top hit that is not a symbol gives a note. */
+export async function askView($: Pick<Engine, 'process'>, text: string, tool: string): Promise<SievePaneView | undefined> {
+  if (!text) return { file: text, tool, why: [], tree: [] }
+  const found = await sieve($, ['ask', '--json', '--', text])
+  const top = found.json?.hits?.[0]
+  const at = top?.kind === 'symbol' ? /^(.+):L(\d+)/.exec(String(top.pointer)) : null
+  if (!at) return { file: text, tool, why: [], tree: [], note: found.note ?? 'the top hit is not a symbol' }
+  if (queue.job) return undefined // a newer job waits: stop, the view is stale
+  return query($, at[1]!, tool, Number(at[2]), false)
 }
 
 const SUBS = new Set(['ask', 'grep', 'callers', 'blast', 'map', 'skeleton', 'why'])
@@ -229,7 +288,7 @@ function sieveQuery(e: Json, ran: Json): Query | undefined {
   else if (tool.startsWith('mcp__sieve__')) {
     // The MCP input fields sit flat on `e`, as `command` does for Bash (claude-code.d.ts, McpToolCallInputFallback).
     const arg = [e.pattern, e.symbol, e.query, e.file, e.path, e.name, e.question].find(v => typeof v === 'string')
-    const name = tool.slice('mcp__sieve__'.length)
+    const name = tool.slice('mcp__sieve__'.length).replace(/^sieve_/, '') // the tool is `sieve_trace_calls`, so the full name is mcp__sieve__sieve_trace_calls
     found = { sub: MCP_SUBS[name] ?? name, arg: arg ?? '' }
   }
   return found && { ...found, saved: savedTokens(String(ran?.text ?? '')) }
@@ -237,6 +296,11 @@ function sieveQuery(e: Json, ran: Json): Query | undefined {
 
 /** The newest job waits here. The tool.call hook writes it. The worker takes it. */
 export const queue: { job?: Job; busy: boolean } = { busy: false }
+
+/** Queues a job. A job that is already running is stale now: its `sieve` loop sees `queue.job` and ends. */
+export function setJob(job: Job) {
+  queue.job = job
+}
 
 /**
  * The tool.call hook. It awaits next(e) first and returns the result unchanged.
@@ -250,13 +314,13 @@ export async function onToolCall($: Pick<Engine, 'session'>, e: Json, next: (e: 
     const q = sieveQuery(e, ran)
     if (q) {
       const abs = normalize(q.arg.startsWith('/') ? q.arg : `${cwd}/${q.arg}`)
-      const isFile = !!q.arg && isCode(q.arg) && abs.startsWith(`${cwd}/`)
-      queue.job = { file: isFile ? abs.slice(cwd.length + 1) : q.arg, path: abs, tool: q.sub, input: e, at: Date.now(), query: q, isFile }
+      const isFile = q.sub === 'skeleton' && !!q.arg && isCode(q.arg) && abs.startsWith(`${cwd}/`)
+      setJob({ file: isFile ? abs.slice(cwd.length + 1) : q.arg, path: abs, tool: q.sub, input: e, at: Date.now(), query: q, isFile })
       return ran
     }
     const path = normalize(String(e.file_path ?? ''))
     if (['Read', ...EDITS].includes(tool) && path.startsWith(`${cwd}/`)) {
-      queue.job = { file: path.slice(cwd.length + 1), path, tool, input: e, at: Date.now() }
+      setJob({ file: path.slice(cwd.length + 1), path, tool, input: e, at: Date.now() })
     }
     if (EDITS.includes(tool) && path.startsWith(`${cwd}/`)) blast.dirty = true
   } catch {} // A failure never reaches the tool result.
@@ -271,12 +335,16 @@ export async function step($: Pick<Engine, 'process' | 'fs'>, put: Put): Promise
   queue.job = undefined
   try {
     const text = job.tool === 'Edit' || job.tool === 'MultiEdit' ? String(await $.fs.read(job.path).catch(() => '')) : ''
-    const whole = job.tool === 'Read' && !job.input.offset // a whole-file Read: line 1 is an import, not a symbol
+    const whole = job.tool === 'Read' && !job.input.offset && !job.input.limit // a whole-file Read: line 1 is an import, not a symbol
     const line = whole || job.query ? 1 : findLine(job.tool, job.input, text)
     const v: SievePaneView | undefined = job.query
       ? job.isFile
         ? await fileView($, job.file)
-        : { file: job.file, tool: job.tool, why: [], tree: [] } // ponytail: a symbol gets the query line only
+        : job.query.sub === 'callers'
+          ? await symbolView($, job.query.arg, job.tool)
+          : job.query.sub === 'ask'
+            ? await askView($, job.query.arg, job.tool)
+            : { file: job.file, tool: job.tool, why: [], tree: [] }
       : whole
       ? await fileView($, job.file)
       : line === undefined
@@ -299,23 +367,24 @@ export function bandInfo(b: Json): Band | null {
   const first = seeds.find(x => !x.wholeFile) ?? seeds[0]
   const more = seeds.length - 1
   return {
-    sym: `${first.name ?? base(String(first.path))}${more > 0 ? ` +${more}` : ''}`,
+    sym: String(first.name ?? base(String(first.path))),
+    more,
     n: hit.length,
     hops: Math.max(0, ...hit.map(h => Number(h.depth) || 0)),
     routes: hit.filter(h => routeOf(h)).length, // one per handler row, as the tree counts
   }
 }
 
-/** The Tokyo Night colors. */
-export const C = { fg: '#c0caf5', dim: '#565f89', blue: '#7aa2f7', cyan: '#7dcfff', purple: '#bb9af7', green: '#9ece6a', orange: '#ff9e64', red: '#f7768e', yellow: '#e0af68', border: '#3b4261' }
+/** The Tokyo Night colors. `text` (fg_dark) is the dim text color. `dim` is for borders, bar tracks and the dimmed mascot only: it gives 2.8:1 on the pane background. */
+export const C = { fg: '#c0caf5', dim: '#565f89', text: '#9aa5ce', blue: '#7aa2f7', cyan: '#7dcfff', purple: '#bb9af7', green: '#9ece6a', orange: '#ff9e64', red: '#f7768e', yellow: '#e0af68', border: '#3b4261' }
 
 /** The level of a caller count: green for 1 to 5, orange for 6 to 20, red above 20. */
 export const level = (n: number) => (n > 20 ? 'red' : n > 5 ? 'orange' : 'green')
 export const levelColor = (n: number) => C[level(n)]
 
-/** The band text, in plain words. */
+/** The band text, in plain words. `more` counts the other changed symbols. */
 export const bandLine = (b: Band) =>
-  `✎ ${b.sym} → affects ${b.n} ${b.n === 1 ? 'caller' : 'callers'}${b.routes ? ` in ${b.routes} ${b.routes === 1 ? 'route' : 'routes'}` : ''}`
+  `✎ ${b.sym}${b.more ? ` and ${b.more} more changed` : ''} → ${b.n} ${b.n === 1 ? 'caller' : 'callers'} affected${b.routes ? ` in ${b.routes} ${b.routes === 1 ? 'route' : 'routes'}` : ''}`
 
 /** A new edit sets dirty. The worker clears it. */
 export const blast: { dirty: boolean; busy: boolean; last: number } = { dirty: false, busy: false, last: -Infinity }
@@ -328,7 +397,7 @@ export async function blastStep($: Pick<Engine, 'process'>, now: number, putBand
   blast.dirty = false
   blast.last = now
   try {
-    const out = await sieve($, ['blast', '--format', 'json', '--no-owners'])
+    const out = await sieve($, ['blast', '--format', 'json', '--no-owners'], () => false)
     if (!blast.dirty) await putBand(out.json ? bandInfo(out.json) : null) // a newer edit wins
   } catch {} // A failing putBand is dropped. A blast failure puts null: the band clears.
   finally {
@@ -371,7 +440,7 @@ export async function statsStep($: Pick<Engine, 'process'>, now: number, putStat
   statsRun.busy = true
   statsRun.last = now
   try {
-    const out = await sieve($, ['stats', '--json'])
+    const out = await sieve($, ['stats', '--json'], () => false)
     const s = out.json ? parseStats(out.json) : null
     await putStats(s)
   } catch {} // A failing putStats is dropped.
@@ -390,7 +459,7 @@ export const MASCOT_NAMES = [...Object.keys(MASCOTS), 'none']
 
 const pixel = (name: string, frame: number) => {
   const m = MASCOTS[name]
-  return m ? m.frames[frame % m.frames.length]! : undefined
+  return m ? m.small[frame % m.small.length]! : undefined // the small frames: 6 pixel rows, 3 cell rows
 }
 
 /**
@@ -489,9 +558,10 @@ export const chart = (days: number[]) => {
 /** The Radar tree. `width` is the pane width in cells. Pure: it makes no query. */
 export function radar(ui: { Box: any; Text: any; Raster?: any; Svg?: any }, width: number, v: SievePaneView | null, b: Band | null, s: Stats | null, art: Art = { name: DEFAULT_MASCOT, frame: 0 }) {
   const { Box, Text, Raster, Svg } = ui
-  const w = Math.max(width - 4, 24) - 1 // the border and the padding take 4 cells, the body has 24 at least, 1 cell stays free
+  const w = Math.max(width - 2, 24) - 1 // the padding takes 2 cells (the engine's pane draws the frame), the body has 24 at least, 1 cell stays free
   const T = (props: Json, text: string, n = w) => <Text {...props}>{cut(text, n)}</Text>
   const title = (t: string) => T({ bold: true, color: C.purple }, t)
+  const blank = () => <Text> </Text> // 1 blank row before a section
   const out: any[] = []
   const edit = !!v && EDITS.includes(v.tool)
   const m = mood(v, b)
@@ -499,26 +569,28 @@ export function radar(ui: { Box: any; Text: any; Raster?: any; Svg?: any }, widt
 
   // 1. the header: the mascot, then the name and the meta
   const shape = art.name !== 'none' && (Raster || Svg) ? mascotWords(art.name, m.rest ? 0 : art.frame, m.dim) : undefined
-  const showArt = !!shape && w >= shape.columns + 18 // the text column needs 17 cells; 16 + 18 = 34
-  const tw = showArt ? w - shape!.columns - 1 : w
+  const showArt = !!shape && w >= shape.columns + 2 + 17 // the text column needs 17 cells, 2 cells stay between the mascot and the text
+  const tw = showArt ? w - shape!.columns - 2 : w
   const head: any[] = []
-  head.push(T({ bold: true, color: C.fg }, v ? (v.symbol ?? base(v.file)) : 'SIEVE', tw))
-  if (!v) head.push(<Text color={C.dim} wrap="wrap">No file yet. The pane fills when the agent reads or edits a file.</Text>)
-  else if (noncode) head.push(<Text color={C.dim} wrap="wrap">{NOT_CODE}</Text>)
+  head.push(T({ bold: true, color: C.fg }, v ? (v.symbols ? base(v.file) : (v.symbol ?? base(v.file))) : 'SIEVE', tw)) // a file view names the file, the symbol below it is the most called one
+  if (!v) head.push(<Text color={C.text} wrap="wrap">No file yet. The pane fills when the agent reads or edits a file.</Text>)
+  else if (noncode) head.push(<Text color={C.text} wrap="wrap">{NOT_CODE}</Text>)
   else {
-    const kind = v.kind === 'function' ? 'fn' : v.kind
+    const kind = v.symbols ? undefined : v.kind === 'function' ? 'fn' : v.kind
     const when = v.query ? v.query.sub : edit ? (v.at ? `edited ${clock(v.at)}` : 'edited') : 'read'
-    const loc = `${base(v.file)}${v.line ? `:${v.line}` : ''}`
+    // The title is the file name or the symbol. Never repeat the file name: a file view shows the folder path.
+    const folder = v.file.includes('/') ? v.file.slice(0, v.file.lastIndexOf('/')) : ''
+    const loc = v.symbols || !v.symbol ? folder : `${base(v.file)}${v.line ? `:${v.line}` : ''}`
     const one = [loc, kind, when].filter(Boolean).join(' · ')
-    if (one.length <= tw) head.push(T({ color: C.dim }, one, tw))
-    else head.push(T({ color: C.dim }, [loc, kind].filter(Boolean).join(' · '), tw), T({ color: C.dim }, when, tw))
-    if (v.note) head.push(<Text color={C.dim} wrap="wrap">{v.note.replace(/^[✗✓] /, '')}</Text>)
+    if (one.length <= tw) head.push(T({ color: C.text }, one, tw))
+    else head.push(T({ color: C.text }, [loc, kind].filter(Boolean).join(' · '), tw), T({ color: C.text }, when, tw))
+    if (v.note) head.push(<Text color={C.text} wrap="wrap">{v.note.replace(/^[✗✓] /, '')}</Text>)
   }
   const art2 = !showArt ? null : Raster ? <Raster key="mascot" columns={shape!.columns} rows={shape!.rows} cells={packCells(shape!.words)} /> : (
     <Svg source={mascotSvg(art.name, m.rest ? 0 : art.frame, m.dim)!} alt={`${MASCOTS[art.name]!.name}`} width={shape!.columns * 4} height={shape!.rows * 8} />
   )
   out.push(
-    <Box gap={1} alignItems="center">
+    <Box gap={2} alignItems="flex-start">
       {art2}
       <Box flexDirection="column" width={tw}>
         {head}
@@ -537,27 +609,33 @@ export function radar(ui: { Box: any; Text: any; Raster?: any; Svg?: any }, widt
   if (s) tiles.push(['SAVED TODAY', kfmt(s.tokens), C.green], ['THIS WEEK', kfmt(s.spark.reduce((a, x) => a + x, 0)), C.blue])
   if (imp.n !== undefined) tiles.push(['IMPACT', String(imp.n), levelColor(imp.n)])
   if (tiles.length) {
-    const tile = Math.floor(w / tiles.length)
+    // Each tile fits its text, 4 cells wider (border and padding). When the row is too wide, the tiles share it in equal parts.
+    const fit = tiles.map(([k, val]) => Math.max(k.length, val.length) + 4)
+    const share = Math.floor((w - (tiles.length - 1)) / tiles.length)
+    const widths = fit.reduce((a, x) => a + x, 0) + tiles.length - 1 <= w ? fit : fit.map(() => share)
     out.push(
-      <Box>
-        {tiles.map(([k, val, color]) => (
-          <Box flexDirection="column" borderStyle="round" borderColor={C.border} width={tile}>
-            {T({ color: C.dim }, k, tile - 2)}
-            {T({ bold: true, color }, val, tile - 2)}
-          </Box>
-        ))}
+      <Box gap={1}>
+        {tiles.map(([k, val, color], i) => {
+          const tile = widths[i]!
+          return (
+            <Box flexDirection="column" borderStyle="round" borderColor={C.border} paddingX={1} width={tile}>
+              {T({ color: C.text }, k, tile - 4)}
+              {T({ bold: true, color }, val, tile - 4)}
+            </Box>
+          )
+        })}
       </Box>,
     )
   }
 
   if (v && !noncode) {
     if (v.symbols) {
-      out.push(title('MOST CALLED SYMBOLS'))
-      out.push(...(v.symbols.length ? v.symbols.map(c => T({ color: C.cyan }, `${c.name}:${c.line}   ${c.n} ${c.n === 1 ? 'caller' : 'callers'}`)) : [T({ color: C.dim }, 'none')]))
+      out.push(blank(), title('MOST CALLED SYMBOLS'))
+      out.push(...(v.symbols.length ? v.symbols.map(c => T({ color: C.cyan }, `${c.name}:${c.line}   ${c.n} ${c.n === 1 ? 'caller' : 'callers'}`)) : [T({ color: C.text }, 'none')]))
     }
     if (v.symbol) {
       // 3. who depends on this
-      out.push(title('WHO DEPENDS ON THIS'))
+      out.push(blank(), title('WHO DEPENDS ON THIS'))
       out.push(T({ bold: true, color: C.fg }, `◉ ${v.symbol}`))
       const tl = treeLines(v.tree, v.n)
       out.push(
@@ -568,19 +646,19 @@ export function radar(ui: { Box: any; Text: any; Raster?: any; Svg?: any }, widt
           </Box>
         )),
       )
-      if (tl.more > 0) out.push(T({ color: C.dim }, `${tl.indent}+${tl.more} more`))
-      if (!v.tree.length) out.push(T({ color: C.dim }, 'no callers'))
+      if (tl.more > 0) out.push(T({ color: C.text }, `${tl.indent}+${tl.more} more`))
+      if (!v.tree.length) out.push(T({ color: C.text }, 'no callers'))
       // 4. the impact bar
       if (imp.n !== undefined) {
         const on = Math.min(BAR, Math.round(imp.n * 1.4))
-        out.push(title('IMPACT'))
+        out.push(blank(), title('IMPACT'))
         out.push(T({ color: levelColor(imp.n) }, `${'█'.repeat(on)}${'░'.repeat(BAR - on)}  ${imp.n} ${imp.n === 1 ? 'caller' : 'callers'} · ${imp.hops} ${imp.hops === 1 ? 'hop' : 'hops'}`))
       }
     }
     // 5. why it exists
     if (v.symbol || v.symbols) {
-      out.push(title('WHY IT EXISTS'))
-      if (!v.why.length) out.push(T({ color: C.dim }, 'no decision recorded'))
+      out.push(blank(), title('WHY IT EXISTS'))
+      if (!v.why.length) out.push(T({ color: C.text }, 'no decision recorded'))
       for (const d of v.why) {
         const mark = d.superseded ? C.red : C.yellow
         out.push(
@@ -594,7 +672,7 @@ export function radar(ui: { Box: any; Text: any; Raster?: any; Svg?: any }, widt
     }
     // 6. the 7-day chart
     if (s && s.spark.length) {
-      out.push(title('SAVED · LAST 7 DAYS'))
+      out.push(blank(), title('SAVED · LAST 7 DAYS'))
       out.push(
         <Box gap={1}>
           {chart(s.spark).map((g, i, all) => (
@@ -605,7 +683,7 @@ export function radar(ui: { Box: any; Text: any; Raster?: any; Svg?: any }, widt
     }
   }
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor={C.border} paddingX={1}>
+    <Box flexDirection="column" paddingX={1} paddingTop={1}>
       {out}
     </Box>
   )

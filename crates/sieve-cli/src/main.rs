@@ -31,6 +31,7 @@ mod stats;
 mod statusline;
 mod telemetry;
 mod templates;
+mod ui;
 mod uninstall;
 mod version;
 mod viz;
@@ -344,15 +345,6 @@ fn preflight_error(args: &[String]) -> Option<String> {
     None
 }
 
-/// Reports whether `message` starts with a Node errno code, such as
-/// `ENOENT: ` or `EACCES: ` (P2-01).
-fn is_node_errno(message: &str) -> bool {
-    let Some((code, _)) = message.split_once(": ") else {
-        return false;
-    };
-    code.len() > 1 && code.starts_with('E') && code.bytes().all(|b| b.is_ascii_uppercase())
-}
-
 fn main() -> ExitCode {
     // P1-01: the Commander help renders the same 18-row command list
     // for `sieve` (no args, stderr, exit 1), `sieve --help`, and `sieve
@@ -372,7 +364,7 @@ fn main() -> ExitCode {
             return ExitCode::SUCCESS;
         }
         Some(commander::TopScan::MissingValue(flags)) => {
-            eprintln!("error: option '{flags}' argument missing");
+            ui::print_commander_error(&format!("error: option '{flags}' argument missing"));
             return ExitCode::FAILURE;
         }
         Some(commander::TopScan::NoOperands) => {
@@ -434,7 +426,7 @@ fn main() -> ExitCode {
     // value flag with no value exits 1 with Commander's own line, ahead
     // of clap's parse (clap's exit 2 and message differ from Commander's).
     if let Some(message) = preflight_error(&raw_args) {
-        eprintln!("{message}");
+        ui::print_commander_error(&message);
         return ExitCode::FAILURE;
     }
 
@@ -459,7 +451,7 @@ fn main() -> ExitCode {
         }
     }
     if let Some(commander::Precheck::Line(line)) = &precheck {
-        eprintln!("{line}");
+        ui::print_commander_error(line);
         return ExitCode::FAILURE;
     }
     let rewritten = match precheck {
@@ -477,22 +469,23 @@ fn main() -> ExitCode {
         Ok(cli) => cli,
         Err(err) => {
             if let Some(line) = commander::line_for(&err, &root, &raw_args) {
-                eprintln!("{line}");
+                ui::print_commander_error(&line);
                 return ExitCode::FAILURE;
             }
-            err.exit()
+            if !err.use_stderr() {
+                err.exit()
+            }
+            // Any other clap error gets the same one-line shape, exit 1.
+            let text = err.to_string();
+            let first = text.lines().next().unwrap_or("");
+            ui::print_commander_error(first);
+            return ExitCode::FAILURE;
         }
     };
     match run(cli) {
         Ok(()) => ExitCode::SUCCESS,
         Err(message) => {
-            // The top-level catch prints a Node errno message (`ENOENT:`,
-            // `EACCES:`) with no prefix; every other error gets the `✗` prefix.
-            if is_node_errno(&message) {
-                eprintln!("{message}");
-            } else {
-                eprintln!("✗ {message}");
-            }
+            ui::print_error(&message);
             ExitCode::FAILURE
         }
     }
@@ -578,19 +571,6 @@ mod tests {
             in_text.sort();
             assert_eq!(in_text, clap_flags, "{name}");
         }
-    }
-
-    /// P2-01: a Node errno message prints with no `✗`; any other message
-    /// keeps the prefix.
-    #[test]
-    fn test_p2_01_is_node_errno_accepts_eacces_and_enoent_only() {
-        assert!(is_node_errno("EACCES: permission denied, scandir '/x'"));
-        assert!(is_node_errno(
-            "ENOENT: no such file or directory, scandir '/x'"
-        ));
-        assert!(!is_node_errno("a graph rebuild is already in flight"));
-        assert!(!is_node_errno("Error: boom"));
-        assert!(!is_node_errno("E: boom"));
     }
 
     /// Commander takes `-1` as a value and lets the last repeat win

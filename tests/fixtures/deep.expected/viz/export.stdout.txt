@@ -1,1 +1,1 @@
-sieve viz → <TMP>/deep/export/index.html (43 kB, 9 concept nodes, 25 code nodes)
+sieve viz wrote <TMP>/deep/export/index.html · 43 kB · 9 concepts · 25 symbols

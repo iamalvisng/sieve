@@ -1,2 +1,2 @@
 [sieve] refreshed the graph (1 file changed) before answering
-✗ --format must be text, markdown, mermaid or json, got "bogus"
+sieve: --format must be text, markdown, mermaid or json, got bogus — try --format text

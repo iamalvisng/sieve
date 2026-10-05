@@ -560,7 +560,7 @@ fn test_p1_72_uninstall_flags_match_golden() {
         // The dry-run line is the one shared report line.
         assert_eq!(
             out.stderr
-                .contains("Dry run — nothing was touched. Re-run with -y to remove."),
+                .contains("dry run \u{b7} nothing removed \u{b7} run sieve uninstall -y to remove"),
             case == "uninstall-dry",
             "{case}: dry-run line"
         );

@@ -1,5 +1,5 @@
-[sieve] saved ≈ 33 tokens
-
-add · function · py/helpers.py:L1-L2
-  calls ← total (py/main.py:L5-L6)
+add  fn  py/helpers.py:1-2
+1 caller
+└─ total  method  py/main.py:5-6
       6: return add(a, b)
+[sieve] saved ≈ 34 tokens

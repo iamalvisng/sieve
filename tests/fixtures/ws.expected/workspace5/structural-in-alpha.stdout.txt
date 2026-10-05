@@ -1,7 +1,6 @@
-sieve ask — "who calls parseConfig"  (lexical)
+ask  who calls parseConfig · 1 hit
 
-1. [alpha/] loadConfig  [caller]
-   alpha/src/a.ts:L5-L7
+1  [alpha/] loadConfig  caller  alpha/src/a.ts:5-7
    function loadConfig(path: string): string
 
 matched in: alpha/ (1)

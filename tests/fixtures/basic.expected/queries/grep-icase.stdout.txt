@@ -1,10 +1,9 @@
-[sieve] saved ≈ 15 tokens
+grep "APP" · 3 hits in 2 symbols across 1 file · searched 7 files
 
-"APP" — 3 hits in 2 symbols across 1 files (searched 7 indexed files)
+App  class  src/app.ts:4-14  · 0 links in
+  4: export class App {
 
-App · class · src/app.ts:L4-L14 · 0 in-edges
-  L4: export class App {
-
-main · function · src/app.ts:L16-L20 · 0 in-edges
-  L17: const app = new App("sieve");
-  L18: app.run(1);
+main  fn  src/app.ts:16-20  · 0 links in
+  17: const app = new App("sieve");
+  18: app.run(1);
+[sieve] saved ≈ 20 tokens

@@ -154,7 +154,7 @@ fn test_build_dir_at_the_workspace_root_refuses_and_keeps_the_children() {
     let canon = fs::canonicalize(&copy.path).expect("canonicalize");
     assert!(
         stderr.contains(&format!(
-            "✗ refusing to build: the context dir {} contains the workspace root or a child repo",
+            "sieve: the context dir {} holds the workspace root or a child repo",
             canon.display()
         )),
         "stderr: {stderr}"

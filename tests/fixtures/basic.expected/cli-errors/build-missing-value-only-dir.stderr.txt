@@ -1,1 +1,1 @@
-error: option '--only-dir <path>' argument missing
+sieve: --only-dir needs a value — see sieve build --help

@@ -15,6 +15,7 @@ use sieve_core::product::product;
 use crate::build::resolve_abs;
 use crate::hosts::{self, json_mcp_targets, Kind, Retract};
 use crate::init::prune_empty_dirs;
+use crate::ui::Ui;
 
 /// Flags for `sieve uninstall`.
 #[derive(Args, Debug)]
@@ -77,35 +78,59 @@ pub fn run(args: &UninstallArgs, _context_dir_override: Option<&Path>) -> Result
         .ok_or_else(|| "HOME is not set".to_string())?;
     let targets = targets(&root, &home, args.global, !args.keep_cache);
 
+    let ui = Ui::stderr();
     if !args.yes {
         let plan = retract(targets, &root, &home, false)?;
-        eprintln!("{}", format_retractions(&plan, false));
-        eprintln!("\nDry run \u{2014} nothing was touched. Re-run with -y to remove.");
+        eprintln!("{}", format_retractions(&ui, &plan, false));
+        eprintln!(
+            "\n{}",
+            ui.dim(&format!(
+                "dry run \u{b7} nothing removed \u{b7} run {} uninstall -y to remove",
+                product().name
+            ))
+        );
         if args.global {
             eprintln!(
-                "Entries marked [machine-wide] affect every project; --no-global skips them."
+                "{}",
+                ui.dim("entries marked [machine-wide] affect every project \u{b7} --no-global skips them")
             );
         } else if !args.no_global {
-            eprintln!("· global hooks under ~ stay (pass --global to remove them)");
+            eprintln!(
+                "{}",
+                ui.dim("global hooks under ~ stay \u{b7} pass --global to remove them")
+            );
         }
         return Ok(());
     }
 
     let done = retract(targets, &root, &home, true)?;
-    eprintln!("{}", format_retractions(&done, true));
+    eprintln!("{}", format_retractions(&ui, &done, true));
     let bad = done
         .iter()
         .filter(|o| o.action == Retract::Unparseable)
         .count();
     if bad > 0 {
+        let files = if bad == 1 { "file" } else { "files" };
         eprintln!(
-            "\n\u{26a0} {bad} file(s) could not be parsed and were left as-is \u{2014} see above."
+            "\n{} {bad} {files} could not be parsed and left as they are \u{2014} see above",
+            ui.orange("\u{26a0}")
         );
     } else {
-        eprintln!("\n\u{2713} sieve fully removed. `sieve init` re-wires from scratch.");
+        eprintln!(
+            "\n{} {}",
+            ui.green("\u{2713}"),
+            ui.fg(&format!(
+                "{} removed \u{b7} run {} init to set it up again",
+                product().name,
+                product().name
+            ))
+        );
     }
     if !args.global && !args.no_global {
-        eprintln!("· skipped global hooks under ~ (pass --global to remove them)");
+        eprintln!(
+            "{}",
+            ui.dim("skipped global hooks under ~ \u{b7} pass --global to remove them")
+        );
     }
     Ok(())
 }
@@ -147,9 +172,9 @@ fn retract(
 }
 
 /// The report: lines grouped by host, in order of first appearance.
-fn format_retractions(outcomes: &[Outcome], apply: bool) -> String {
+fn format_retractions(ui: &Ui, outcomes: &[Outcome], apply: bool) -> String {
     if outcomes.is_empty() {
-        return "· nothing to remove \u{2014} no sieve wiring found here".to_string();
+        return "nothing to remove \u{2014} no sieve files found here".to_string();
     }
     let verb = if apply { "removed" } else { "would remove" };
     let mut hosts_seen: Vec<&str> = Vec::new();
@@ -163,7 +188,7 @@ fn format_retractions(outcomes: &[Outcome], apply: bool) -> String {
         if !lines.is_empty() {
             lines.push(String::new());
         }
-        lines.push(format!("{host}:"));
+        lines.push(ui.purple(&format!("{host}:")));
         for o in outcomes.iter().filter(|o| o.host == host) {
             let (mark, note) = match o.action {
                 Retract::Unparseable => (
@@ -176,8 +201,10 @@ fn format_retractions(outcomes: &[Outcome], apply: bool) -> String {
             };
             let scope = if o.global { " [machine-wide]" } else { "" };
             lines.push(format!(
-                "  {mark} {verb}: {}{scope}{note}",
-                o.path.display()
+                "  {mark} {}: {}{scope}{}",
+                ui.orange(verb),
+                ui.cyan(&o.path.display().to_string()),
+                ui.dim(&note)
             ));
         }
     }
@@ -417,9 +444,9 @@ mod tests {
             ),
         ];
         let want = "agents:\n  ~ would remove: /r/AGENTS.md (fenced sieve section)\n  ~ would remove: /h/.codex/config.toml [machine-wide] ([mcp_servers.sieve])\n  - would remove: /h/.codex/hooks.json [machine-wide] (SessionStart \u{2014} deleted)\n\nadal:\n  - would remove: /r/.adal/skills/x/SKILL.md (sieve-owned instruction file \u{2014} deleted)\n\nclaude:\n  \u{26a0} would remove: /r/.mcp.json \u{2014} not valid JSON, left untouched (remove the sieve entry by hand)";
-        assert_eq!(format_retractions(&rs, false), want);
+        assert_eq!(format_retractions(&Ui::plain(), &rs, false), want);
         assert_eq!(
-            format_retractions(&rs, true),
+            format_retractions(&Ui::plain(), &rs, true),
             want.replace("would remove", "removed")
         );
     }
@@ -427,8 +454,8 @@ mod tests {
     #[test]
     fn test_p1_72_report_with_nothing_to_remove() {
         assert_eq!(
-            format_retractions(&[], false),
-            "· nothing to remove \u{2014} no sieve wiring found here"
+            format_retractions(&Ui::plain(), &[], false),
+            "nothing to remove \u{2014} no sieve files found here"
         );
     }
 }

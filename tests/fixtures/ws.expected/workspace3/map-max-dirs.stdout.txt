@@ -1,19 +1,23 @@
 workspace map — 2 repo(s)
 
 ## alpha/
-[sieve] saved ≈ 10 tokens
+map · 1 file · 5 symbols · 8 links · typescript
 
-repo map — 1 files · 5 symbols · 8 edges · typescript
+src/a.ts            1 file · 5 symbols   hubs: alphaAdd (a.ts, 1←), shared (a.ts, 1←), useShared (a.ts, 1←)
 
-src/a.ts            1 files · 5 symbols   hubs: alphaAdd (a.ts, 1←), shared (a.ts, 1←), useShared (a.ts, 1←)
-
-hotspots: alphaAdd · function · src/a.ts:L1-L3 · 1←  shared · function · src/a.ts:L9-L11 · 1←  useShared · function · src/a.ts:L13-L15 · 1←
+hotspots
+alphaAdd  fn  src/a.ts:1-3  · 1 link in
+shared  fn  src/a.ts:9-11  · 1 link in
+useShared  fn  src/a.ts:13-15  · 1 link in
+[sieve] saved ≈ 14 tokens
 
 ## beta/
-[sieve] saved ≈ 13 tokens
+map · 1 file · 5 symbols · 8 links · typescript
 
-repo map — 1 files · 5 symbols · 8 edges · typescript
+src/b.ts            1 file · 5 symbols   hubs: betaGreet (b.ts, 1←), shared (b.ts, 1←), useShared (b.ts, 1←)
 
-src/b.ts            1 files · 5 symbols   hubs: betaGreet (b.ts, 1←), shared (b.ts, 1←), useShared (b.ts, 1←)
-
-hotspots: betaGreet · function · src/b.ts:L1-L3 · 1←  shared · function · src/b.ts:L9-L11 · 1←  useShared · function · src/b.ts:L13-L15 · 1←
+hotspots
+betaGreet  fn  src/b.ts:1-3  · 1 link in
+shared  fn  src/b.ts:9-11  · 1 link in
+useShared  fn  src/b.ts:13-15  · 1 link in
+[sieve] saved ≈ 17 tokens

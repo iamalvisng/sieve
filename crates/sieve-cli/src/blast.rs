@@ -128,7 +128,7 @@ fn export_radius(
     std::fs::write(&file, &out.page).map_err(|e| e.to_string())?;
     let kb = (out.page.len() as f64 / 1024.0).round();
     eprintln!(
-        "• --export-viz: {} ({kb} kB, {} areas, {} code nodes)",
+        "sieve blast wrote {} \u{b7} {kb} kB \u{b7} {} areas \u{b7} {} symbols",
         file.display(),
         out.context_nodes,
         out.code_nodes

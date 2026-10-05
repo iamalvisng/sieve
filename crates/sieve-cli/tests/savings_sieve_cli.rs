@@ -88,10 +88,10 @@ fn test_savings_sieve_tool_header_is_short_and_recorded() {
     let (copy, home) = built();
     let grep = run(&copy.path, &home.path, &["grep", "import", "--fixed"], None);
     let stdout = String::from_utf8_lossy(&grep.stdout).into_owned();
-    let header = stdout.lines().next().expect("a header line");
+    let header = stdout.lines().last().expect("a last line");
     assert!(
         header.starts_with("[sieve] saved \u{2248} ") && header.ends_with(" tokens"),
-        "header: {header}"
+        "last line: {header}"
     );
     assert!(!has_tally(&stdout), "{stdout}");
 

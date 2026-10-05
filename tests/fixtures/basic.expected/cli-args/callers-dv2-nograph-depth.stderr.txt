@@ -1,1 +1,1 @@
-✗ No index here yet. Run `sieve build .` first.
+sieve: no index here yet — run sieve build .

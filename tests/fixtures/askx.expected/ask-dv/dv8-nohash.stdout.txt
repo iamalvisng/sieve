@@ -1,7 +1,6 @@
-sieve ask — "notes"  (lexical)
+ask  notes · 1 hit
 
-1. Widget Notes  [concept]
-   src/widget.ts
+1  Widget Notes  concept  src/widget.ts
    The widget helpers add one to a number and sum a fixed series.
    related: gadget-notes, sprocket-notes
 

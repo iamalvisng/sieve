@@ -402,7 +402,11 @@ fn format_dir_line(d: &DirEntry) -> String {
         format!("{}/", d.path)
     };
     let label = pad_end_utf16(&label, DIR_COL_WIDTH);
-    let counts = format!("{} files · {} symbols", d.files, d.symbols);
+    let counts = format!(
+        "{} \u{b7} {}",
+        sieve_core::voice::count(d.files, "file"),
+        sieve_core::voice::count(d.symbols, "symbol")
+    );
     let hubs = if d.hubs.is_empty() {
         String::new()
     } else {
@@ -413,12 +417,10 @@ fn format_dir_line(d: &DirEntry) -> String {
 }
 
 fn format_hotspot(h: &Hub) -> String {
+    let links = if h.in_degree == 1 { "link" } else { "links" };
     format!(
-        "{} · {} · {}:{} · {}←",
-        h.name,
-        kind_str(h.kind),
-        h.path,
-        h.span,
+        "{}  \u{b7} {} {links} in",
+        sieve_core::voice::row(&h.name, kind_str(h.kind), &h.path, Some(&h.span)),
         h.in_degree
     )
 }
@@ -439,10 +441,10 @@ fn dropped_note(dropped: usize) -> Option<String> {
 pub fn format_repo_map(map: &RepoMap) -> String {
     let totals = &map.totals;
     let header = format!(
-        "repo map — {} files · {} symbols · {} edges · {}",
-        totals.files,
-        totals.symbols,
-        totals.edges,
+        "map \u{b7} {} \u{b7} {} \u{b7} {} \u{b7} {}",
+        sieve_core::voice::count(totals.files, "file"),
+        sieve_core::voice::count(totals.symbols, "symbol"),
+        sieve_core::voice::count(totals.edges, "link"),
         totals.languages.join(", ")
     );
 
@@ -467,8 +469,12 @@ pub fn format_repo_map(map: &RepoMap) -> String {
         }
         lines.push(String::new());
     }
-    let hotspots: Vec<String> = map.hotspots.iter().map(format_hotspot).collect();
-    lines.push(format!("hotspots: {}", hotspots.join("  ")));
+    if map.hotspots.is_empty() {
+        lines.push("hotspots: none".to_string());
+    } else {
+        lines.push("hotspots".to_string());
+        lines.extend(map.hotspots.iter().map(format_hotspot));
+    }
 
     format!("{}\n", lines.join("\n"))
 }
@@ -600,7 +606,7 @@ mod tests {
     }
 
     #[test]
-    fn the_counts_never_singularize() {
+    fn the_counts_singularize_at_one() {
         let d = DirEntry {
             path: "src".to_string(),
             files: 1,
@@ -609,7 +615,7 @@ mod tests {
             hubs: Vec::new(),
             is_file: false,
         };
-        assert!(format_dir_line(&d).contains("1 files · 1 symbols"));
+        assert!(format_dir_line(&d).contains("1 file · 1 symbol"));
     }
 
     #[test]
@@ -627,7 +633,7 @@ mod tests {
             dropped: 0,
         };
         let rendered = format_repo_map(&map);
-        assert!(rendered.contains("hotspots: \n"));
+        assert!(rendered.contains("hotspots: none\n"));
     }
 
     #[test]

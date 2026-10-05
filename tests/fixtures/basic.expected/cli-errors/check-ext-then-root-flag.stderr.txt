@@ -1,1 +1,1 @@
-error: option '-e, --extensions <exts...>' argument missing
+sieve: -e, needs a value — see sieve check --help

@@ -1,4 +1,6 @@
-✓ graph ready · 21 nodes, 23 edges
-✓ claude   .claude/, .mcp.json
-· restart your agents so a new session picks up sieve
-· commit .claude/ .mcp.json to share it — sieve/ stays local and git-ignored
+sieve set up Claude Code in this repo
+graph ready · 21 symbols · 23 links
+Claude Code  .claude/, .mcp.json
+restart your agents so a new session picks up sieve
+commit .claude/ .mcp.json to share it · sieve/ stays local and git-ignored
+done · wrote 3 files in this repo · nothing outside this repo was written

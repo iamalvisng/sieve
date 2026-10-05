@@ -1,3 +1,1 @@
-deep layer: not built — wiring graph is the source of truth
-
-graph check: OK — the wiring graph is in sync with the code. (meaning tier 0% complete — 24 of 24 node(s) pending: apps/web/src/w.ts, apps/web/src/w.ts#webFive, apps/web/src/w.ts#webFour, apps/web/src/w.ts#webOne, apps/web/src/w.ts#webThree, apps/web/src/w.ts#webTwo, deep/x/y/src/d.ts, deep/x/y/src/d.ts#deepFive, … +16 more.)
+✓ sieve is in sync with the code · 4 files · checked in 0.0 s

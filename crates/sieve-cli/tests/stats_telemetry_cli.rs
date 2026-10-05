@@ -219,7 +219,7 @@ fn test_p1_67_telemetry_under_the_sieve_name_prints_one_true_line() {
         .expect("run sieve");
     assert_eq!(
         String::from_utf8_lossy(&output.stderr),
-        "✗ unknown action \"bogus\" — expected status, enable, disable, or debug\n"
+        "sieve: unknown action bogus \u{2014} use status, enable, disable, or debug\n"
     );
     assert_eq!(output.status.code(), Some(1));
 }

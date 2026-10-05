@@ -2020,6 +2020,18 @@ mod tests {
         assert_eq!(sum_after_marker(text, "[sieve] tokens saved \u{2248} "), 0);
     }
 
+    /// The saving line is the last line of a query result. The hook reads it
+    /// there, and counts it once.
+    #[test]
+    fn test_savings_marker_is_read_from_the_last_line() {
+        let text = "h  fn  a.ts:1-9\n1 caller\n\u{2514}\u{2500} g  fn  b.ts:1-3\n[sieve] saved \u{2248} 20,269 tokens\n";
+        assert_eq!(sum_after_marker(text, "[sieve] saved \u{2248} "), 20_269);
+        assert_eq!(
+            text.lines().last(),
+            Some("[sieve] saved \u{2248} 20,269 tokens")
+        );
+    }
+
     #[test]
     fn weak_match_nudge_stops_after_the_cap() {
         let mut session = SessionState::default();
@@ -2514,7 +2526,7 @@ mod tests {
         assert_eq!(hso["hookEventName"], "PostToolUse");
         let note = hso["additionalContext"].as_str().expect("note text");
         assert!(
-            note.contains("fn f0"),
+            note.contains("f0  fn"),
             "the note holds the skeleton: {note}"
         );
         assert!(
@@ -2799,7 +2811,7 @@ mod tests {
         assert_eq!(hso["hookEventName"], "PostToolUse");
         let note = hso["additionalContext"].as_str().expect("note text");
         assert!(
-            note.contains("fn f0"),
+            note.contains("f0  fn"),
             "the note holds the skeleton: {note}"
         );
         assert!(note.contains("hook replaced your command"), "{note}");

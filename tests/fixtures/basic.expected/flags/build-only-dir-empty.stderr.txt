@@ -1,1 +1,1 @@
-✗ --only-dir: expected a non-empty repo-relative path
+sieve: --only-dir needs a non-empty repo path — try --only-dir packages/app

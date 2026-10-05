@@ -78,18 +78,21 @@ pub struct GrepResult {
 /// there is more than one scope to name.
 fn prefix_not_indexed_message(prefix: &str, scopes: &[String]) -> String {
     let clause = if scopes.len() > 1 {
-        format!(" — scopes here: {}", scopes.join(" · "))
+        format!(" (scopes here: {})", scopes.join(" \u{b7} "))
     } else {
         String::new()
     };
-    format!("nothing indexed under \"{prefix}/\"{clause} (or any path prefix)")
+    format!(
+        "nothing is indexed under {prefix}/{clause} \u{2014} try {} map",
+        sieve_core::product().name
+    )
 }
 
 /// Every way `grep` can fail.
 #[derive(Debug, Error)]
 pub enum GrepError {
     /// The pattern does not compile as a regex.
-    #[error("invalid pattern \"{pattern}\": {message}")]
+    #[error("invalid pattern \"{pattern}\": {message} \u{2014} fix the pattern, or add --fixed")]
     InvalidPattern { pattern: String, message: String },
     /// The `--in` prefix matches no indexed node.
     #[error("{}", prefix_not_indexed_message(prefix, scopes))]
@@ -476,21 +479,25 @@ fn kind_str(kind: Kind) -> &'static str {
 }
 
 fn format_group(g: &GrepGroup) -> String {
+    let links = format!(
+        "{} {} in",
+        g.in_degree,
+        if g.in_degree == 1 { "link" } else { "links" }
+    );
     let header = match &g.symbol {
         Some(sym) => format!(
-            "{} · {} · {}:{} · {} in-edges",
-            sym.name,
-            kind_str(sym.kind),
-            sym.path,
-            sym.span,
-            g.in_degree
+            "{}  \u{b7} {links}",
+            sieve_core::voice::row(&sym.name, kind_str(sym.kind), &sym.path, Some(&sym.span))
         ),
-        None => format!("{} (module level) · {} in-edges", g.path, g.in_degree),
+        None => {
+            let name = g.path.rsplit('/').next().unwrap_or(&g.path);
+            format!("{name}  module  {}  \u{b7} {links}", g.path)
+        }
     };
     let hit_lines: Vec<String> = g
         .hits
         .iter()
-        .map(|h| format!("  L{}: {}", h.line, h.text))
+        .map(|h| format!("  {}: {}", h.line, h.text))
         .collect();
     format!("{header}\n{}", hit_lines.join("\n"))
 }
@@ -500,12 +507,12 @@ pub fn format_grep_result(r: &GrepResult) -> String {
     let files_hit: std::collections::HashSet<&str> =
         r.groups.iter().map(|g| g.path.as_str()).collect();
     let header = format!(
-        "\"{}\" — {} hits in {} symbols across {} files (searched {} indexed files)",
+        "grep \"{}\" \u{b7} {} in {} across {} \u{b7} searched {}",
         r.pattern,
-        r.total_hits,
-        r.groups.len(),
-        files_hit.len(),
-        r.files_searched
+        sieve_core::voice::count(r.total_hits, "hit"),
+        sieve_core::voice::count(r.groups.len(), "symbol"),
+        sieve_core::voice::count(files_hit.len(), "file"),
+        sieve_core::voice::count(r.files_searched, "file")
     );
 
     let mut note_parts = Vec::new();
@@ -521,7 +528,7 @@ pub fn format_grep_result(r: &GrepResult) -> String {
         header
     } else {
         format!(
-            "{header}\n(truncated: {} — narrow with --in or refine the pattern)",
+            "{header}\ntruncated: {} \u{b7} narrow with --in, or use a shorter pattern",
             note_parts.join(", ")
         )
     };
@@ -543,20 +550,16 @@ fn collapse_trailing_newlines(s: &str) -> String {
 /// nothing.
 pub fn zero_hit_note(r: &GrepResult) -> String {
     let mut note = format!(
-        "no hits for \"{}\" in {} indexed files. \
-The pattern may be too specific — retry {} grep with a bare symbol name \
-or short substring (drop the receiver, full signature, and regex anchors). \
-All indexed code was searched; use raw grep -rn only for genuinely \
-unindexed files (docs, configs, brand-new files)",
+        "no hits for \"{}\" in {} indexed files \u{2014} try a bare symbol name or a short \
+substring, or run {} ask \"<question>\". Use raw grep -rn only for files the index does not hold",
         r.pattern,
         r.files_searched,
         sieve_core::product().name
     );
     if r.truncated.files > 0 {
-        //: `file` for one, `files` otherwise.
         let s = if r.truncated.files == 1 { "" } else { "s" };
         note.push_str(&format!(
-            " — note: {} indexed file{s} could not be read (stale graph? run {} build)",
+            ". {} indexed file{s} could not be read \u{2014} run {} build",
             r.truncated.files,
             sieve_core::product().name
         ));
@@ -670,6 +673,13 @@ mod tests {
         (pattern.to_string(), tail.contains(" -i "))
     }
 
+    /// With `SIEVE_BLESS=1`, writes `got` to the golden file.
+    fn bless_regex_golden(dir: &Path, id: &str, ext: &str, got: &str) {
+        if std::env::var("SIEVE_BLESS").is_ok_and(|v| v == "1") {
+            std::fs::write(dir.join(format!("{id}.{ext}")), got).expect("write golden");
+        }
+    }
+
     fn read_regex_golden(dir: &Path, id: &str, ext: &str) -> String {
         std::fs::read_to_string(dir.join(format!("{id}.{ext}")))
             .unwrap_or_else(|_| panic!("read golden {id}.{ext}"))
@@ -678,7 +688,7 @@ mod tests {
     /// P1-12, P3-16: the user pattern runs as `new RegExp(source, "i" | "")`
     /// does, with no `u` flag. Every golden comes from a recorded run over
     /// `tests/inputs/grep-regex/regex-cases.ts` alone. An exit-0 case compares
-    /// stdout; an exit-1 case compares the `✗ invalid pattern` line.
+    /// stdout; an exit-1 case compares the `sieve: invalid pattern` line.
     #[test]
     fn test_p1_12_p3_16_grep_regex_engine_matches_golden() {
         let manifest = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR");
@@ -717,19 +727,23 @@ mod tests {
             let want_exit = read_regex_golden(&golden_dir, id, "exit.txt");
             match grep_graph(&graph, &dir, &pattern, &opts) {
                 Ok(result) => {
-                    let want = read_regex_golden(&golden_dir, id, "stdout.txt");
                     let got = if result.total_hits == 0 {
                         String::new()
                     } else {
                         format_grep_result(&result)
                     };
+                    bless_regex_golden(&golden_dir, id, "stdout.txt", &got);
+                    let want = read_regex_golden(&golden_dir, id, "stdout.txt");
                     if want_exit.trim() != "0" || got != want {
                         failures.push(format!("{id}: want exit {want_exit}\n{want}\ngot\n{got}"));
                     }
                 }
                 Err(GrepError::InvalidPattern { message, .. }) => {
+                    let got = format!(
+                        "sieve: invalid pattern \"{pattern}\": {message} \u{2014} fix the pattern, or add --fixed\n"
+                    );
+                    bless_regex_golden(&golden_dir, id, "stderr.txt", &got);
                     let want = read_regex_golden(&golden_dir, id, "stderr.txt");
-                    let got = format!("✗ invalid pattern \"{pattern}\": {message}\n");
                     if want_exit.trim() != "1" || got != want {
                         failures.push(format!("{id}: want exit {want_exit}\n{want}\ngot\n{got}"));
                     }
@@ -846,7 +860,7 @@ mod tests {
         assert_eq!(first.encode_utf16().count(), 160);
         assert_eq!(
             format_grep_result(&result).lines().next(),
-            Some("\"hit\" — 300 hits in 1 symbols across 1 files (searched 2 indexed files)")
+            Some("grep \"hit\" \u{b7} 300 hits in 1 symbol across 1 file \u{b7} searched 2 files")
         );
     }
 
@@ -867,8 +881,8 @@ mod tests {
         assert_eq!(
             text.lines().nth(1),
             Some(
-                "(truncated: 1 more hit beyond the cap, 1 indexed file unreadable — \
-                 narrow with --in or refine the pattern)"
+                "truncated: 1 more hit beyond the cap, 1 indexed file unreadable \u{b7} \
+                 narrow with --in, or use a shorter pattern"
             )
         );
         assert_eq!(text.lines().nth(2), Some(""));
@@ -883,10 +897,10 @@ mod tests {
         let mut result = grep_graph(&graph, &dir, "zzz", &default_opts()).expect("grep runs");
         assert_eq!(result.truncated.files, 2);
         assert!(zero_hit_note(&result)
-            .ends_with("— note: 2 indexed files could not be read (stale graph? run sieve build)"));
+            .ends_with(". 2 indexed files could not be read \u{2014} run sieve build"));
         result.truncated.files = 1;
         assert!(zero_hit_note(&result)
-            .ends_with("— note: 1 indexed file could not be read (stale graph? run sieve build)"));
+            .ends_with(". 1 indexed file could not be read \u{2014} run sieve build"));
     }
 
     #[test]

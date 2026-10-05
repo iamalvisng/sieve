@@ -1,1 +1,1 @@
-error: unknown option '-1.'
+sieve: grep has no -1. option — see sieve grep --help

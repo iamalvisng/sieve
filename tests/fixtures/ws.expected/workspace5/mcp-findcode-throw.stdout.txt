@@ -1,1 +1,1 @@
-{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"no workspace repo \"zzz\" - repos: alpha, beta, gamma"}],"isError":true}}
+{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"no workspace repo named zzz — use one of: alpha, beta, gamma"}],"isError":true}}

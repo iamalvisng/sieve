@@ -1,3 +1,1 @@
-deep layer: not built — wiring graph is the source of truth
-
-graph check: OK — the wiring graph is in sync with the code. (meaning tier 0% complete — 26 of 26 node(s) pending: packages/alpha/nested/n.ts, packages/alpha/nested/n.ts#nestedFive, packages/alpha/nested/n.ts#nestedFour, packages/alpha/nested/n.ts#nestedOne, packages/alpha/nested/n.ts#nestedThree, packages/alpha/nested/n.ts#nestedTwo, packages/alpha/src/a.ts, packages/alpha/src/a.ts#alphaFive, … +18 more.)
+✓ sieve is in sync with the code · 5 files · checked in 0.0 s
