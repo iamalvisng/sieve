@@ -1,0 +1,9 @@
+# Blast query list for tests/fixtures/edges. refresh.sh runs this list
+# after it commits the built tree and edits two files (see README.md,
+# "Blast queries"), not with the main edges.txt list.
+# Format: <id><TAB><arguments after "sieve">
+blast	blast --format text -d 1
+blast-d2	blast -d 2
+blast-json	blast --format json -d 1
+blast-base	blast --base HEAD -d 1
+blast-notgit	blast

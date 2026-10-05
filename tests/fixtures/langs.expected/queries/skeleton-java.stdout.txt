@@ -1,0 +1,14 @@
+[sieve] saved ≈ 6 tokens
+
+sieve skeleton — java/App.java
+- L4-L6  interface Greeter  interface Greeter
+- L5-L5  method greet  String greet();
+- L8-L10  enum Level  enum Level
+- L12-L13  struct Point  record Point(int x, int y)
+- L15-L42  class App  class App implements Greeter
+- L18-L20  method App  App(String name)
+- L22-L24  method greet  public String greet()
+- L26-L28  method join  public String join(String... parts)
+- L30-L33  method main  public static void main(String[] args)
+- L35-L37  method famACall  public static void famACall()
+- L39-L41  method famCCall  public static void famCCall()

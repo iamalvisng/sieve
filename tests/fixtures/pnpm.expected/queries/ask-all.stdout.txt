@@ -1,0 +1,35 @@
+sieve ask — "function"  (lexical)
+
+1. [libs/core/] coreFive · function  [symbol]
+   libs/core/src/c.ts:L13-L14
+   function coreFive(): number
+
+2. deepFive · function  [symbol]
+   deep/x/y/src/d.ts:L13-L14
+   function deepFive(): number
+
+3. otherFive · function  [symbol]
+   libs/other/src/o.ts:L13-L14
+   function otherFive(): number
+
+4. [apps/web/] webFive · function  [symbol]
+   apps/web/src/w.ts:L13-L14
+   function webFive(): number
+
+5. [libs/core/] coreFour · function  [symbol]
+   libs/core/src/c.ts:L10-L11
+   function coreFour(): number
+
+6. deepFour · function  [symbol]
+   deep/x/y/src/d.ts:L10-L11
+   function deepFour(): number
+
+7. otherFour · function  [symbol]
+   libs/other/src/o.ts:L10-L11
+   function otherFour(): number
+
+8. [apps/web/] webFour · function  [symbol]
+   apps/web/src/w.ts:L10-L11
+   function webFour(): number
+
+matched in: (root) (4) · apps/web/ (2) · libs/core/ (2)

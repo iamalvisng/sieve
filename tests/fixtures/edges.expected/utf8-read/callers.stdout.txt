@@ -1,0 +1,5 @@
+[sieve] saved ≈ 13 tokens
+
+latinString · function · ts/latin.ts:L2-L4
+  calls ← latinCaller (ts/latin.ts:L5-L7)
+      6: return latinString().length; // caf�

@@ -1,0 +1,2 @@
+⚠ this folder contains 2 separate git repos — splitting: each repo now gets its own committable sieve/ (alpha/sieve/, beta/sieve/); the combined graph here is replaced by a workspace index. Queries from here now search all repos, fairly.
+building 2 workspace repos: alpha, beta

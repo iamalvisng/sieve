@@ -1,0 +1,8 @@
+[sieve] saved ≈ 191 tokens
+
+repo map — 12 files · 24 symbols · 49 edges · python, typescript
+
+ts/                 7 files · 15 symbols   hubs: Base (base.ts, 2←), area (derived.ts, 1←), Circle (derived.ts, 1←)
+py/                 5 files · 9 symbols   hubs: speak (derived.py, 2←), Animal (base.py, 1←), Dog (derived.py, 1←)
+
+hotspots: Base · class · ts/base.ts:L5-L9 · 2←  speak · method · py/derived.py:L7-L8 · 2←  Animal · class · py/base.py:L1-L3 · 1←  area · method · ts/derived.ts:L4-L6 · 1←  Circle · class · ts/derived.ts:L3-L11 · 1←  Dog · class · py/derived.py:L6-L11 · 1←  greet · method · ts/base.ts:L6-L8 · 1←  helper · function · py/pkg/mod.py:L1-L2 · 1←  inner · function · ts/calls.ts:L16-L18 · 1←  outer · function · ts/calls.ts:L7-L19 · 1←  Shape · interface · ts/base.ts:L1-L3 · 1←  twice · function · ts/same.ts:L3-L5 · 1←

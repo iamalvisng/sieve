@@ -1,0 +1,6 @@
+Usage: sieve version [options]
+
+Print the installed version
+
+Options:
+  -h, --help  display help for command

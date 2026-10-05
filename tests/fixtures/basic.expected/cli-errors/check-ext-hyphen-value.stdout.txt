@@ -1,0 +1,3 @@
+deep layer: not built — wiring graph is the source of truth
+
+graph check: OK — the wiring graph is in sync with the code. (meaning tier 0% complete — 21 of 21 node(s) pending: packages/shared/index.ts, packages/shared/index.ts#formatVersion, py/helpers.py, py/helpers.py#add, py/helpers.py#sub, py/main.py, py/main.py#Calculator, py/main.py#Calculator.total, … +13 more.)

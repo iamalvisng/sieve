@@ -1,0 +1,6 @@
+# Ask divergence queries for tests/fixtures/askx (DV7: a concept top).
+# Format: <id><TAB><arguments after "sieve">
+# "notes" hits only the concept sieve/widget-notes.md, so the top hit is
+# a concept and coverage reads from the concept's name and body bags.
+dv7-concept-top-json	ask "notes" --json
+dv7-concept-weak-json	ask "series notes filler padding words" --json

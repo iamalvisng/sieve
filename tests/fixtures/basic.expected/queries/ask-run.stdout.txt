@@ -1,0 +1,33 @@
+sieve ask — "how does run compute the result"  (lexical)
+
+1. run · method  [symbol]
+   src/app.ts:L11-L13
+   run(n: number): number
+
+2. run · function  [symbol]
+   py/main.py:L9-L11
+   def run()
+
+3. quadruple · function  [symbol]
+   src/util.ts:L5-L7
+   function quadruple(n: number): number
+
+4. add · function  [symbol]
+   py/helpers.py:L1-L2
+   def add(a, b)
+
+5. main · function  [symbol]
+   src/app.ts:L16-L20
+   function main(): void
+
+6. total · method  [symbol]
+   py/main.py:L5-L6
+   def total(self, a, b)
+
+7. double · function  [symbol]
+   src/util.ts:L1-L3
+   function double(n: number): number
+
+8. App · class  [symbol]
+   src/app.ts:L4-L14
+   class App

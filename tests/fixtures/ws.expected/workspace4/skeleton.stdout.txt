@@ -1,0 +1,6 @@
+sieve skeleton — src/a.ts
+- L1-L3  function alphaAdd  function alphaAdd(a: number, b: number): number
+- L5-L7  function alphaTwice  function alphaTwice(n: number): number
+- L9-L11  function shared  function shared(): number
+- L13-L15  function useShared  function useShared(): number
+- L17-L19  function useSharedTwice  function useSharedTwice(): number

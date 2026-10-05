@@ -1,0 +1,16 @@
+./.adal/skills/sieve/SKILL.md
+./.claude/settings.json
+./.claude/skills/sieve/SKILL.md
+./.cursor/hooks.json
+./.cursor/mcp.json
+./.cursor/rules/sieve.mdc
+./.gemini/settings.json
+./.github/copilot-instructions.md
+./.grok/config.toml
+./.grok/skills/sieve/SKILL.md
+./.kiro/settings/mcp.json
+./.kiro/steering/sieve.md
+./.mcp.json
+./.windsurf/rules/sieve.md
+./AGENTS.md
+./GEMINI.md

@@ -1,0 +1,6 @@
+# JS-regex parity queries (P1-04, P1-12) for tests/fixtures/basic. Format: <id><TAB><arguments after "sieve">.
+# p1-04-feff: U+FEFF is JS whitespace, so the query is structural.
+# p1-04-nel: U+0085 is not JS whitespace, so the query is lexical.
+p1-04-feff	ask "who﻿calls double" --json
+p1-04-nel	ask "whocalls double" --json
+p1-12-brace-quant	grep '{2}'

@@ -1,0 +1,5 @@
+[sieve] saved ≈ 8 tokens
+
+sieve skeleton — ts/latin.ts
+- L2-L4  function latinString  function latinString(): string
+- L5-L7  function latinCaller  function latinCaller(): number

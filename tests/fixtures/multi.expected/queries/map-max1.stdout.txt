@@ -1,0 +1,20 @@
+[sieve] saved ≈ 78 tokens
+
+repo map — 7 files · 20 symbols · 33 edges · typescript
+
+## packages/alpha/
+packages/alpha/src/layout.ts1 files · 3 symbols   hubs: layoutGrid (layout.ts, 1←), paintCanvas (layout.ts, 1←)
+… +1 more directory not shown (raise max-dirs to see more)
+
+## packages/gamma/
+packages/gamma/src/data.ts1 files · 3 symbols   hubs: sortItems (data.ts, 1←)
+… +1 more directory not shown (raise max-dirs to see more)
+
+## packages/beta/
+packages/beta/src/format.ts1 files · 3 symbols   hubs: formatCell (format.ts, 1←), formatRow (format.ts, 1←)
+… +1 more directory not shown (raise max-dirs to see more)
+
+## (root)
+src/index.ts        1 files · 2 symbols
+
+hotspots: exportPdf · function · packages/beta/src/render.ts:L9-L11 · 1←  formatCell · function · packages/beta/src/format.ts:L9-L11 · 1←  formatRow · function · packages/beta/src/format.ts:L5-L7 · 1←  layoutGrid · function · packages/alpha/src/layout.ts:L5-L7 · 1←  paintCanvas · function · packages/alpha/src/layout.ts:L10-L12 · 1←  renderChart · function · packages/beta/src/render.ts:L5-L7 · 1←  renderFooter · function · packages/alpha/src/render.ts:L9-L11 · 1←  renderHeader · function · packages/alpha/src/render.ts:L5-L7 · 1←  renderPage · function · packages/alpha/src/render.ts:L1-L3 · 1←  renderReport · function · packages/beta/src/render.ts:L1-L3 · 1←  sortItems · function · packages/gamma/src/data.ts:L5-L7 · 1←

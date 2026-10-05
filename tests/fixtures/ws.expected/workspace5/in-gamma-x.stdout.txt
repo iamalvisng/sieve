@@ -1,0 +1,26 @@
+sieve ask — "parse config"  (lexical)
+
+1. [gamma/packages/x/] parseConfigX · function  [symbol]
+   gamma/packages/x/src/parse-config.ts:L1-L3
+   function parseConfigX(text: string): string
+
+2. [gamma/packages/x/] loadConfigX · function  [symbol]
+   gamma/packages/x/src/parse-config.ts:L5-L7
+   function loadConfigX(path: string): string
+
+3. [gamma/packages/x/] parse-config.ts · file  [symbol]
+   gamma/packages/x/src/parse-config.ts
+
+4. [gamma/packages/x/] xOne · function  [symbol]
+   gamma/packages/x/src/parse-config.ts:L9-L11
+   function xOne(): number
+
+5. [gamma/packages/x/] xThree · function  [symbol]
+   gamma/packages/x/src/parse-config.ts:L17-L19
+   function xThree(): number
+
+6. [gamma/packages/x/] xTwo · function  [symbol]
+   gamma/packages/x/src/parse-config.ts:L13-L15
+   function xTwo(): number
+
+matched in: gamma/packages/x/ (6)

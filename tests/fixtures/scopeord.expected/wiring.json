@@ -1,0 +1,304 @@
+{
+  "meta": {
+    "version": 1,
+    "nodeCount": 14,
+    "edgeCount": 12,
+    "languages": [
+      "typescript"
+    ],
+    "scopes": [
+      {
+        "prefix": "apkg",
+        "label": "apkg",
+        "markers": [
+          "package.json",
+          "go.mod",
+          "Cargo.toml"
+        ]
+      },
+      {
+        "prefix": "Bpkg",
+        "label": "Bpkg",
+        "markers": [
+          "package.json",
+          "go.mod",
+          "Cargo.toml"
+        ]
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "apkg/i.ts",
+      "name": "i.ts",
+      "kind": "file",
+      "path": "apkg/i.ts",
+      "span": "L1-L19",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "e11a7382035e608f9c7dd17f1f2dbe63acd35980c58d9e847b83234f17ac41d8",
+      "chars": 270,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "apkg/i.ts#f1",
+      "name": "f1",
+      "kind": "function",
+      "path": "apkg/i.ts",
+      "span": "L1-L3",
+      "signature": "function f1(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "24584210bae4f54de1b5800f4e2a7d8c7096c05625366b17aad25c17a475ef35",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "apkg/i.ts#f2",
+      "name": "f2",
+      "kind": "function",
+      "path": "apkg/i.ts",
+      "span": "L4-L6",
+      "signature": "function f2(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "0497f2857e1d2e73b304225770369eb7590de7296d3bc9f136c634a0bb488d47",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "apkg/i.ts#f3",
+      "name": "f3",
+      "kind": "function",
+      "path": "apkg/i.ts",
+      "span": "L7-L9",
+      "signature": "function f3(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "75da8544341f92b66aeb860f7a5ac0384d27ca68730c3f9adca6b445fd040199",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "apkg/i.ts#f4",
+      "name": "f4",
+      "kind": "function",
+      "path": "apkg/i.ts",
+      "span": "L10-L12",
+      "signature": "function f4(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "d2c0a1338963ba778b82826c312caae6722ae95eb8360d92e1149528e6383f36",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "apkg/i.ts#f5",
+      "name": "f5",
+      "kind": "function",
+      "path": "apkg/i.ts",
+      "span": "L13-L15",
+      "signature": "function f5(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "5f5cb96406428fe2939984417aa13aaa8c6ec993c7e3a58dce720986e28339b3",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "apkg/i.ts#f6",
+      "name": "f6",
+      "kind": "function",
+      "path": "apkg/i.ts",
+      "span": "L16-L18",
+      "signature": "function f6(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "bf0e3a619ad721555ba2e8a22cc80e8d8a2ca5194e04b2b247ad383c2b897a01",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "Bpkg/i.ts",
+      "name": "i.ts",
+      "kind": "file",
+      "path": "Bpkg/i.ts",
+      "span": "L1-L19",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "e11a7382035e608f9c7dd17f1f2dbe63acd35980c58d9e847b83234f17ac41d8",
+      "chars": 270,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "Bpkg/i.ts#f1",
+      "name": "f1",
+      "kind": "function",
+      "path": "Bpkg/i.ts",
+      "span": "L1-L3",
+      "signature": "function f1(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "24584210bae4f54de1b5800f4e2a7d8c7096c05625366b17aad25c17a475ef35",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "Bpkg/i.ts#f2",
+      "name": "f2",
+      "kind": "function",
+      "path": "Bpkg/i.ts",
+      "span": "L4-L6",
+      "signature": "function f2(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "0497f2857e1d2e73b304225770369eb7590de7296d3bc9f136c634a0bb488d47",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "Bpkg/i.ts#f3",
+      "name": "f3",
+      "kind": "function",
+      "path": "Bpkg/i.ts",
+      "span": "L7-L9",
+      "signature": "function f3(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "75da8544341f92b66aeb860f7a5ac0384d27ca68730c3f9adca6b445fd040199",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "Bpkg/i.ts#f4",
+      "name": "f4",
+      "kind": "function",
+      "path": "Bpkg/i.ts",
+      "span": "L10-L12",
+      "signature": "function f4(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "d2c0a1338963ba778b82826c312caae6722ae95eb8360d92e1149528e6383f36",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "Bpkg/i.ts#f5",
+      "name": "f5",
+      "kind": "function",
+      "path": "Bpkg/i.ts",
+      "span": "L13-L15",
+      "signature": "function f5(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "5f5cb96406428fe2939984417aa13aaa8c6ec993c7e3a58dce720986e28339b3",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "Bpkg/i.ts#f6",
+      "name": "f6",
+      "kind": "function",
+      "path": "Bpkg/i.ts",
+      "span": "L16-L18",
+      "signature": "function f6(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "bf0e3a619ad721555ba2e8a22cc80e8d8a2ca5194e04b2b247ad383c2b897a01",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "apkg/i.ts",
+      "target": "apkg/i.ts#f1",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "apkg/i.ts",
+      "target": "apkg/i.ts#f2",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "apkg/i.ts",
+      "target": "apkg/i.ts#f3",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "apkg/i.ts",
+      "target": "apkg/i.ts#f4",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "apkg/i.ts",
+      "target": "apkg/i.ts#f5",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "apkg/i.ts",
+      "target": "apkg/i.ts#f6",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "Bpkg/i.ts",
+      "target": "Bpkg/i.ts#f1",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "Bpkg/i.ts",
+      "target": "Bpkg/i.ts#f2",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "Bpkg/i.ts",
+      "target": "Bpkg/i.ts#f3",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "Bpkg/i.ts",
+      "target": "Bpkg/i.ts#f4",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "Bpkg/i.ts",
+      "target": "Bpkg/i.ts#f5",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "Bpkg/i.ts",
+      "target": "Bpkg/i.ts#f6",
+      "relation": "contains",
+      "confidence": "extracted"
+    }
+  ]
+}

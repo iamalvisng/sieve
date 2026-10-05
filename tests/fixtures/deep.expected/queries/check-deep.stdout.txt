@@ -1,0 +1,3 @@
+sieve check: OK — the graph is in sync with the code.
+
+graph check: OK — the wiring graph is in sync with the code. (meaning tier 92% complete — 2 of 25 node(s) pending: py/helpers.py, py/main.py.)

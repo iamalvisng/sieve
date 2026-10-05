@@ -1,0 +1,1 @@
+✗ nothing indexed under "-h/" (or any path prefix)

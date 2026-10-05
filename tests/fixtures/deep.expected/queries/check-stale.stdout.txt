@@ -1,0 +1,13 @@
+sieve check: STALE
+
+changed (1):
+  ~ src/util.ts  (3bc1c754 → 063e6572)
+
+Run `sieve build` to regenerate, then commit sieve/.
+
+graph check: STALE
+
+stale summaries (1):
+  ! src/util.ts
+
+Run `sieve build` to refresh stale summaries.

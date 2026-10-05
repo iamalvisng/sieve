@@ -1,0 +1,8 @@
+# Query list for tests/fixtures/langs. One query per line.
+# Format: <id><TAB><arguments after "sieve">
+map	map
+skeleton-rust	skeleton rust/lib.rs
+skeleton-java	skeleton java/App.java
+callers-go	callers Greet
+ask-all	ask "greet" -n 20
+check	check

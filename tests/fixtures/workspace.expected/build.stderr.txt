@@ -1,0 +1,1 @@
+parsing 1/5: packages/alpha/nested/n.ts                        parsing 2/5: packages/alpha/src/a.ts                           parsing 3/5: packages/beta/src/b.ts                            parsing 4/5: src/index.ts                                      parsing 5/5: tools/gamma/src/g.ts                              

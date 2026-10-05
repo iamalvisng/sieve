@@ -1,0 +1,1 @@
+error: option '-d, --depth <n>' argument missing

@@ -1,0 +1,2 @@
+sieve skeleton — ts/latin-name.ts
+- L1-L3  function caf�Name  function caf�Name(): number

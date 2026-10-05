@@ -1,0 +1,3 @@
+sieve check: NO GRAPH
+
+No sieve/ graph found. Run `sieve build` first.

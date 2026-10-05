@@ -1,0 +1,62 @@
+{
+  "id": "x",
+  "lastQuery": null,
+  "perAgentQuery": {},
+  "toolReads": 0,
+  "sourceReads": 0,
+  "savedTokens": 0,
+  "injectedPointers": [],
+  "nudges": 0,
+  "session": {
+    "id": "x",
+    "tokens": 0,
+    "dollars": null
+  },
+  "today": {
+    "date": "2026-10-05",
+    "tokens": 0,
+    "dollars": null
+  },
+  "last7days": [
+    {
+      "date": "2026-10-05",
+      "tokens": 0,
+      "dollars": null
+    },
+    {
+      "date": "2026-10-04",
+      "tokens": 0,
+      "dollars": null
+    },
+    {
+      "date": "2026-10-03",
+      "tokens": 0,
+      "dollars": null
+    },
+    {
+      "date": "2026-10-02",
+      "tokens": 0,
+      "dollars": null
+    },
+    {
+      "date": "2026-10-01",
+      "tokens": 0,
+      "dollars": null
+    },
+    {
+      "date": "2026-09-30",
+      "tokens": 0,
+      "dollars": null
+    },
+    {
+      "date": "2026-09-29",
+      "tokens": 0,
+      "dollars": null
+    }
+  ],
+  "last7daysTotal": {
+    "tokens": 0,
+    "dollars": null
+  },
+  "basis": "input tokens at the session blended billed input rate (inputCostMicros / inputTokensBilled)"
+}

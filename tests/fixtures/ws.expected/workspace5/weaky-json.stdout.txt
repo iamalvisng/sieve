@@ -1,0 +1,87 @@
+{
+  "query": "parse config loader token",
+  "mode": "lexical",
+  "hits": [
+    {
+      "kind": "symbol",
+      "title": "parseConfigLoaderTokenAlpha · function",
+      "pointer": "alpha/src/a.ts:L1-L3",
+      "snippet": "function parseConfigLoaderTokenAlpha(text: string): string",
+      "score": 1,
+      "scope": "alpha"
+    },
+    {
+      "kind": "symbol",
+      "title": "parseConfigRoot · function",
+      "pointer": "gamma/src/root.ts:L1-L3",
+      "snippet": "function parseConfigRoot(text: string): string",
+      "score": 1,
+      "scope": "gamma"
+    },
+    {
+      "kind": "symbol",
+      "title": "parseConfigLoaderTokenX · function",
+      "pointer": "gamma/packages/x/src/parse-config.ts:L1-L3",
+      "snippet": "function parseConfigLoaderTokenX(text: string): string",
+      "score": 1,
+      "scope": "gamma/packages/x"
+    },
+    {
+      "kind": "symbol",
+      "title": "loadConfigX · function",
+      "pointer": "gamma/packages/x/src/parse-config.ts:L5-L7",
+      "snippet": "function loadConfigX(path: string): string",
+      "score": 1,
+      "scope": "gamma/packages/x"
+    },
+    {
+      "kind": "symbol",
+      "title": "parse-config.ts · file",
+      "pointer": "gamma/packages/x/src/parse-config.ts",
+      "snippet": "",
+      "score": 1,
+      "scope": "gamma/packages/x"
+    },
+    {
+      "kind": "symbol",
+      "title": "xOne · function",
+      "pointer": "gamma/packages/x/src/parse-config.ts:L9-L11",
+      "snippet": "function xOne(): number",
+      "score": 1,
+      "scope": "gamma/packages/x"
+    },
+    {
+      "kind": "symbol",
+      "title": "xThree · function",
+      "pointer": "gamma/packages/x/src/parse-config.ts:L17-L19",
+      "snippet": "function xThree(): number",
+      "score": 1,
+      "scope": "gamma/packages/x"
+    },
+    {
+      "kind": "symbol",
+      "title": "xTwo · function",
+      "pointer": "gamma/packages/x/src/parse-config.ts:L13-L15",
+      "snippet": "function xTwo(): number",
+      "score": 1,
+      "scope": "gamma/packages/x"
+    }
+  ],
+  "scopes": {
+    "federated": [
+      "alpha",
+      "gamma/packages/x",
+      "gamma"
+    ],
+    "alsoMatched": [
+      {
+        "scope": "gamma/packages/y",
+        "bestId": "gamma file 00000002"
+      },
+      {
+        "scope": "beta",
+        "bestId": "beta/src/b.ts:L1-L4"
+      }
+    ]
+  }
+}

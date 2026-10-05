@@ -1,0 +1,35 @@
+agents:
+  - removed: <TMP>/AGENTS.md (fenced sieve section — deleted)
+
+adal:
+  - removed: <TMP>/.adal/skills/sieve/SKILL.md (sieve-owned instruction file — deleted)
+
+cursor:
+  - removed: <TMP>/.cursor/rules/sieve.mdc (sieve-owned instruction file — deleted)
+  - removed: <TMP>/.cursor/mcp.json (mcpServers.sieve — deleted)
+
+gemini:
+  - removed: <TMP>/GEMINI.md (fenced sieve section — deleted)
+  - removed: <TMP>/.gemini/settings.json (mcpServers.sieve — deleted)
+
+grok:
+  - removed: <TMP>/.grok/skills/sieve/SKILL.md (sieve-owned instruction file — deleted)
+  - removed: <TMP>/.grok/config.toml ([mcp_servers.sieve] — deleted)
+
+copilot:
+  - removed: <TMP>/.github/copilot-instructions.md (fenced sieve section — deleted)
+
+kiro:
+  - removed: <TMP>/.kiro/steering/sieve.md (sieve-owned instruction file — deleted)
+  - removed: <TMP>/.kiro/settings/mcp.json (mcpServers.sieve — deleted)
+
+windsurf:
+  - removed: <TMP>/.windsurf/rules/sieve.md (sieve-owned instruction file — deleted)
+
+claude:
+  - removed: <TMP>/.claude/settings.json (statusline + hooks + allowlist + footer regex — deleted)
+  - removed: <TMP>/.claude/skills/sieve/SKILL.md (sieve skill — deleted)
+  - removed: <TMP>/.mcp.json (mcpServers.sieve — deleted)
+
+✓ sieve fully removed. `sieve init` re-wires from scratch.
+· skipped global hooks under ~ (pass --global to remove them)

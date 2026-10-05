@@ -1,0 +1,1 @@
+[sieve] prompt hook: lastFile "a.ts" matches more than one scope — skipping scope hint

@@ -1,0 +1,100 @@
+{
+  "version": 1,
+  "model": "openai:gpt-4o-mini",
+  "repoDigest": "e859715e7a4dad99df09997d5330515c0a0a827c1806b22d9f40faeca656b38c",
+  "files": [
+    {
+      "path": "packages/shared/index.ts",
+      "hash": "f6323ec4716ab498a407b46fdd058442ac9b92289f0b00a33044930992832f1d"
+    },
+    {
+      "path": "py/helpers.py",
+      "hash": "af626eb7a9c3d865bc4d7d84f96982d7349f4931c403286d23603d85e6552442"
+    },
+    {
+      "path": "py/main.py",
+      "hash": "2ed82f71c10b311d3d0a67b0f9cfa6be7db8c8f00f8b3d4b8c04e4af7bccd880"
+    },
+    {
+      "path": "src/app.ts",
+      "hash": "75f16c73e7e2c06c27b4a5ccf2ce9612a9ff19e1cd98630e2f6704cd53614a37"
+    },
+    {
+      "path": "src/legacy.mjs",
+      "hash": "7f39e8be25b12e87f0ee3b021d4e09b1bb244ebab520520b225f2900958dc45d"
+    },
+    {
+      "path": "src/util.ts",
+      "hash": "3bc1c754159982185ef50395a883bce5f1d070d9254056ef430c3758709150e4"
+    },
+    {
+      "path": "src/view.tsx",
+      "hash": "9482e2e497c8997064b28666b61bf03c9f884bb6119a96a6431943a1620d4b63"
+    }
+  ],
+  "nodes": [
+    {
+      "slug": "application-module",
+      "name": "Application Module",
+      "type": "system",
+      "sources": [
+        "src/app.ts"
+      ],
+      "sourcesDigest": "1e55d65fd40b8103ea733a59045c38d305d54af60a0486264bb5ff9a73c41195"
+    },
+    {
+      "slug": "basic-arithmetic-helpers",
+      "name": "Basic Arithmetic Helpers",
+      "type": "system",
+      "sources": [
+        "py/helpers.py"
+      ],
+      "sourcesDigest": "4dc881a5df8f6ec48ac039bc56f558aecb4c808d7fbe5c4eabae46df2f0ab78b"
+    },
+    {
+      "slug": "calculator-application",
+      "name": "Calculator Application",
+      "type": "system",
+      "sources": [
+        "py/main.py"
+      ],
+      "sourcesDigest": "51cb4e7923db48cfce174e836132078289e0b35f605563ba2c635e90d086ca93"
+    },
+    {
+      "slug": "greeting-component",
+      "name": "Greeting Component",
+      "type": "file",
+      "sources": [
+        "src/view.tsx"
+      ],
+      "sourcesDigest": "8dac0b790cb84899e19cf0a5db22824d45d0a2e30a5c55bb222b414dde1c42d4"
+    },
+    {
+      "slug": "legacy-greeting-functionality",
+      "name": "Legacy Greeting Functionality",
+      "type": "file",
+      "sources": [
+        "src/legacy.mjs"
+      ],
+      "sourcesDigest": "3a8ba9c5530227fa590f3bd1a4f6882c0e056935d6c42f76f108847c99beda67"
+    },
+    {
+      "slug": "shared-versioning-utility",
+      "name": "Shared Versioning Utility",
+      "type": "system",
+      "sources": [
+        "packages/shared/index.ts"
+      ],
+      "sourcesDigest": "c813a997a1b2a41a3c36e3695334883dc45fb4f34571de2b717a07443e47bb03"
+    },
+    {
+      "slug": "utility-functions",
+      "name": "Utility Functions",
+      "type": "system",
+      "sources": [
+        "src/util.ts"
+      ],
+      "sourcesDigest": "759d135f4c9b601fc18d92202385fb18f360ea3a3e9e034bd7a0336657783ffc"
+    }
+  ]
+}

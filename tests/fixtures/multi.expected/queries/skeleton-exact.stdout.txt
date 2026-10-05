@@ -1,0 +1,4 @@
+sieve skeleton — packages/alpha/src/render.ts
+- L1-L3  function renderPage  function renderPage(): string
+- L5-L7  function renderHeader  function renderHeader(): string
+- L9-L11  function renderFooter  function renderFooter(): string

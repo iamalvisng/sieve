@@ -1,0 +1,70 @@
+sieve ask — "quadruple"  (lexical)
+
+1. quadruple · function  [symbol]
+   src/util.ts:L5-L7
+   This function quadruples the input number by applying the double function twice, demonstrating function composition.
+
+```
+  return double(double(n));
+… (crux — full definition at src/util.ts:L5-L7; rerun with --full)
+```
+
+2. run · method  [symbol]
+   src/app.ts:L11-L13
+   The run method executes a quadrupling operation on a given number.
+
+```
+  run(n: number): number {
+    return quadruple(n);
+  }
+… (crux — full definition at src/app.ts:L11-L13; rerun with --full)
+```
+
+3. double · function  [symbol]
+   src/util.ts:L1-L3
+   This function doubles the input number, effectively providing a simple multiplication operation.
+
+```
+  return n * 2;
+… (crux — full definition at src/util.ts:L1-L3; rerun with --full)
+```
+
+4. app.ts · file  [symbol]
+   src/app.ts
+   This file contains the definition of the App class and the main function for application execution.
+
+5. util.ts · file  [symbol]
+   src/util.ts
+   This file contains utility functions for numerical operations, specifically for doubling and quadrupling a number.
+
+6. App · class  [symbol]
+   src/app.ts:L4-L14
+   The App class represents an application with a name and provides functionality to run operations.
+
+```
+export class App {
+  name: string;
+
+  constructor(name: string) {
+    this.name = name;
+  }
+
+  run(n: number): number {
+    return quadruple(n);
+  }
+}
+… (crux — full definition at src/app.ts:L4-L14; rerun with --full)
+```
+
+7. main · function  [symbol]
+   src/app.ts:L16-L20
+   The main function serves as the entry point for the application, creating an App instance and invoking its run method.
+
+```
+export function main(): void {
+  const app = new App("sieve");
+  app.run(1);
+  z.string();
+}
+… (crux — full definition at src/app.ts:L16-L20; rerun with --full)
+```

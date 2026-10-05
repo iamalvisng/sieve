@@ -1,0 +1,4 @@
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"golden","version":"1"}}}
+{"jsonrpc":"2.0","id":2,"method":"tools/list"}
+{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"sieve_find_code","arguments":{"query":"render","limit":8}}}
+{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"sieve_repo_map","arguments":{"max_dirs":2}}}

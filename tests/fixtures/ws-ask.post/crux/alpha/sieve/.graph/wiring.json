@@ -1,0 +1,166 @@
+{
+  "meta": {
+    "version": 1,
+    "nodeCount": 7,
+    "edgeCount": 7,
+    "languages": [
+      "typescript"
+    ],
+    "scopes": [
+      {
+        "prefix": "",
+        "label": "",
+        "markers": []
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "src/a.ts",
+      "name": "a.ts",
+      "kind": "file",
+      "path": "src/a.ts",
+      "span": "L1-L12",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "4c41c551772d51e1c03bb496aea16b7a9b6f3d986d2ce6e0bfa848b6156e18f3",
+      "chars": 244,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "src/a.ts#loadConfig",
+      "name": "loadConfig",
+      "kind": "function",
+      "path": "src/a.ts",
+      "span": "L5-L7",
+      "signature": "function loadConfig(path: string): string",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "e7397162264f2ca9f324d2f7a3961f2d3f5f80ad0eef0a97d7bce20d701ac0e9",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "src/a.ts#parseConfig",
+      "name": "parseConfig",
+      "kind": "function",
+      "path": "src/a.ts",
+      "span": "L1-L3",
+      "signature": "function parseConfig(text: string): string",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "2867a0baf96fe9669a710562e3b6f354ea152f17d49f3c5093f3a29b8c9a6fd1",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "src/a.ts#parseConfigFile",
+      "name": "parseConfigFile",
+      "kind": "function",
+      "path": "src/a.ts",
+      "span": "L9-L11",
+      "signature": "function parseConfigFile(path: string): string",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "dd53d040df14c007df13df548266a10d7cb1d3f3e0ee00412dffc0bc2b362c52",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": {
+        "code": "  return loadConfig(path);",
+        "span": "L10-L10"
+      }
+    },
+    {
+      "id": "src/b.ts",
+      "name": "b.ts",
+      "kind": "file",
+      "path": "src/b.ts",
+      "span": "L1-L8",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "1da765bab826ac52b1b7448b9fa816d6a14196a9b9b305cbf10e8440c56372dd",
+      "chars": 143,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "src/b.ts#configName",
+      "name": "configName",
+      "kind": "function",
+      "path": "src/b.ts",
+      "span": "L5-L7",
+      "signature": "function configName(): string",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "7b26b572d256cfd86305fbde12560a75c955d96f1f192d1cc4d06c071a30d684",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "src/b.ts#parseHeader",
+      "name": "parseHeader",
+      "kind": "function",
+      "path": "src/b.ts",
+      "span": "L1-L3",
+      "signature": "function parseHeader(line: string): string",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "19091849eb6450cd017b22e764234602bd3f83856e71b1edf4761ea0fba29d8a",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "src/a.ts",
+      "target": "src/a.ts#loadConfig",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/a.ts",
+      "target": "src/a.ts#parseConfig",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/a.ts",
+      "target": "src/a.ts#parseConfigFile",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/a.ts#loadConfig",
+      "target": "src/a.ts#parseConfig",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/a.ts#parseConfigFile",
+      "target": "src/a.ts#loadConfig",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/b.ts",
+      "target": "src/b.ts#configName",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/b.ts",
+      "target": "src/b.ts#parseHeader",
+      "relation": "contains",
+      "confidence": "extracted"
+    }
+  ]
+}

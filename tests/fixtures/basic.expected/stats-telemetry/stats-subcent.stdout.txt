@@ -1,0 +1,7 @@
+sieve stats — session x
+  sieve reads:   1
+  source reads:  0   (Read / Grep / Glob)
+  mix:           100% sieve
+  tokens saved:  ~100
+  value saved:   ~<$0.01
+  last query:    grep x

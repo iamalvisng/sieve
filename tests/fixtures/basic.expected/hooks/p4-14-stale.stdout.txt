@@ -1,0 +1,1 @@
+{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"[sieve] blast radius for util.ts, who depends on it:\n • imports ← app.ts (app.ts)\n • calls ← run (app.ts)"}}

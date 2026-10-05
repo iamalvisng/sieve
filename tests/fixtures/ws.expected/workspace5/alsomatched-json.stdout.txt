@@ -1,0 +1,28 @@
+{
+  "query": "parse config",
+  "mode": "lexical",
+  "hits": [
+    {
+      "kind": "symbol",
+      "title": "parseConfigFile · function",
+      "pointer": "alpha/src/a.ts:L9-L11",
+      "snippet": "function parseConfigFile(path: string): string",
+      "score": 1,
+      "scope": "alpha"
+    }
+  ],
+  "scopes": {
+    "federated": [
+      "alpha",
+      "gamma/packages/x",
+      "gamma",
+      "gamma/packages/y"
+    ],
+    "alsoMatched": [
+      {
+        "scope": "beta",
+        "bestId": "beta/src/b.ts:L1-L4"
+      }
+    ]
+  }
+}

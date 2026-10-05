@@ -1,0 +1,5 @@
+# Query list for tests/fixtures/pnpm. One query per line.
+# Format: <id><TAB><arguments after "sieve">
+map	map
+ask-all	ask "function"
+check	check

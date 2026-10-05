@@ -1,0 +1,43 @@
+{
+  "context": {
+    "ok": false,
+    "missing": true,
+    "contentDrift": [],
+    "removed": [],
+    "coverage": [],
+    "indexDrift": []
+  },
+  "graph": {
+    "ok": true,
+    "missing": false,
+    "added": [],
+    "removed": [],
+    "changed": [],
+    "stale": [],
+    "pending": 21,
+    "pendingIds": [
+      "packages/shared/index.ts",
+      "packages/shared/index.ts#formatVersion",
+      "py/helpers.py",
+      "py/helpers.py#add",
+      "py/helpers.py#sub",
+      "py/main.py",
+      "py/main.py#Calculator",
+      "py/main.py#Calculator.total",
+      "py/main.py#run",
+      "src/app.ts",
+      "src/app.ts#App",
+      "src/app.ts#App.constructor",
+      "src/app.ts#App.run",
+      "src/app.ts#main",
+      "src/legacy.mjs",
+      "src/legacy.mjs#legacyGreet",
+      "src/util.ts",
+      "src/util.ts#double",
+      "src/util.ts#quadruple",
+      "src/view.tsx",
+      "src/view.tsx#Greeting"
+    ],
+    "nodes": 21
+  }
+}

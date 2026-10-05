@@ -1,0 +1,4 @@
+✓ wiring: 40 nodes (12 function, 10 method, 8 file, 7 class, 1 interface, 1 type, 1 enum), 35 edges, 8 cards [python, typescript]
+  parsed: 8 of 8 files (0 replayed from cache)
+  → <TMP>/sieve
+  <TMP>/sieve/ is git-ignored (added automatically) — a local cache; teammates run `sieve build` to get their own.

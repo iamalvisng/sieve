@@ -1,0 +1,23 @@
+## Rust crate dependencies
+
+Sieve links the crates below. `cargo about` writes this section from
+`Cargo.lock`. Run `scripts/third-party.sh` to refresh it.
+
+Licenses in use:
+{{#each overview}}
+- {{name}}: {{count}} crates
+{{/each}}
+
+{{#each licenses}}
+### {{name}}
+
+Used by:
+{{#each used_by}}
+- {{crate.name}} {{crate.version}}
+{{/each}}
+
+```text
+{{{text}}}
+```
+
+{{/each}}

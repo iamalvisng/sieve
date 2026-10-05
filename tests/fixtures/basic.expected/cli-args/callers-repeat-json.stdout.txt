@@ -1,0 +1,29 @@
+{
+  "query": "add",
+  "matches": [
+    {
+      "symbol": {
+        "id": "py/helpers.py#add",
+        "name": "add",
+        "kind": "function",
+        "path": "py/helpers.py",
+        "span": "L1-L2"
+      },
+      "hits": [
+        {
+          "id": "py/main.py#Calculator.total",
+          "relation": "calls",
+          "depth": 1,
+          "name": "total",
+          "kind": "method",
+          "path": "py/main.py",
+          "span": "L5-L6"
+        }
+      ]
+    }
+  ],
+  "saved": {
+    "files": 2,
+    "baselineChars": 230
+  }
+}

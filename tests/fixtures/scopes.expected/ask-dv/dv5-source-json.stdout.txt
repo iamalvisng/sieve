@@ -1,0 +1,6 @@
+{
+  "query": "tinyfunc",
+  "mode": "empty",
+  "hits": [],
+  "note": "no matching nodes — try different words, or `sieve build` if sieve/ is empty — scopes here: packages/big/ · (root)"
+}

@@ -1,0 +1,6 @@
+{
+  "query": "zzzz_nothing_here",
+  "mode": "empty",
+  "hits": [],
+  "note": "no matching nodes — try different words, or `sieve build` if sieve/ is empty — scopes here: packages/alpha/ · packages/gamma/ · packages/beta/ · (root)"
+}

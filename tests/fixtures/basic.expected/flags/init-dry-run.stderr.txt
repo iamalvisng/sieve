@@ -1,0 +1,21 @@
+would write — this repo:
+  .claude/settings.json            sieve statusline + hook blocks
+  .claude/skills/sieve/SKILL.md    sieve skill
+  .mcp.json                        mcpServers.sieve
+  AGENTS.md                        fenced sieve section
+  .adal/skills/sieve/SKILL.md      sieve-owned file
+  .cursor/rules/sieve.mdc          sieve-owned file
+  .cursor/mcp.json                 mcpServers.sieve
+  .cursor/hooks.json               postToolUse / afterMCPExecution / sessionEnd
+  GEMINI.md                        fenced sieve section
+  .gemini/settings.json            mcpServers.sieve
+  .grok/skills/sieve/SKILL.md      sieve-owned file
+  .grok/config.toml                [mcp_servers.sieve]
+  AGENTS.md                        fenced sieve section
+  AGENTS.md                        fenced sieve section
+  .github/copilot-instructions.md  fenced sieve section
+  .kiro/steering/sieve.md          sieve-owned file
+  .kiro/settings/mcp.json          mcpServers.sieve
+  .windsurf/rules/sieve.md         sieve-owned file
+
+nothing was written (--dry-run)

@@ -1,0 +1,3 @@
+# Ask divergence queries for tests/fixtures/scopes (DV5).
+# Format: <id><TAB><arguments after "sieve">
+dv5-source-json	ask "tinyfunc" --source --json

@@ -1,0 +1,2 @@
+✗ base ref "nope" is not in this checkout.
+  In CI, fetch enough history for the merge base: actions/checkout with `fetch-depth: 0`.

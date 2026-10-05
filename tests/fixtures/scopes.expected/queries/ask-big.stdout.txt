@@ -1,0 +1,31 @@
+sieve ask — "big function"  (lexical)
+
+1. [packages/big/] bigFive · function  [symbol]
+   packages/big/index.ts:L13-L14
+   function bigFive(): number
+
+2. [packages/big/] bigFour · function  [symbol]
+   packages/big/index.ts:L10-L11
+   function bigFour(): number
+
+3. [packages/big/] bigOne · function  [symbol]
+   packages/big/index.ts:L1-L2
+   function bigOne(): number
+
+4. [packages/big/] bigSix · function  [symbol]
+   packages/big/index.ts:L16-L17
+   function bigSix(): number
+
+5. [packages/big/] bigThree · function  [symbol]
+   packages/big/index.ts:L7-L8
+   function bigThree(): number
+
+6. [packages/big/] bigTwo · function  [symbol]
+   packages/big/index.ts:L4-L5
+   function bigTwo(): number
+
+7. [packages/big/] index.ts · file  [symbol]
+   packages/big/index.ts
+
+matched in: packages/big/ (7)
+also matched: (root) — narrow with --in (root)

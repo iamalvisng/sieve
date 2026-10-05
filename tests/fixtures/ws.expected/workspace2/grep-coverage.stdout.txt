@@ -1,0 +1,8 @@
+"return" — 2 hits in 2 symbols across 1 files (searched 1 indexed files)
+
+alphaAdd · function · alpha/src/a.ts:L1-L3 · 1 in-edges
+  L2: return a + b;
+
+alphaTwice · function · alpha/src/a.ts:L5-L7 · 0 in-edges
+  L6: return alphaAdd(n, n);
+1 of 2 workspace repos have graphs; run sieve build to cover beta

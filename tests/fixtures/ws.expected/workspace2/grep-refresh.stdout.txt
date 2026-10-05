@@ -1,0 +1,6 @@
+[sieve] saved ≈ 5 tokens
+
+"alphaExtra" — 1 hits in 1 symbols across 1 files (searched 2 indexed files)
+
+alphaExtra · function · alpha/src/a.ts:L9-L11 · 0 in-edges
+  L9: export function alphaExtra(): number {

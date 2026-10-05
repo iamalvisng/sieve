@@ -1,0 +1,4 @@
+✓ wiring: 6 nodes (4 function, 2 file), 6 edges, 2 cards [typescript]
+  parsed: 2 of 2 files (0 replayed from cache)
+  → <TMP>/sieve
+  sieve/ is git-ignored (added automatically) — a local cache; teammates run `sieve build` to get their own.

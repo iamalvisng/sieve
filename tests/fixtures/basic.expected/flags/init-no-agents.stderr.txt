@@ -1,0 +1,4 @@
+✓ graph ready · 21 nodes, 23 edges
+✓ claude   .claude/, .mcp.json
+· restart your agents so a new session picks up sieve
+· commit .claude/ .mcp.json to share it — sieve/ stays local and git-ignored

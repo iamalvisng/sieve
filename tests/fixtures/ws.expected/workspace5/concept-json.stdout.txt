@@ -1,0 +1,87 @@
+{
+  "query": "parse config",
+  "mode": "lexical",
+  "hits": [
+    {
+      "kind": "symbol",
+      "title": "parseConfigFile · function",
+      "pointer": "alpha/src/a.ts:L9-L11",
+      "snippet": "function parseConfigFile(path: string): string",
+      "score": 1,
+      "scope": "alpha"
+    },
+    {
+      "kind": "symbol",
+      "title": "parseConfigRoot · function",
+      "pointer": "gamma/src/root.ts:L1-L3",
+      "snippet": "function parseConfigRoot(text: string): string",
+      "score": 1,
+      "scope": "gamma"
+    },
+    {
+      "kind": "symbol",
+      "title": "parseConfigX · function",
+      "pointer": "gamma/packages/x/src/parse-config.ts:L1-L3",
+      "snippet": "function parseConfigX(text: string): string",
+      "score": 1,
+      "scope": "gamma/packages/x"
+    },
+    {
+      "kind": "symbol",
+      "title": "configY · function",
+      "pointer": "gamma/packages/y/src/parse/y.ts:L1-L3",
+      "snippet": "function configY(): number",
+      "score": 1,
+      "scope": "gamma/packages/y"
+    },
+    {
+      "kind": "concept",
+      "title": "Config loading",
+      "pointer": "alpha/src/a.ts, alpha/src/b.ts",
+      "snippet": "Alpha parses each config file, then loads the parsed config.",
+      "related": [
+        "alpha-headers"
+      ],
+      "score": 0.9838709677419354,
+      "scope": "alpha"
+    },
+    {
+      "kind": "symbol",
+      "title": "parseHeader · function",
+      "pointer": "alpha/src/b.ts:L1-L3",
+      "snippet": "function parseHeader(line: string): string",
+      "score": 0.9682539682539681,
+      "scope": "alpha"
+    },
+    {
+      "kind": "symbol",
+      "title": "parseConfig · function",
+      "pointer": "alpha/src/a.ts:L1-L3",
+      "snippet": "function parseConfig(text: string): string",
+      "score": 1,
+      "scope": "alpha"
+    },
+    {
+      "kind": "symbol",
+      "title": "loadConfigX · function",
+      "pointer": "gamma/packages/x/src/parse-config.ts:L5-L7",
+      "snippet": "function loadConfigX(path: string): string",
+      "score": 1,
+      "scope": "gamma/packages/x"
+    }
+  ],
+  "scopes": {
+    "federated": [
+      "alpha",
+      "gamma/packages/x",
+      "gamma",
+      "gamma/packages/y"
+    ],
+    "alsoMatched": [
+      {
+        "scope": "beta",
+        "bestId": "beta/src/b.ts:L1-L4"
+      }
+    ]
+  }
+}

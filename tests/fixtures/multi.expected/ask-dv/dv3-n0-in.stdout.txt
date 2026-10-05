@@ -1,0 +1,5 @@
+sieve ask — "render"  (lexical)
+
+no matches.
+
+[sieve] no hits — don't re-ask with new wording; switch tool: `sieve grep "<literal>"` for every occurrence · `sieve skeleton <file>` for a file's full API · `sieve callers <symbol>` for who-uses.

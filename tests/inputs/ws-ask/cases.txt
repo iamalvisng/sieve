@@ -1,0 +1,36 @@
+# id<TAB>variant<TAB>sieve args (run at the parent of the variant copy)
+default	base	ask "parse config"
+n3	base	ask "parse config" -n 3
+n0	base	ask "parse config" -n 0
+json	base	ask "parse config" --json
+json-source	base	ask "parse config" --json --source
+source	base	ask "parse config" --source
+source-full	base	ask "parse config" --source --full
+no-graph-rank	base	ask "parse config" --no-graph-rank
+in-beta	base	ask "parse config" --in beta
+in-gamma	base	ask "parse config" --in gamma
+in-gamma-json	base	ask "parse config" --in gamma --json
+in-gamma-x	base	ask "parse config" --in gamma/packages/x
+in-alpha-nosuch	base	ask "parse config" --in alpha/nosuch
+in-zzz	base	ask "parse config" --in zzz
+in-empty	base	ask "parse config" --in ""
+alsomatched-json	base	ask "parse config" --json -n 1
+structural	base	ask "who calls parseConfig"
+structural-in-alpha	base	ask "who calls parseConfig" --in alpha
+structural-in-alpha-json	base	ask "who calls parseConfig" --in alpha --json
+unbuilt	unbuilt	ask "parse config"
+unbuilt-in-beta	unbuilt	ask "parse config" --in beta
+concept	concept	ask "parse config"
+concept-json	concept	ask "parse config" --json
+concept-gamma	concept-gamma	ask "parse config" --in gamma
+concept-gamma-json	concept-gamma	ask "parse config" --in gamma --json
+ties	ties	ask "parse config" --in gamma -n 20
+weaky	weaky	ask "parse config loader token" -n 20
+weaky-json	weaky	ask "parse config loader token" --json
+many-json	many	ask "parse config loader" --in gamma -n 1 --json
+filegate	filegate	ask "zeta omega sigma rho kappa lambda mu nu xi pi"
+filegate-json	filegate	ask "zeta omega sigma rho kappa lambda mu nu xi pi" --json
+filegate-plural	filegate	ask "zetas omegas sigma rho kappa lambda mu nu xi pi"
+ties-json	ties	ask "parse config" --in gamma -n 20 --json
+crux-source	crux	ask "parse config" --source -n 2
+crux-full	crux	ask "parse config" --source --full -n 2

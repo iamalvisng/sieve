@@ -1,0 +1,5 @@
+sieve ask — "septuple"  (empty)
+
+no matching nodes — try different words, or `sieve build` if sieve/ is empty
+
+[sieve] no hits — don't re-ask with new wording; switch tool: `sieve grep "<literal>"` for every occurrence · `sieve skeleton <file>` for a file's full API · `sieve callers <symbol>` for who-uses.

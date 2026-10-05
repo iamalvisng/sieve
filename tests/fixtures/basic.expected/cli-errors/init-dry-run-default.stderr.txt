@@ -1,0 +1,7 @@
+would write — this repo:
+  .claude/settings.json          sieve statusline + hook blocks
+  .claude/skills/sieve/SKILL.md  sieve skill
+  .mcp.json                      mcpServers.sieve
+
+nothing was written (--dry-run)
+· skipped agents, adal, cursor, gemini, grok, hermes, antigravity, copilot, kiro, windsurf (no marker in this repo) — add with --agents <name>

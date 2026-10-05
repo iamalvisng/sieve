@@ -1,0 +1,11 @@
+agents
+adal
+cursor
+gemini
+grok
+hermes
+antigravity
+copilot
+kiro
+windsurf
+claude

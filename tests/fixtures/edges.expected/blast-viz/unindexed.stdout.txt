@@ -1,0 +1,7 @@
+blast radius — working tree vs HEAD (depth 1)
+  changed: 1 file in 0 areas, 0 seed symbols
+  impacted: 0 symbols in 0 areas
+
+no indexed dependents outside the changed files themselves
+
+⚠ 1 changed file not in the graph (notes.md) — no parser claims the extension, or the index predates the file.

@@ -1,0 +1,7 @@
+blast radius — working tree vs HEAD (depth 1)
+  changed: 1 file in 1 area, 1 seed symbol
+  impacted: 0 symbols in 0 areas
+
+✗ latin — 1 changed file, 0/1 reached by a test
+
+no indexed dependents outside the changed files themselves

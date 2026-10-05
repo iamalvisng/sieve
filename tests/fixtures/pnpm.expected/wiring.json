@@ -1,0 +1,490 @@
+{
+  "meta": {
+    "version": 1,
+    "nodeCount": 24,
+    "edgeCount": 20,
+    "languages": [
+      "typescript"
+    ],
+    "scopes": [
+      {
+        "prefix": "libs/core",
+        "label": "libs/core",
+        "markers": [
+          "package.json"
+        ]
+      },
+      {
+        "prefix": "apps/web",
+        "label": "apps/web",
+        "markers": [
+          "package.json"
+        ]
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "apps/web/src/w.ts",
+      "name": "w.ts",
+      "kind": "file",
+      "path": "apps/web/src/w.ts",
+      "span": "L1-L15",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "6110e258090a48566f568d0086a7ead65741548bc78d7de5a461e5084672114a",
+      "chars": 253,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "apps/web/src/w.ts#webFive",
+      "name": "webFive",
+      "kind": "function",
+      "path": "apps/web/src/w.ts",
+      "span": "L13-L14",
+      "signature": "function webFive(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "87157add5c9f76161aa2c55991c765d9fd9bbb3039f5b10f5d43b08228285453",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "apps/web/src/w.ts#webFour",
+      "name": "webFour",
+      "kind": "function",
+      "path": "apps/web/src/w.ts",
+      "span": "L10-L11",
+      "signature": "function webFour(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "20f7dd1fdcc1eea9ca544656cc15777d9799f5aaac3082552f6769cb5e108416",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "apps/web/src/w.ts#webOne",
+      "name": "webOne",
+      "kind": "function",
+      "path": "apps/web/src/w.ts",
+      "span": "L1-L2",
+      "signature": "function webOne(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "421adf7a5a1d76f088423b6b0b375c0b71bbc867771f910ba73222beccbde6e7",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "apps/web/src/w.ts#webThree",
+      "name": "webThree",
+      "kind": "function",
+      "path": "apps/web/src/w.ts",
+      "span": "L7-L8",
+      "signature": "function webThree(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "c3fd81aab51a38411ab6d45b291a614da2df17d7ee3a67bdc8777fc527ee5db5",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "apps/web/src/w.ts#webTwo",
+      "name": "webTwo",
+      "kind": "function",
+      "path": "apps/web/src/w.ts",
+      "span": "L4-L5",
+      "signature": "function webTwo(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "2ec286435531a6630b9d912456aec10746e1f5a68ef74a150c28d84555e8ef16",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "deep/x/y/src/d.ts",
+      "name": "d.ts",
+      "kind": "file",
+      "path": "deep/x/y/src/d.ts",
+      "span": "L1-L15",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "b96a9c7f5f0dc53e324f5ef3dac78622c6498e2a74767d2f342b72a7929eec1d",
+      "chars": 258,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "deep/x/y/src/d.ts#deepFive",
+      "name": "deepFive",
+      "kind": "function",
+      "path": "deep/x/y/src/d.ts",
+      "span": "L13-L14",
+      "signature": "function deepFive(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "11449d9ba4a3140d82b4ed2c5d36a4c785f7d92811213b8518c8c80d27a775ef",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "deep/x/y/src/d.ts#deepFour",
+      "name": "deepFour",
+      "kind": "function",
+      "path": "deep/x/y/src/d.ts",
+      "span": "L10-L11",
+      "signature": "function deepFour(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "607fc1c1426cce6d3bdec6dcc21f1a092f61e0af67493e2fe09a21a3106bdaa6",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "deep/x/y/src/d.ts#deepOne",
+      "name": "deepOne",
+      "kind": "function",
+      "path": "deep/x/y/src/d.ts",
+      "span": "L1-L2",
+      "signature": "function deepOne(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "f5469745b260a55c2d7ddf11fb8289550fbaf19eb0ebe1e01912171f9c0190e9",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "deep/x/y/src/d.ts#deepThree",
+      "name": "deepThree",
+      "kind": "function",
+      "path": "deep/x/y/src/d.ts",
+      "span": "L7-L8",
+      "signature": "function deepThree(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "537b3c6573d2bec632453422cd6a6c342ab66bd326b9272feb3db4e342dafc81",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "deep/x/y/src/d.ts#deepTwo",
+      "name": "deepTwo",
+      "kind": "function",
+      "path": "deep/x/y/src/d.ts",
+      "span": "L4-L5",
+      "signature": "function deepTwo(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "26e7da1afc6c1a39de865e8923953d956f99889a03a60be1dd53c5f1887a1610",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "libs/core/src/c.ts",
+      "name": "c.ts",
+      "kind": "file",
+      "path": "libs/core/src/c.ts",
+      "span": "L1-L15",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "76cd165254e532bbb019627147fec0e762b5ab114d9ae3a22c1366ad44b02ee9",
+      "chars": 258,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "libs/core/src/c.ts#coreFive",
+      "name": "coreFive",
+      "kind": "function",
+      "path": "libs/core/src/c.ts",
+      "span": "L13-L14",
+      "signature": "function coreFive(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "8c2e69fb6845beef126fab35adf030b6e9aaccd7bec6adb08dc5952ca32afe16",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "libs/core/src/c.ts#coreFour",
+      "name": "coreFour",
+      "kind": "function",
+      "path": "libs/core/src/c.ts",
+      "span": "L10-L11",
+      "signature": "function coreFour(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "2fc2692df65a32893d2b78aa650367d5dfbf26eff89b1c84c5074f8ac19019d0",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "libs/core/src/c.ts#coreOne",
+      "name": "coreOne",
+      "kind": "function",
+      "path": "libs/core/src/c.ts",
+      "span": "L1-L2",
+      "signature": "function coreOne(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "77728aa0c792f9faa89ae9e1feab178190e1ce65a5748cd04e78f264b6bc9b7d",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "libs/core/src/c.ts#coreThree",
+      "name": "coreThree",
+      "kind": "function",
+      "path": "libs/core/src/c.ts",
+      "span": "L7-L8",
+      "signature": "function coreThree(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "79d6d8e2ca0a38c6d329d5a2295a763bd0c2bbfa83893808b639b698778a3937",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "libs/core/src/c.ts#coreTwo",
+      "name": "coreTwo",
+      "kind": "function",
+      "path": "libs/core/src/c.ts",
+      "span": "L4-L5",
+      "signature": "function coreTwo(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "b10da6eb368aa7aa8d868e2626b68378829ae2b56f2377e6e4ccb684a0b51e75",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "libs/other/src/o.ts",
+      "name": "o.ts",
+      "kind": "file",
+      "path": "libs/other/src/o.ts",
+      "span": "L1-L15",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "dfdc5fdfeece6789c0b11e809701115cd4a6b5a05d41e305d2fb9e7bbe4452a5",
+      "chars": 263,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "libs/other/src/o.ts#otherFive",
+      "name": "otherFive",
+      "kind": "function",
+      "path": "libs/other/src/o.ts",
+      "span": "L13-L14",
+      "signature": "function otherFive(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "49e7bbdc25e15c38f2b9855417641a057c0a03210d2d74e904e69c1f8f305e64",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "libs/other/src/o.ts#otherFour",
+      "name": "otherFour",
+      "kind": "function",
+      "path": "libs/other/src/o.ts",
+      "span": "L10-L11",
+      "signature": "function otherFour(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "d5d489318ca8dc5524e995c6c66ec02892e8c72e38e7a89c27d3d0bd68f6f5b2",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "libs/other/src/o.ts#otherOne",
+      "name": "otherOne",
+      "kind": "function",
+      "path": "libs/other/src/o.ts",
+      "span": "L1-L2",
+      "signature": "function otherOne(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "235bcc1db7d44cccfaf3ded1db18a4d1af8baf2d448c54be09bba1db4f559ec4",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "libs/other/src/o.ts#otherThree",
+      "name": "otherThree",
+      "kind": "function",
+      "path": "libs/other/src/o.ts",
+      "span": "L7-L8",
+      "signature": "function otherThree(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "94f25f1091866291576e4948928e51aadc4a117884b9d9ce22e98e7e729f5731",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "libs/other/src/o.ts#otherTwo",
+      "name": "otherTwo",
+      "kind": "function",
+      "path": "libs/other/src/o.ts",
+      "span": "L4-L5",
+      "signature": "function otherTwo(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "b40e96b4b35acef1cecf91a7f35762de4568dadc9757510b89ea18b403a4573c",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "apps/web/src/w.ts",
+      "target": "apps/web/src/w.ts#webFive",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "apps/web/src/w.ts",
+      "target": "apps/web/src/w.ts#webFour",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "apps/web/src/w.ts",
+      "target": "apps/web/src/w.ts#webOne",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "apps/web/src/w.ts",
+      "target": "apps/web/src/w.ts#webThree",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "apps/web/src/w.ts",
+      "target": "apps/web/src/w.ts#webTwo",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deep/x/y/src/d.ts",
+      "target": "deep/x/y/src/d.ts#deepFive",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deep/x/y/src/d.ts",
+      "target": "deep/x/y/src/d.ts#deepFour",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deep/x/y/src/d.ts",
+      "target": "deep/x/y/src/d.ts#deepOne",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deep/x/y/src/d.ts",
+      "target": "deep/x/y/src/d.ts#deepThree",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deep/x/y/src/d.ts",
+      "target": "deep/x/y/src/d.ts#deepTwo",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "libs/core/src/c.ts",
+      "target": "libs/core/src/c.ts#coreFive",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "libs/core/src/c.ts",
+      "target": "libs/core/src/c.ts#coreFour",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "libs/core/src/c.ts",
+      "target": "libs/core/src/c.ts#coreOne",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "libs/core/src/c.ts",
+      "target": "libs/core/src/c.ts#coreThree",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "libs/core/src/c.ts",
+      "target": "libs/core/src/c.ts#coreTwo",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "libs/other/src/o.ts",
+      "target": "libs/other/src/o.ts#otherFive",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "libs/other/src/o.ts",
+      "target": "libs/other/src/o.ts#otherFour",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "libs/other/src/o.ts",
+      "target": "libs/other/src/o.ts#otherOne",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "libs/other/src/o.ts",
+      "target": "libs/other/src/o.ts#otherThree",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "libs/other/src/o.ts",
+      "target": "libs/other/src/o.ts#otherTwo",
+      "relation": "contains",
+      "confidence": "extracted"
+    }
+  ]
+}

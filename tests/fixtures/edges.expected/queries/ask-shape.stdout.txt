@@ -1,0 +1,31 @@
+sieve ask — "shape area circle"  (lexical)
+
+1. Circle · class  [symbol]
+   ts/derived.ts:L3-L11
+   class Circle extends Base implements Shape
+
+2. Shape · interface  [symbol]
+   ts/base.ts:L1-L3
+   interface Shape
+
+3. outer · function  [symbol]
+   ts/calls.ts:L7-L19
+   function outer(): number
+
+4. area · method  [symbol]
+   ts/derived.ts:L4-L6
+   area(): number
+
+5. Base · class  [symbol]
+   ts/base.ts:L5-L9
+   class Base
+
+6. calls.ts · file  [symbol]
+   ts/calls.ts
+
+7. derived.ts · file  [symbol]
+   ts/derived.ts
+
+8. greet · method  [symbol]
+   ts/base.ts:L6-L8
+   greet(): string

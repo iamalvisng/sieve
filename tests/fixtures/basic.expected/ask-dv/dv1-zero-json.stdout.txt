@@ -1,0 +1,6 @@
+{
+  "query": "zzzz_no_such_thing_anywhere",
+  "mode": "empty",
+  "hits": [],
+  "note": "no matching nodes — try different words, or `sieve build` if sieve/ is empty"
+}

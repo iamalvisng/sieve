@@ -1,0 +1,10 @@
+Usage: sieve stats [options] [dir]
+
+Show this agent session's sieve-vs-source usage mix and tokens saved
+
+Arguments:
+  dir         repository root (default: nearest ancestor with a sieve/ index)
+
+Options:
+  --json      output the session stats as JSON
+  -h, --help  display help for command

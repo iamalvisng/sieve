@@ -1,0 +1,19 @@
+{
+  "query": "bigwidget",
+  "mode": "lexical",
+  "hits": [
+    {
+      "kind": "symbol",
+      "title": "bigwidget · function",
+      "pointer": "src/widget.ts:L5-L96",
+      "snippet": "function bigwidget(n: number): number",
+      "score": 1.5
+    }
+  ],
+  "coverage": 1,
+  "coverageStrong": 1,
+  "saved": {
+    "files": 1,
+    "baselineChars": 1456
+  }
+}

@@ -1,0 +1,5 @@
+sieve ask — "éuses double"  (structural)
+
+callers / references of double
+
+- quadruple  src/util.ts:L5-L7  (calls) — function quadruple(n: number): number

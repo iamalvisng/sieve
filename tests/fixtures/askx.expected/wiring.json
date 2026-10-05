@@ -1,0 +1,123 @@
+{
+  "meta": {
+    "version": 1,
+    "nodeCount": 5,
+    "edgeCount": 5,
+    "languages": [
+      "typescript"
+    ],
+    "scopes": [
+      {
+        "prefix": "",
+        "label": "",
+        "markers": []
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "src/widget.test.ts",
+      "name": "widget.test.ts",
+      "kind": "file",
+      "path": "src/widget.test.ts",
+      "span": "L1-L6",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "fce70d3bcf1e4d26ba1013736d709bb7bf84a852cdff373d68513f1acc6e3b87",
+      "chars": 105,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "src/widget.test.ts#widgetCheck",
+      "name": "widgetCheck",
+      "kind": "function",
+      "path": "src/widget.test.ts",
+      "span": "L3-L5",
+      "signature": "function widgetCheck(): boolean",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "4f661f0018353b4c63435555aef31d0ec80314b9c6d974a26342e7042a4f1e00",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "src/widget.ts",
+      "name": "widget.ts",
+      "kind": "file",
+      "path": "src/widget.ts",
+      "span": "L1-L97",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "76f459922e86f19ade0f6fc36ad4509efd086ebf810703ac9f52590308378c52",
+      "chars": 1456,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "src/widget.ts#bigwidget",
+      "name": "bigwidget",
+      "kind": "function",
+      "path": "src/widget.ts",
+      "span": "L5-L96",
+      "signature": "function bigwidget(n: number): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "06204fbc07917083d848efd3d521370dfcd8e0c7d4abb3527b98b8d7feb3aa03",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "src/widget.ts#widget",
+      "name": "widget",
+      "kind": "function",
+      "path": "src/widget.ts",
+      "span": "L1-L3",
+      "signature": "function widget(n: number): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "c76ba1fc2b21d4cc7ca12c4e8ef74aedfa58e2444aa8e9cf2f477d47a8a294b0",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "src/widget.test.ts",
+      "target": "src/widget.test.ts#widgetCheck",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/widget.test.ts",
+      "target": "src/widget.ts",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/widget.test.ts#widgetCheck",
+      "target": "src/widget.ts#widget",
+      "relation": "calls",
+      "confidence": "inferred"
+    },
+    {
+      "source": "src/widget.ts",
+      "target": "src/widget.ts#bigwidget",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/widget.ts",
+      "target": "src/widget.ts#widget",
+      "relation": "contains",
+      "confidence": "extracted"
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+# Query list for tests/fixtures/symbols. One query per line.
+# Format: <id><TAB><arguments after "sieve">
+grep-inner	grep "inner" --fixed
+ask-box	ask "box value accessor"
+callers-method	callers value
+callers-p1-22-method-json	callers value --json

@@ -1,0 +1,36 @@
+{
+  "query": "double",
+  "mode": "lexical",
+  "hits": [
+    {
+      "kind": "symbol",
+      "title": "double · function",
+      "pointer": "src/util.ts:L1-L3",
+      "snippet": "function double(n: number): number",
+      "score": 1.441006913009861
+    },
+    {
+      "kind": "symbol",
+      "title": "run · method",
+      "pointer": "src/app.ts:L11-L13",
+      "snippet": "run(n: number): number",
+      "score": 0.2606308316299293
+    },
+    {
+      "kind": "symbol",
+      "title": "quadruple · function",
+      "pointer": "src/util.ts:L5-L7",
+      "snippet": "function quadruple(n: number): number",
+      "score": 0.7808410916295618
+    },
+    {
+      "kind": "symbol",
+      "title": "main · function",
+      "pointer": "src/app.ts:L16-L20",
+      "snippet": "function main(): void",
+      "score": 0.09787383366036148
+    }
+  ],
+  "coverage": 1,
+  "coverageStrong": 1
+}

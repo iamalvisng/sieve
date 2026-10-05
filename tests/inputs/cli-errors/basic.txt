@@ -1,0 +1,92 @@
+# Commander error-form queries for tests/fixtures/basic (P1-01, P1-51).
+# Format: <id><TAB><arguments after "sieve">. Run in the built temp copy.
+# Source: commander 15.0.0 lib/command.js (unknownOption, missingArgument,
+# optionMissingArgument, _excessArguments) and lib/suggestSimilar.js.
+ask-unknown-flag	ask q --jsn
+ask-unknown-far	ask q --zzzzzzzz
+ask-missing-arg	ask
+ask-missing-value	ask q -n
+ask-missing-value-in	ask q --in
+ask-extra-arg	ask q x y
+grep-unknown-flag	grep a --fixd
+grep-missing-arg	grep
+grep-missing-value	grep a --in
+grep-extra-arg	grep a b c
+callers-unknown-flag	callers a --bad
+callers-missing-arg	callers
+callers-missing-value	callers a --direction
+callers-missing-value-short	callers a -d
+callers-extra-arg	callers a b c
+check-unknown-flag	check --bad
+check-missing-value	check -e
+check-extra-arg	check a b
+skeleton-unknown-flag	skeleton a --bad
+skeleton-missing-arg	skeleton
+skeleton-missing-dir-value	skeleton a --dir
+skeleton-extra-arg	skeleton a b c
+map-unknown-flag	map --bad
+map-missing-value	map --max-dirs
+map-extra-arg	map a b
+order-unknown-before-extra	ask q x y --bad
+order-missing-value-before-unknown	ask q --bad --in
+unknown-inline-value	ask q --limt=3
+unknown-short-group	ask q -xyz
+top-vh	-vh
+top-version-help	--version --help
+top-help-version	-h -v
+top-v-version	-v version
+top-versio	--versio
+top-dir-equals	--dir=x
+top-dir-missing-after-help	-h --dir
+sub-after-v	ask q -v
+version-after-value-flag	ask q --in -v
+negative-operand	grep a -5
+negative-variadic-value	check -e .ts -1
+short-group-unknown	grep a -ix
+negative-dot-operand	grep a -.5
+negative-exp-plus-operand	grep a -1e+5
+negative-exp-both-operand	grep a -1.5e-3
+negative-dot-variadic-value	check -e .ts -.5
+negative-exp-plus-variadic-value	check -e .ts -1e+5
+negative-exp-both-variadic-value	check -e .ts -1.5e-3
+unknown-trailing-dot	grep a -1.
+unknown-upper-exp	grep a -1E5
+build-missing-value-ext	build -e
+build-missing-value-include-dir	build --include-dir
+build-missing-value-only-dir	build --only-dir
+viz-missing-value-port	viz -p
+viz-missing-value-export	viz --export
+viz-missing-value-title	viz --title
+viz-missing-value-tabs	viz --tabs
+blast-missing-value-base	blast --base
+blast-missing-value-depth	blast -d
+blast-missing-value-format	blast --format
+blast-missing-value-export-viz	blast --export-viz
+blast-missing-value-title	blast --title
+blast-missing-value-pr-author	blast --pr-author
+init-missing-value-agents	init --agents
+ask-in-hyphen-value	ask q --in -h
+ask-short-group-help-is-unknown	ask q -hx
+ask-help-twice-is-unknown	ask q -hh
+ask-help-wins-over-unknown	ask q --bad -h
+ask-unknown-group-then-help	ask q -hx -h
+ask-help-then-missing-value	ask q -h --in
+grep-flag-group-then-help	grep a -ih
+check-ext-hyphen-value	check -e -x
+check-ext-hyphen-value-then-more	check -e -x .zz -1 .yy
+check-ext-attached-value	check -ex
+check-ext-hyphen-value-then-help	check -e -x -h
+blast-pr-author-hyphen-value	blast --pr-author -x a
+init-agents-hyphen-value	init --dry-run --agents -x claude
+ask-in-then-root-flag	ask q --in --dir x
+ask-in-then-root-flag-inline	ask q --in --dir=x
+ask-limit-then-root-flag	ask q -n --dir x
+check-ext-then-root-flag	check -e --dir x
+check-ext-then-terminator-operand	check -e .zz -- nodir
+build-ext-then-terminator-operand	build -e .zz -- nodir
+ask-in-with-missing-dir	ask q --in zz --dir x
+blast-missing-dir-relative	blast --pr-author a --dir x
+callers-missing-dir-relative	callers a --dir x
+init-dry-run-default	init --dry-run
+init-dry-run-claude	init --dry-run --agents claude
+init-dry-run-claude-terminator	init --dry-run --agents claude -- nodir

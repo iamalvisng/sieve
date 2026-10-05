@@ -1,0 +1,4 @@
+[sieve] saved ≈ 42 tokens
+
+𝒻oo · function · src/uni.ts:L5-L7
+  calls ← runFoo (src/uni.ts:L13-L15)

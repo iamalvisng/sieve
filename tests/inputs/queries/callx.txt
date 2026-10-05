@@ -1,0 +1,10 @@
+# Query list for tests/fixtures/callx. One query per line.
+# Format: <id><TAB><arguments after "sieve">
+# P1-21: in zed's span, "doubled(" comes before "double(", so a substring
+# match quotes the wrong line. The golden quotes the whole-word line.
+callers-p1-21-double	callers double
+# P3-25: sieve sorts edges by (source, relation, target). From zed, the
+# "calls" edges to src/calc.ts come before the "references" edge to
+# src/base.ts#Widget. So the hit order is not id order. A sort by id
+# moves Widget first and changes the output.
+callers-p3-25-zed-out	callers zed --direction out

@@ -1,0 +1,11 @@
+[sieve] saved ≈ 214 tokens
+
+repo map — 4 files · 20 symbols · 20 edges · typescript
+
+## libs/core/
+libs/core/src/c.ts  1 files · 5 symbols
+
+## apps/web/
+apps/web/src/w.ts   1 files · 5 symbols
+
+hotspots: 

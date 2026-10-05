@@ -1,0 +1,210 @@
+### sieve blast radius
+
+**1 area changed → 8 areas can be affected.** 64 dependent symbols, depth 1.
+Tests: **no test reaches extra**.
+Tag: **Other Person** — 8 of 9 areas
+
+```mermaid
+flowchart TB
+  A0(("lib0fn0<br/>8 symbols"))
+  A1(("lib1fn0<br/>8 symbols"))
+  A2(("lib2fn0<br/>8 symbols"))
+  A3(("lib3fn0<br/>8 symbols"))
+  A4(("lib4fn0<br/>8 symbols"))
+  AX(("3 smaller areas<br/>24 symbols"))
+  classDef reached fill:#D9EDF3,stroke:#3AA7C9,stroke-width:1.5px,color:#0E313C;
+  class A0,A1,A2,A3,A4 reached;
+  classDef tail fill:#EEF2F3,stroke:#9AA4A9,stroke-width:1px,color:#3A4247;
+  class AX tail;
+```
+
+| Can be affected | Symbols | Nearest hop | Reached from |
+| --- | --: | --- | --- |
+| lib0fn0 | 8 | `lib0/callers.ts:L2-L2` lib0fn0 — calls, depth 1 | extra |
+| lib1fn0 | 8 | `lib1/callers.ts:L2-L2` lib1fn0 — calls, depth 1 | extra |
+| lib2fn0 | 8 | `lib2/callers.ts:L2-L2` lib2fn0 — calls, depth 1 | extra |
+| lib3fn0 | 8 | `lib3/callers.ts:L2-L2` lib3fn0 — calls, depth 1 | extra |
+| lib4fn0 | 8 | `lib4/callers.ts:L2-L2` lib4fn0 — calls, depth 1 | extra |
+| lib5fn0 | 8 | `lib5/callers.ts:L2-L2` lib5fn0 — calls, depth 1 | extra |
+| _2 smaller areas_ | 16 | lib6fn0, lib7fn0 | see below |
+
+<details>
+<summary><strong>Who knows this code</strong> — 1 person across 9 areas</summary>
+
+| Area | Who knows it |
+| --- | --- |
+| **lib0fn0** · affected | Other Person — 1 commit, last today |
+| **lib1fn0** · affected | Other Person — 1 commit, last today |
+| **lib2fn0** · affected | Other Person — 1 commit, last today |
+| **lib3fn0** · affected | Other Person — 1 commit, last today |
+| **lib4fn0** · affected | Other Person — 1 commit, last today |
+| **lib5fn0** · affected | Other Person — 1 commit, last today |
+| **lib6fn0** · affected | Other Person — 1 commit, last today |
+| **lib7fn0** · affected | Other Person — 1 commit, last today |
+| _…1 further area_ | |
+
+_Ownership is git history over each area's own files, weighted towards recent work (120-day half-life). Merge commits and bots are dropped, and you are dropped from your own PR. A name with no `@` has no GitHub handle in its commit email — tag them by hand, or add a `.mailmap` entry. A suggestion from history, not a CODEOWNERS rule._
+
+</details>
+
+<details>
+<summary><strong>All 64 dependent symbols</strong>, grouped by area</summary>
+
+**lib0fn0** — 8 symbols in 1 file
+
+- `lib0/callers.ts:L2-L2` — lib0fn0 (calls, depth 1)
+  ```2: export function lib0fn0(): number { return extra(); }```
+- `lib0/callers.ts:L3-L3` — lib0fn1 (calls, depth 1)
+  ```3: export function lib0fn1(): number { return extra(); }```
+- `lib0/callers.ts:L4-L4` — lib0fn2 (calls, depth 1)
+  ```4: export function lib0fn2(): number { return extra(); }```
+- `lib0/callers.ts:L5-L5` — lib0fn3 (calls, depth 1)
+  ```5: export function lib0fn3(): number { return extra(); }```
+- `lib0/callers.ts:L6-L6` — lib0fn4 (calls, depth 1)
+  ```6: export function lib0fn4(): number { return extra(); }```
+- `lib0/callers.ts:L7-L7` — lib0fn5 (calls, depth 1)
+  ```7: export function lib0fn5(): number { return extra(); }```
+- `lib0/callers.ts:L8-L8` — lib0fn6 (calls, depth 1)
+  ```8: export function lib0fn6(): number { return extra(); }```
+- `lib0/callers.ts:L9-L9` — lib0fn7 (calls, depth 1)
+  ```9: export function lib0fn7(): number { return extra(); }```
+
+**lib1fn0** — 8 symbols in 1 file
+
+- `lib1/callers.ts:L2-L2` — lib1fn0 (calls, depth 1)
+  ```2: export function lib1fn0(): number { return extra(); }```
+- `lib1/callers.ts:L3-L3` — lib1fn1 (calls, depth 1)
+  ```3: export function lib1fn1(): number { return extra(); }```
+- `lib1/callers.ts:L4-L4` — lib1fn2 (calls, depth 1)
+  ```4: export function lib1fn2(): number { return extra(); }```
+- `lib1/callers.ts:L5-L5` — lib1fn3 (calls, depth 1)
+  ```5: export function lib1fn3(): number { return extra(); }```
+- `lib1/callers.ts:L6-L6` — lib1fn4 (calls, depth 1)
+  ```6: export function lib1fn4(): number { return extra(); }```
+- `lib1/callers.ts:L7-L7` — lib1fn5 (calls, depth 1)
+  ```7: export function lib1fn5(): number { return extra(); }```
+- `lib1/callers.ts:L8-L8` — lib1fn6 (calls, depth 1)
+  ```8: export function lib1fn6(): number { return extra(); }```
+- `lib1/callers.ts:L9-L9` — lib1fn7 (calls, depth 1)
+  ```9: export function lib1fn7(): number { return extra(); }```
+
+**lib2fn0** — 8 symbols in 1 file
+
+- `lib2/callers.ts:L2-L2` — lib2fn0 (calls, depth 1)
+  ```2: export function lib2fn0(): number { return extra(); }```
+- `lib2/callers.ts:L3-L3` — lib2fn1 (calls, depth 1)
+  ```3: export function lib2fn1(): number { return extra(); }```
+- `lib2/callers.ts:L4-L4` — lib2fn2 (calls, depth 1)
+  ```4: export function lib2fn2(): number { return extra(); }```
+- `lib2/callers.ts:L5-L5` — lib2fn3 (calls, depth 1)
+  ```5: export function lib2fn3(): number { return extra(); }```
+- `lib2/callers.ts:L6-L6` — lib2fn4 (calls, depth 1)
+  ```6: export function lib2fn4(): number { return extra(); }```
+- `lib2/callers.ts:L7-L7` — lib2fn5 (calls, depth 1)
+  ```7: export function lib2fn5(): number { return extra(); }```
+- `lib2/callers.ts:L8-L8` — lib2fn6 (calls, depth 1)
+  ```8: export function lib2fn6(): number { return extra(); }```
+- `lib2/callers.ts:L9-L9` — lib2fn7 (calls, depth 1)
+  ```9: export function lib2fn7(): number { return extra(); }```
+
+**lib3fn0** — 8 symbols in 1 file
+
+- `lib3/callers.ts:L2-L2` — lib3fn0 (calls, depth 1)
+  ```2: export function lib3fn0(): number { return extra(); }```
+- `lib3/callers.ts:L3-L3` — lib3fn1 (calls, depth 1)
+  ```3: export function lib3fn1(): number { return extra(); }```
+- `lib3/callers.ts:L4-L4` — lib3fn2 (calls, depth 1)
+  ```4: export function lib3fn2(): number { return extra(); }```
+- `lib3/callers.ts:L5-L5` — lib3fn3 (calls, depth 1)
+  ```5: export function lib3fn3(): number { return extra(); }```
+- `lib3/callers.ts:L6-L6` — lib3fn4 (calls, depth 1)
+  ```6: export function lib3fn4(): number { return extra(); }```
+- `lib3/callers.ts:L7-L7` — lib3fn5 (calls, depth 1)
+  ```7: export function lib3fn5(): number { return extra(); }```
+- `lib3/callers.ts:L8-L8` — lib3fn6 (calls, depth 1)
+  ```8: export function lib3fn6(): number { return extra(); }```
+- `lib3/callers.ts:L9-L9` — lib3fn7 (calls, depth 1)
+  ```9: export function lib3fn7(): number { return extra(); }```
+
+**lib4fn0** — 8 symbols in 1 file
+
+- `lib4/callers.ts:L2-L2` — lib4fn0 (calls, depth 1)
+  ```2: export function lib4fn0(): number { return extra(); }```
+- `lib4/callers.ts:L3-L3` — lib4fn1 (calls, depth 1)
+  ```3: export function lib4fn1(): number { return extra(); }```
+- `lib4/callers.ts:L4-L4` — lib4fn2 (calls, depth 1)
+  ```4: export function lib4fn2(): number { return extra(); }```
+- `lib4/callers.ts:L5-L5` — lib4fn3 (calls, depth 1)
+  ```5: export function lib4fn3(): number { return extra(); }```
+- `lib4/callers.ts:L6-L6` — lib4fn4 (calls, depth 1)
+  ```6: export function lib4fn4(): number { return extra(); }```
+- `lib4/callers.ts:L7-L7` — lib4fn5 (calls, depth 1)
+  ```7: export function lib4fn5(): number { return extra(); }```
+- `lib4/callers.ts:L8-L8` — lib4fn6 (calls, depth 1)
+  ```8: export function lib4fn6(): number { return extra(); }```
+- `lib4/callers.ts:L9-L9` — lib4fn7 (calls, depth 1)
+  ```9: export function lib4fn7(): number { return extra(); }```
+
+**lib5fn0** — 8 symbols in 1 file
+
+- `lib5/callers.ts:L2-L2` — lib5fn0 (calls, depth 1)
+  ```2: export function lib5fn0(): number { return extra(); }```
+- `lib5/callers.ts:L3-L3` — lib5fn1 (calls, depth 1)
+  ```3: export function lib5fn1(): number { return extra(); }```
+- `lib5/callers.ts:L4-L4` — lib5fn2 (calls, depth 1)
+  ```4: export function lib5fn2(): number { return extra(); }```
+- `lib5/callers.ts:L5-L5` — lib5fn3 (calls, depth 1)
+  ```5: export function lib5fn3(): number { return extra(); }```
+- `lib5/callers.ts:L6-L6` — lib5fn4 (calls, depth 1)
+  ```6: export function lib5fn4(): number { return extra(); }```
+- `lib5/callers.ts:L7-L7` — lib5fn5 (calls, depth 1)
+  ```7: export function lib5fn5(): number { return extra(); }```
+- `lib5/callers.ts:L8-L8` — lib5fn6 (calls, depth 1)
+  ```8: export function lib5fn6(): number { return extra(); }```
+- `lib5/callers.ts:L9-L9` — lib5fn7 (calls, depth 1)
+  ```9: export function lib5fn7(): number { return extra(); }```
+
+**lib6fn0** — 8 symbols in 1 file
+
+- `lib6/callers.ts:L2-L2` — lib6fn0 (calls, depth 1)
+  ```2: export function lib6fn0(): number { return extra(); }```
+- `lib6/callers.ts:L3-L3` — lib6fn1 (calls, depth 1)
+  ```3: export function lib6fn1(): number { return extra(); }```
+- `lib6/callers.ts:L4-L4` — lib6fn2 (calls, depth 1)
+  ```4: export function lib6fn2(): number { return extra(); }```
+- `lib6/callers.ts:L5-L5` — lib6fn3 (calls, depth 1)
+  ```5: export function lib6fn3(): number { return extra(); }```
+- `lib6/callers.ts:L6-L6` — lib6fn4 (calls, depth 1)
+  ```6: export function lib6fn4(): number { return extra(); }```
+- `lib6/callers.ts:L7-L7` — lib6fn5 (calls, depth 1)
+  ```7: export function lib6fn5(): number { return extra(); }```
+- `lib6/callers.ts:L8-L8` — lib6fn6 (calls, depth 1)
+  ```8: export function lib6fn6(): number { return extra(); }```
+- `lib6/callers.ts:L9-L9` — lib6fn7 (calls, depth 1)
+  ```9: export function lib6fn7(): number { return extra(); }```
+
+**lib7fn0** — 8 symbols in 1 file
+
+- `lib7/callers.ts:L2-L2` — lib7fn0 (calls, depth 1)
+  ```2: export function lib7fn0(): number { return extra(); }```
+- `lib7/callers.ts:L3-L3` — lib7fn1 (calls, depth 1)
+  ```3: export function lib7fn1(): number { return extra(); }```
+- `lib7/callers.ts:L4-L4` — lib7fn2 (calls, depth 1)
+  ```4: export function lib7fn2(): number { return extra(); }```
+- `lib7/callers.ts:L5-L5` — lib7fn3 (calls, depth 1)
+  ```5: export function lib7fn3(): number { return extra(); }```
+
+…3 further symbols not listed.
+
+</details>
+<details>
+<summary><strong>Test signal</strong> per changed area — 1 ✗</summary>
+
+_Reached = a node under a test path has a resolved edge into the changed symbol. It undercounts anything called indirectly — through a CLI, a spawned process or a dynamic import — so read a low ratio as “look here”, never as a coverage gate._
+
+- ✗ **extra** — 0 of 2 reached · no test file reaches it
+  - not reached: `extra`, `newFn`
+
+</details>
+
+<sub>`sieve blast` · working tree vs HEAD · depth 1 · 2 changed files</sub>

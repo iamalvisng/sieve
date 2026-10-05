@@ -1,0 +1,27 @@
+{
+  "query": "parse config loader",
+  "mode": "lexical",
+  "hits": [
+    {
+      "kind": "symbol",
+      "title": "parseConfigRoot · function",
+      "pointer": "gamma/src/root.ts:L1-L3",
+      "snippet": "function parseConfigRoot(text: string): string",
+      "score": 1,
+      "scope": "gamma"
+    }
+  ],
+  "scopes": {
+    "federated": [
+      "gamma",
+      "gamma/packages/x",
+      "gamma/packages/y",
+      "gamma/packages/w1",
+      "gamma/packages/w2",
+      "gamma/packages/w3",
+      "gamma/packages/w4",
+      "gamma/packages/w5"
+    ],
+    "alsoMatched": []
+  }
+}

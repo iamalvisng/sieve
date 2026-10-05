@@ -1,0 +1,11 @@
+blast radius — working tree vs HEAD (depth 1)
+  changed: 2 files in 1 area, 2 seed symbols
+  impacted: 1 symbol in 1 area
+
+✗ extra — 2 changed files, 0/2 reached by a test
+
+alpha — 1 symbol in 1 file
+  calls ← alpha (lib/alpha.ts:L2-L2) [depth 1]
+
+who to tag
+  Other Person — alpha · 1 commit, last today

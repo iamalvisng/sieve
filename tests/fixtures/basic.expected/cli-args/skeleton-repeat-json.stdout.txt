@@ -1,0 +1,21 @@
+{
+  "file": "src/util.ts",
+  "entries": [
+    {
+      "name": "double",
+      "kind": "function",
+      "span": "L1-L3",
+      "signature": "function double(n: number): number"
+    },
+    {
+      "name": "quadruple",
+      "kind": "function",
+      "span": "L5-L7",
+      "signature": "function quadruple(n: number): number"
+    }
+  ],
+  "saved": {
+    "files": 1,
+    "baselineChars": 140
+  }
+}

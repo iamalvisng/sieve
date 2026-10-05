@@ -1,0 +1,10 @@
+[sieve] saved ≈ 15 tokens
+
+"APP" — 3 hits in 2 symbols across 1 files (searched 7 indexed files)
+
+App · class · src/app.ts:L4-L14 · 0 in-edges
+  L4: export class App {
+
+main · function · src/app.ts:L16-L20 · 0 in-edges
+  L17: const app = new App("sieve");
+  L18: app.run(1);

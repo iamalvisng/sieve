@@ -1,0 +1,1 @@
+error: option '--include-dir <name>' argument missing

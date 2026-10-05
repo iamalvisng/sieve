@@ -1,0 +1,66 @@
+{
+  "query": "quadruple",
+  "mode": "lexical",
+  "hits": [
+    {
+      "kind": "symbol",
+      "title": "quadruple · function",
+      "pointer": "src/util.ts:L5-L7",
+      "snippet": "function quadruple(n: number): number",
+      "score": 1.5,
+      "code": "export function quadruple(n: number): number {\n  return double(double(n));\n}"
+    },
+    {
+      "kind": "symbol",
+      "title": "run · method",
+      "pointer": "src/app.ts:L11-L13",
+      "snippet": "run(n: number): number",
+      "score": 0.5648598948196188,
+      "code": "  run(n: number): number {\n    return quadruple(n);\n  }"
+    },
+    {
+      "kind": "symbol",
+      "title": "double · function",
+      "pointer": "src/util.ts:L1-L3",
+      "snippet": "function double(n: number): number",
+      "score": 0.18761431742526832,
+      "code": "export function double(n: number): number {\n  return n * 2;\n}"
+    },
+    {
+      "kind": "symbol",
+      "title": "app.ts · file",
+      "pointer": "src/app.ts",
+      "snippet": "",
+      "score": 0.37163543469184346
+    },
+    {
+      "kind": "symbol",
+      "title": "util.ts · file",
+      "pointer": "src/util.ts",
+      "snippet": "",
+      "score": 0.09711657414845264
+    },
+    {
+      "kind": "symbol",
+      "title": "App · class",
+      "pointer": "src/app.ts:L4-L14",
+      "snippet": "class App",
+      "score": 0.1977440974398848,
+      "code": "export class App {\n  name: string;\n\n  constructor(name: string) {\n    this.name = name;\n  }\n\n  run(n: number): number {\n    return quadruple(n);\n  }\n}"
+    },
+    {
+      "kind": "symbol",
+      "title": "main · function",
+      "pointer": "src/app.ts:L16-L20",
+      "snippet": "function main(): void",
+      "score": 0.12573607051800434,
+      "code": "export function main(): void {\n  const app = new App(\"sieve\");\n  app.run(1);\n  z.string();\n}"
+    }
+  ],
+  "coverage": 1,
+  "coverageStrong": 1,
+  "saved": {
+    "files": 2,
+    "baselineChars": 447
+  }
+}

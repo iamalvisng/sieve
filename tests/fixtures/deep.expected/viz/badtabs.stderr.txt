@@ -1,0 +1,1 @@
+✗ --tabs takes a comma-separated subset of context, code, outline — got "bogus"

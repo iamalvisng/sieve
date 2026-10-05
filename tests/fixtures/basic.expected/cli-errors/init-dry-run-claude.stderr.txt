@@ -1,0 +1,6 @@
+would write — this repo:
+  .claude/settings.json          sieve statusline + hook blocks
+  .claude/skills/sieve/SKILL.md  sieve skill
+  .mcp.json                      mcpServers.sieve
+
+nothing was written (--dry-run)

@@ -1,0 +1,20 @@
+# CLI argument parity queries for tests/fixtures/basic, run in the built
+# temp copy. Format: <id><TAB><arguments after "sieve">
+# P1-23 (callers DV2): sieve checks the graph, then --in, then the
+# symbol, then --direction, then --depth (dist graph/traverse-cli.js:116-148).
+callers-dv2-direction	callers zzz_nope --direction sideways
+callers-dv2-depth	callers zzz_nope --depth 0
+callers-dv2-in-direction	callers zzz_nope --direction sideways --in nope
+callers-dv2-in-depth	callers zzz_nope --depth 0 --in nope
+# Commander takes the next token as a required option's value, even "-1"
+# (commander/lib/command.js:1808), and a repeated flag keeps its last value.
+callers-neg-depth	callers add --depth -1
+callers-repeat-depth	callers add --depth 2 -d 3
+callers-repeat-json	callers add --json --json
+map-neg-max-dirs	map --max-dirs -1
+map-repeat-max-dirs	map --max-dirs 1 --max-dirs 2
+ask-repeat-limit	ask add -n 1 -n 2
+grep-repeat-in	grep add --in nope --in src
+blast-neg-depth	blast --depth -1
+skeleton-repeat-json	skeleton src/util.ts --json --json
+dir-repeat	--dir nope --dir sieve callers add

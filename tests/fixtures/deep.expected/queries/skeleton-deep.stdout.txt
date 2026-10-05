@@ -1,0 +1,5 @@
+sieve skeleton — src/app.ts
+- L4-L14  class App  class App — The App class represents an application with a name and provides functionality to run operations.
+- L7-L9  method constructor  constructor(name: string) — The constructor initializes the App instance with a given name.
+- L11-L13  method run  run(n: number): number — The run method executes a quadrupling operation on a given number.
+- L16-L20  function main  function main(): void — The main function serves as the entry point for the application, creating an App instance and invoking its run method.

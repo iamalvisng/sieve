@@ -1,0 +1,39 @@
+[package]
+name = "sieve-parse"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+sieve-core = { path = "../sieve-core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+sha2 = "0.10"
+# tree-sitter 0.25 loads ABI 13 to 15, so this covers both the 0.23-ABI-14
+# grammar crates below and the breadth-tier crates that build ABI 15.
+tree-sitter = "0.25"
+tree-sitter-typescript = "0.23"
+tree-sitter-python = "0.23"
+tree-sitter-go = "0.23"
+tree-sitter-java = "0.23"
+tree-sitter-php = "0.23"
+tree-sitter-rust = "0.23"
+tree-sitter-c = "0.23"
+tree-sitter-cpp = "0.23"
+tree-sitter-ruby = "0.23"
+tree-sitter-c-sharp = "0.23"
+tree-sitter-scala = "0.23"
+tree-sitter-ocaml = "0.23"
+tree-sitter-swift = "0.7"
+tree-sitter-kotlin-sg = "=0.4.0"
+tree-sitter-clojure = "0.1"
+tree-sitter-r = "1"
+tree-sitter-elixir = "0.3.5"
+tree-sitter-solidity = "1.2.13"
+tree-sitter-zig = "1.1.2"
+tree-sitter-dart = "0.2.0"
+tree-sitter-nix = "0.3.0"
+tree-sitter-lua = "0.5.0"
+
+[dev-dependencies]
+serde_json = { version = "1", features = ["float_roundtrip"] }

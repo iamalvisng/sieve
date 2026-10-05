@@ -1,0 +1,11 @@
+sieve ask — "add"  (lexical)
+
+1. add · function  [symbol]
+   py/helpers.py:L1-L2
+   def add(a, b)
+
+2. total · method  [symbol]
+   py/main.py:L5-L6
+   def total(self, a, b)
+
+[sieve] only 2 hits — don't re-ask with new wording; switch tool: `sieve grep "<literal>"` for every occurrence · `sieve skeleton <file>` for a file's full API · `sieve callers <symbol>` for who-uses.

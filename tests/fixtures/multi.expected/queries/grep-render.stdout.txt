@@ -1,0 +1,37 @@
+"render" — 14 hits in 11 symbols across 6 files (searched 7 indexed files)
+
+renderPage · function · packages/alpha/src/render.ts:L1-L3 · 1 in-edges
+  L1: export function renderPage(): string {
+  L2: return renderHeader() + renderFooter();
+
+renderHeader · function · packages/alpha/src/render.ts:L5-L7 · 1 in-edges
+  L5: export function renderHeader(): string {
+
+renderFooter · function · packages/alpha/src/render.ts:L9-L11 · 1 in-edges
+  L9: export function renderFooter(): string {
+
+renderReport · function · packages/beta/src/render.ts:L1-L3 · 1 in-edges
+  L1: export function renderReport(): string {
+  L2: return renderChart() + exportPdf();
+
+renderChart · function · packages/beta/src/render.ts:L5-L7 · 1 in-edges
+  L5: export function renderChart(): string {
+
+renderMenu · function · packages/alpha/src/layout.ts:L1-L3 · 0 in-edges
+  L1: export function renderMenu(): string {
+
+renderTable · function · packages/beta/src/format.ts:L1-L3 · 0 in-edges
+  L1: export function renderTable(): string {
+
+packages/gamma/src/util.ts (module level) · 0 in-edges
+  L1: // Does not render page grid; this file only merges records.
+
+src/index.ts (module level) · 0 in-edges
+  L1: import { renderPage } from "../packages/alpha/src/render";
+  L2: import { renderReport } from "../packages/beta/src/render";
+
+buildAlphaPage · function · src/index.ts:L4-L6 · 0 in-edges
+  L5: return renderPage();
+
+buildBetaReport · function · src/index.ts:L8-L10 · 0 in-edges
+  L9: return renderReport();

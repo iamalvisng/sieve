@@ -1,0 +1,25 @@
+sieve ask — "dog speak"  (lexical)
+
+1. Dog · class  [symbol]
+   py/derived.py:L6-L11
+   class Dog(Animal)
+
+2. speak · method  [symbol]
+   py/base.py:L2-L3
+   def speak(self)
+
+3. speak · method  [symbol]
+   py/derived.py:L7-L8
+   def speak(self)
+
+4. Animal · class  [symbol]
+   py/base.py:L1-L3
+   class Animal
+
+5. make · function  [symbol]
+   py/derived.py:L14-L16
+   def make()
+
+6. twice · method  [symbol]
+   py/derived.py:L10-L11
+   def twice(self)

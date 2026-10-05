@@ -1,0 +1,1 @@
+✗ invalid pattern "a)": Invalid regular expression: /a)/: Unmatched ')'

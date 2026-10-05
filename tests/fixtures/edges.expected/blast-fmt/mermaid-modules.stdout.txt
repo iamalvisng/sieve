@@ -1,0 +1,5 @@
+flowchart TB
+  A0(("alpha<br/>1 symbol"))
+  A1(("Zulu<br/>1 symbol"))
+  classDef reached fill:#D9EDF3,stroke:#3AA7C9,stroke-width:1.5px,color:#0E313C;
+  class A0,A1 reached;

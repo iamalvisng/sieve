@@ -1,0 +1,1 @@
+{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"[sieve] The index may hold more than this probe found. For code questions, run `sieve ask \"<your task>\" --source` before you use Grep or Read."}}

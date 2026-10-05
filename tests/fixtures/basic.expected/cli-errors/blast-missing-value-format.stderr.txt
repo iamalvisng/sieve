@@ -1,0 +1,1 @@
+error: option '--format <fmt>' argument missing

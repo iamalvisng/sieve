@@ -1,0 +1,9 @@
+# Ask divergence queries for tests/fixtures/basic (DV1, DV2, DV3, DV5).
+# Format: <id><TAB><arguments after "sieve">
+dv1-calls-json	ask "who calls double" --json
+dv5-source-json	ask "quadruple" --source --json
+dv5-calls-source-json	ask "who calls double" --source --json
+dv1-zero-json	ask "zzzz_no_such_thing_anywhere" --json
+dv2-eaccent-uses	ask "éuses double"
+dv2-resume-call	ask "what does résumé call"
+dv3-n0	ask "double" -n 0

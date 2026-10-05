@@ -1,0 +1,40 @@
+agents:
+  - would remove: <TMP>/AGENTS.md (fenced sieve section — deleted)
+
+adal:
+  - would remove: <TMP>/.adal/skills/sieve/SKILL.md (sieve-owned instruction file — deleted)
+
+cursor:
+  - would remove: <TMP>/.cursor/rules/sieve.mdc (sieve-owned instruction file — deleted)
+  - would remove: <TMP>/.cursor/mcp.json (mcpServers.sieve — deleted)
+
+gemini:
+  - would remove: <TMP>/GEMINI.md (fenced sieve section — deleted)
+  - would remove: <TMP>/.gemini/settings.json (mcpServers.sieve — deleted)
+
+grok:
+  - would remove: <TMP>/.grok/skills/sieve/SKILL.md (sieve-owned instruction file — deleted)
+  - would remove: <TMP>/.grok/config.toml ([mcp_servers.sieve] — deleted)
+
+copilot:
+  - would remove: <TMP>/.github/copilot-instructions.md (fenced sieve section — deleted)
+
+kiro:
+  - would remove: <TMP>/.kiro/steering/sieve.md (sieve-owned instruction file — deleted)
+  - would remove: <TMP>/.kiro/settings/mcp.json (mcpServers.sieve — deleted)
+
+windsurf:
+  - would remove: <TMP>/.windsurf/rules/sieve.md (sieve-owned instruction file — deleted)
+
+claude:
+  - would remove: <TMP>/.claude/settings.json (statusline + hooks + allowlist + footer regex — deleted)
+  - would remove: <TMP>/.claude/skills/sieve/SKILL.md (sieve skill — deleted)
+  - would remove: <TMP>/.mcp.json (mcpServers.sieve — deleted)
+
+graph:
+  - would remove: <TMP>/sieve (local graph cache — deleted)
+  - would remove: <TMP>/.gitignore (sieve/ ignore entry — deleted)
+  - would remove: <TMP>/.ignore (sieve/ search re-admit entries — deleted)
+
+Dry run — nothing was touched. Re-run with -y to remove.
+· global hooks under ~ stay (pass --global to remove them)

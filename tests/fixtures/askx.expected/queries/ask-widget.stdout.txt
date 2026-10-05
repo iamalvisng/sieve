@@ -1,0 +1,24 @@
+sieve ask — "widget"  (lexical)
+
+1. widget · function  [symbol]
+   src/widget.ts:L1-L3
+   function widget(n: number): number
+
+2. Widget Notes  [concept]
+   src/widget.ts
+   The widget helpers add one to a number and sum a fixed series.
+   related: gadget-notes, sprocket-notes
+
+3. widgetCheck · function  [symbol]
+   src/widget.test.ts:L3-L5
+   function widgetCheck(): boolean
+
+4. widget.ts · file  [symbol]
+   src/widget.ts
+
+5. widget.test.ts · file  [symbol]
+   src/widget.test.ts
+
+6. bigwidget · function  [symbol]
+   src/widget.ts:L5-L96
+   function bigwidget(n: number): number

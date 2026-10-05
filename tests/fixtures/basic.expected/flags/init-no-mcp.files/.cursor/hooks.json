@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "hooks": {
+    "postToolUse": [
+      {
+        "matcher": "Read|Grep|Glob|Search|Shell",
+        "command": "sieve hook cursor-post-tool"
+      }
+    ],
+    "afterMCPExecution": [
+      {
+        "command": "sieve hook cursor-mcp"
+      }
+    ],
+    "sessionEnd": [
+      {
+        "command": "sieve hook cursor-session-end"
+      }
+    ]
+  }
+}

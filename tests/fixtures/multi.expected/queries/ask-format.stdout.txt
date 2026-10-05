@@ -1,0 +1,19 @@
+sieve ask — "format row"  (lexical)
+
+1. [packages/beta/] formatRow · function  [symbol]
+   packages/beta/src/format.ts:L5-L7
+   function formatRow(): string
+
+2. [packages/beta/] formatCell · function  [symbol]
+   packages/beta/src/format.ts:L9-L11
+   function formatCell(): string
+
+3. [packages/beta/] renderTable · function  [symbol]
+   packages/beta/src/format.ts:L1-L3
+   function renderTable(): string
+
+4. [packages/beta/] format.ts · file  [symbol]
+   packages/beta/src/format.ts
+
+matched in: packages/beta/ (4)
+also matched: packages/alpha/ — narrow with --in packages/alpha/

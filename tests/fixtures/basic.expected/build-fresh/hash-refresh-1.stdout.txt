@@ -1,0 +1,7 @@
+"dubble" — 2 hits in 2 symbols across 1 files (searched 7 indexed files)
+
+dubble · function · src/util.ts:L1-L3 · 1 in-edges
+  L1: export function dubble(n: number): number {
+
+quadruple · function · src/util.ts:L5-L7 · 1 in-edges
+  L6: return dubble(dubble(n));

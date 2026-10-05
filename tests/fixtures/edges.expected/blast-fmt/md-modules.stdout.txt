@@ -1,0 +1,60 @@
+### sieve blast radius
+
+**2 areas changed → 2 areas can be affected.** 2 dependent symbols, depth 1.
+Tests: **no test reaches extra, helper**.
+Tag: **Other Person** — 3 of 4 areas
+
+```mermaid
+flowchart TB
+  A0(("alpha<br/>1 symbol"))
+  A1(("Zulu<br/>1 symbol"))
+  classDef reached fill:#D9EDF3,stroke:#3AA7C9,stroke-width:1.5px,color:#0E313C;
+  class A0,A1 reached;
+```
+
+| Can be affected | Symbols | Nearest hop | Reached from |
+| --- | --: | --- | --- |
+| alpha | 1 | `lib/alpha.ts:L2-L2` alpha — calls, depth 1 | extra |
+| Zulu | 1 | `lib2/zulu.ts:L2-L2` Zulu — calls, depth 1 | extra |
+
+<details>
+<summary><strong>Who knows this code</strong> — 1 person across 4 areas</summary>
+
+| Area | Who knows it |
+| --- | --- |
+| **helper** · changed | Other Person — 1 commit, last today |
+| **alpha** · affected | Other Person — 1 commit, last today |
+| **Zulu** · affected | Other Person — 1 commit, last today |
+| **extra** · changed | _only you — nobody else has touched these files_ |
+
+_Ownership is git history over each area's own files, weighted towards recent work (120-day half-life). Merge commits and bots are dropped, and you are dropped from your own PR. A name with no `@` has no GitHub handle in its commit email — tag them by hand, or add a `.mailmap` entry. A suggestion from history, not a CODEOWNERS rule._
+
+</details>
+
+<details>
+<summary><strong>All 2 dependent symbols</strong>, grouped by area</summary>
+
+**alpha** — 1 symbol in 1 file
+
+- `lib/alpha.ts:L2-L2` — alpha (calls, depth 1)
+  ```2: export function alpha(): number { return extra(); }```
+
+**Zulu** — 1 symbol in 1 file
+
+- `lib2/zulu.ts:L2-L2` — Zulu (calls, depth 1)
+  ```2: export function Zulu(): number { return extra(); }```
+
+</details>
+<details>
+<summary><strong>Test signal</strong> per changed area — 2 ✗</summary>
+
+_Reached = a node under a test path has a resolved edge into the changed symbol. It undercounts anything called indirectly — through a CLI, a spawned process or a dynamic import — so read a low ratio as “look here”, never as a coverage gate._
+
+- ✗ **extra** — 0 of 2 reached · no test file reaches it
+  - not reached: `extra`, `newFn`
+- ✗ **helper** — 0 of 1 reached · no test file reaches it
+  - not reached: `helper`
+
+</details>
+
+<sub>`sieve blast` · working tree vs HEAD · depth 1 · 3 changed files</sub>

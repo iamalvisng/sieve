@@ -1,0 +1,14 @@
+{
+  "lastQuery": null,
+  "perAgentQuery": {},
+  "toolReads": 1,
+  "sourceReads": 1,
+  "savedTokens": 100,
+  "injectedPointers": [],
+  "nudges": 0,
+  "host": "claude-code",
+  "turnUsedSieve": true,
+  "savedByDay": {
+    "2026-10-05": 100
+  }
+}

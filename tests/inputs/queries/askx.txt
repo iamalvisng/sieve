@@ -1,0 +1,11 @@
+# Query list for tests/fixtures/askx. One query per line.
+# Format: <id><TAB><arguments after "sieve">
+# P1-07: the concept doc sieve/widget-notes.md carries two links, so the
+# "widget" hit block prints a "related:" line.
+# P3-04: src/widget.test.ts is a test path, so its --json score carries
+# the 0.35 factor.
+# P3-15: bigwidget spans 92 lines, so --source --full prints the 80-line
+# cap and the "+N more lines" marker.
+ask-widget	ask "widget"
+ask-widget-json	ask "widget" --json
+ask-big-full	ask "bigwidget" --source --full

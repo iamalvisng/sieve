@@ -1,0 +1,4 @@
+workspace check — 2 repo(s)
+
+alpha/: STALE (1 added, 1 changed)
+beta/: OK

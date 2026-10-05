@@ -1,0 +1,9 @@
+sieve ask — "parse config"  (lexical)
+
+1. [beta/] render · function  [symbol]
+   beta/src/b.ts:L1-L4
+   function render(view: string): string
+
+matched in: beta/ (1)
+
+[sieve] only 1 hit — don't re-ask with new wording; switch tool: `sieve grep "<literal>"` for every occurrence · `sieve skeleton <file>` for a file's full API · `sieve callers <symbol>` for who-uses.

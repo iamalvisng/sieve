@@ -1,0 +1,9 @@
+# Query list for tests/fixtures/edges. One query per line.
+# Format: <id><TAB><arguments after "sieve">
+grep-greet	grep "greet" --fixed
+grep-speak	grep "speak" --fixed
+ask-shape	ask "shape area circle"
+ask-dog	ask "dog speak"
+callers-greet	callers greet --depth 2
+callers-speak-out	callers Dog.speak --direction out
+map	map

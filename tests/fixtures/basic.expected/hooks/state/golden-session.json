@@ -1,0 +1,18 @@
+{
+  "lastQuery": "total totally unrelated padding filler text please",
+  "perAgentQuery": {},
+  "toolReads": 1,
+  "sourceReads": 1,
+  "savedTokens": 420,
+  "injectedPointers": [
+    "src/app.ts:L11-L13",
+    "py/main.py:L9-L11",
+    "src/util.ts:L5-L7"
+  ],
+  "nudges": 2,
+  "host": "claude-code",
+  "turnUsedSieve": false,
+  "savedByDay": {
+    "2026-10-05": 420
+  }
+}

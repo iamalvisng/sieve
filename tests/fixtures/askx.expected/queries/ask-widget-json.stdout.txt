@@ -1,0 +1,54 @@
+{
+  "query": "widget",
+  "mode": "lexical",
+  "hits": [
+    {
+      "kind": "symbol",
+      "title": "widget · function",
+      "pointer": "src/widget.ts:L1-L3",
+      "snippet": "function widget(n: number): number",
+      "score": 1.5
+    },
+    {
+      "kind": "concept",
+      "title": "Widget Notes",
+      "pointer": "src/widget.ts",
+      "snippet": "The widget helpers add one to a number and sum a fixed series.",
+      "related": [
+        "gadget-notes",
+        "sprocket-notes"
+      ],
+      "score": 1
+    },
+    {
+      "kind": "symbol",
+      "title": "widgetCheck · function",
+      "pointer": "src/widget.test.ts:L3-L5",
+      "snippet": "function widgetCheck(): boolean",
+      "score": 0.27739916307415136
+    },
+    {
+      "kind": "symbol",
+      "title": "widget.ts · file",
+      "pointer": "src/widget.ts",
+      "snippet": "",
+      "score": 1.1364825002086263
+    },
+    {
+      "kind": "symbol",
+      "title": "widget.test.ts · file",
+      "pointer": "src/widget.test.ts",
+      "snippet": "",
+      "score": 0.24960318779417667
+    },
+    {
+      "kind": "symbol",
+      "title": "bigwidget · function",
+      "pointer": "src/widget.ts:L5-L96",
+      "snippet": "function bigwidget(n: number): number",
+      "score": 0.3469716345542241
+    }
+  ],
+  "coverage": 1,
+  "coverageStrong": 1
+}

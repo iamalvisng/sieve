@@ -1,0 +1,35 @@
+sieve ask — "render page grid"  (lexical)
+
+1. [packages/alpha/] renderPage · function  [symbol]
+   packages/alpha/src/render.ts:L1-L3
+   function renderPage(): string
+
+2. buildAlphaPage · function  [symbol]
+   src/index.ts:L4-L6
+   function buildAlphaPage(): string
+
+3. [packages/beta/] renderReport · function  [symbol]
+   packages/beta/src/render.ts:L1-L3
+   function renderReport(): string
+
+4. [packages/alpha/] layoutGrid · function  [symbol]
+   packages/alpha/src/layout.ts:L5-L7
+   function layoutGrid(): string
+
+5. [packages/beta/] renderTable · function  [symbol]
+   packages/beta/src/format.ts:L1-L3
+   function renderTable(): string
+
+6. [packages/alpha/] renderFooter · function  [symbol]
+   packages/alpha/src/render.ts:L9-L11
+   function renderFooter(): string
+
+7. index.ts · file  [symbol]
+   src/index.ts
+
+8. [packages/beta/] renderChart · function  [symbol]
+   packages/beta/src/render.ts:L5-L7
+   function renderChart(): string
+
+matched in: packages/alpha/ (3) · packages/beta/ (3) · (root) (2)
+also matched: packages/gamma/ — narrow with --in packages/gamma/

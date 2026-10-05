@@ -1,0 +1,19 @@
+sieve ask — "render"  (lexical)
+
+1. [packages/alpha/] renderPage · function  [symbol]
+   packages/alpha/src/render.ts:L1-L3
+   function renderPage(): string
+
+2. [packages/beta/] renderReport · function  [symbol]
+   packages/beta/src/render.ts:L1-L3
+   function renderReport(): string
+
+3. [packages/beta/] renderTable · function  [symbol]
+   packages/beta/src/format.ts:L1-L3
+   function renderTable(): string
+
+matched in: packages/beta/ (2) · packages/alpha/ (1)
+also matched: (root) — narrow with --in (root)
+also matched: packages/gamma/ — narrow with --in packages/gamma/
+
+[sieve] only 3 hits — don't re-ask with new wording; switch tool: `sieve grep "<literal>"` for every occurrence · `sieve skeleton <file>` for a file's full API · `sieve callers <symbol>` for who-uses.

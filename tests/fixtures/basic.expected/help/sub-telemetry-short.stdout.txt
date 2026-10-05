@@ -1,0 +1,9 @@
+Usage: sieve telemetry [options] [action]
+
+Show that Sieve sends no usage data. The command records nothing.
+
+Arguments:
+  action      status (default) | enable | disable | debug (default: "status")
+
+Options:
+  -h, --help  display help for command

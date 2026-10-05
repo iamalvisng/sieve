@@ -1,0 +1,185 @@
+{
+  "basis": "working tree vs HEAD",
+  "depth": 1,
+  "changed": [
+    {
+      "path": "ts/derived.ts",
+      "status": "modified",
+      "ranges": [
+        {
+          "start": 12,
+          "end": 13
+        }
+      ],
+      "hunks": [
+        {
+          "start": 12,
+          "end": 13,
+          "lines": [
+            {
+              "n": 12,
+              "sign": "+",
+              "text": ""
+            },
+            {
+              "n": 13,
+              "sign": "+",
+              "text": "export function extra(): number { return greet().length; }"
+            }
+          ],
+          "dropped": 0
+        }
+      ]
+    },
+    {
+      "path": "ts/newfile.ts",
+      "status": "added",
+      "ranges": [
+        {
+          "start": 1,
+          "end": 3
+        }
+      ],
+      "hunks": [
+        {
+          "start": 1,
+          "end": 3,
+          "lines": [
+            {
+              "n": 1,
+              "sign": "+",
+              "text": "export function newFn(): number {"
+            },
+            {
+              "n": 2,
+              "sign": "+",
+              "text": "  return 1;"
+            },
+            {
+              "n": 3,
+              "sign": "+",
+              "text": "}"
+            }
+          ],
+          "dropped": 0
+        }
+      ]
+    }
+  ],
+  "unindexed": [],
+  "deleted": [],
+  "seeds": [
+    {
+      "id": "ts/derived.ts#extra",
+      "name": "extra",
+      "kind": "function",
+      "path": "ts/derived.ts",
+      "span": "L13-L13",
+      "wholeFile": false
+    },
+    {
+      "id": "ts/newfile.ts#newFn",
+      "name": "newFn",
+      "kind": "function",
+      "path": "ts/newfile.ts",
+      "span": "L1-L3",
+      "wholeFile": false
+    }
+  ],
+  "impacted": [
+    {
+      "id": "lib/alpha.ts#alpha",
+      "name": "alpha",
+      "kind": "function",
+      "path": "lib/alpha.ts",
+      "span": "L2-L2",
+      "relation": "calls",
+      "depth": 1
+    },
+    {
+      "id": "lib2/zulu.ts#Zulu",
+      "name": "Zulu",
+      "kind": "function",
+      "path": "lib2/zulu.ts",
+      "span": "L2-L2",
+      "relation": "calls",
+      "depth": 1
+    }
+  ],
+  "modules": [
+    {
+      "label": "alpha",
+      "labelSource": "symbol",
+      "key": "lib/",
+      "files": [
+        "lib/alpha.ts"
+      ],
+      "symbols": [
+        {
+          "id": "lib/alpha.ts#alpha",
+          "name": "alpha",
+          "kind": "function",
+          "path": "lib/alpha.ts",
+          "span": "L2-L2",
+          "relation": "calls",
+          "depth": 1
+        }
+      ],
+      "from": [
+        "ts/derived.ts"
+      ],
+      "owners": []
+    },
+    {
+      "label": "Zulu",
+      "labelSource": "symbol",
+      "key": "lib2/",
+      "files": [
+        "lib2/zulu.ts"
+      ],
+      "symbols": [
+        {
+          "id": "lib2/zulu.ts#Zulu",
+          "name": "Zulu",
+          "kind": "function",
+          "path": "lib2/zulu.ts",
+          "span": "L2-L2",
+          "relation": "calls",
+          "depth": 1
+        }
+      ],
+      "from": [
+        "ts/derived.ts"
+      ],
+      "owners": []
+    }
+  ],
+  "testModules": [],
+  "areas": [
+    {
+      "label": "extra",
+      "labelSource": "symbol",
+      "key": "ts/",
+      "files": [
+        "ts/derived.ts",
+        "ts/newfile.ts"
+      ],
+      "seeds": 2,
+      "tests": "none",
+      "testFiles": [],
+      "changedTestFiles": [],
+      "reached": 0,
+      "behavioural": 2,
+      "unreached": [
+        "extra",
+        "newFn"
+      ],
+      "seedNames": [
+        "extra",
+        "newFn"
+      ],
+      "owners": []
+    }
+  ],
+  "reviewers": []
+}

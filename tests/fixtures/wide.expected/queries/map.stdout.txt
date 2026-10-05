@@ -1,0 +1,23 @@
+[sieve] saved ≈ 54 tokens
+
+repo map — 19 files · 25 symbols · 59 edges · typescript
+
+d19/                1 files · 7 symbols
+d01/                1 files · 1 symbols   hubs: f01 (a.ts, 8←)
+d02/                1 files · 1 symbols   hubs: f02 (a.ts, 1←)
+d03/                1 files · 1 symbols   hubs: f03 (a.ts, 1←)
+d04/                1 files · 1 symbols   hubs: f04 (a.ts, 1←)
+d05/                1 files · 1 symbols   hubs: f05 (a.ts, 1←)
+d06/                1 files · 1 symbols   hubs: f06 (a.ts, 1←)
+d07/                1 files · 1 symbols   hubs: f07 (a.ts, 1←)
+d08/                1 files · 1 symbols   hubs: f08 (a.ts, 1←)
+d09/                1 files · 1 symbols   hubs: f09 (a.ts, 1←)
+d10/                1 files · 1 symbols   hubs: f10 (a.ts, 1←)
+d11/                1 files · 1 symbols   hubs: f11 (a.ts, 1←)
+d12/                1 files · 1 symbols   hubs: f12 (a.ts, 1←)
+d13/                1 files · 1 symbols   hubs: f13 (a.ts, 1←)
+d14/                1 files · 1 symbols
+d15/                1 files · 1 symbols
+… +3 more directories not shown (raise max-dirs to see more)
+
+hotspots: f01 · function · d01/a.ts:L1-L3 · 8←  f02 · function · d02/a.ts:L1-L3 · 1←  f03 · function · d03/a.ts:L1-L3 · 1←  f04 · function · d04/a.ts:L1-L3 · 1←  f05 · function · d05/a.ts:L1-L3 · 1←  f06 · function · d06/a.ts:L1-L3 · 1←  f07 · function · d07/a.ts:L1-L3 · 1←  f08 · function · d08/a.ts:L1-L3 · 1←  f09 · function · d09/a.ts:L1-L3 · 1←  f10 · function · d10/a.ts:L1-L3 · 1←  f11 · function · d11/a.ts:L1-L3 · 1←  f12 · function · d12/a.ts:L1-L3 · 1←

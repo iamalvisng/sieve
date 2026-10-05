@@ -1,0 +1,73 @@
+sieve ask — "parse config"  (lexical)
+
+1. [gamma/] parseConfigRb · function  [symbol]
+   gamma/src/root2.ts:L1-L3
+   function parseConfigRb(): number
+
+2. [gamma/] parseConfigRa · function  [symbol]
+   gamma/src/root.ts:L1-L3
+   function parseConfigRa(): number
+
+3. [gamma/packages/x/] parseConfigXA · function  [symbol]
+   gamma/packages/x/src/parse-config.ts:L1-L3
+   function parseConfigXA(): number
+
+4. [gamma/packages/y/] configY · function  [symbol]
+   gamma/packages/y/src/parse/y.ts:L1-L3
+   function configY(): number
+
+5. [gamma/] parseTail · function  [symbol]
+   gamma/src/root2.ts:L5-L7
+   function parseTail(): number
+
+6. [gamma/packages/x/] parseConfigXB · function  [symbol]
+   gamma/packages/x/src/parse-config.ts:L5-L7
+   function parseConfigXB(): number
+
+7. [gamma/packages/y/] y.ts · file  [symbol]
+   gamma/packages/y/src/parse/y.ts
+
+8. [gamma/packages/x/] parseConfigXC · function  [symbol]
+   gamma/packages/x/src/parse-config.ts:L9-L11
+   function parseConfigXC(): number
+
+9. [gamma/packages/y/] yFour · function  [symbol]
+   gamma/packages/y/src/parse/y.ts:L17-L19
+   function yFour(): number
+
+10. [gamma/packages/x/] parseConfigXD · function  [symbol]
+   gamma/packages/x/src/parse-config.ts:L13-L15
+   function parseConfigXD(): number
+
+11. [gamma/packages/y/] yOne · function  [symbol]
+   gamma/packages/y/src/parse/y.ts:L5-L7
+   function yOne(): number
+
+12. [gamma/packages/x/] parseConfigXE · function  [symbol]
+   gamma/packages/x/src/parse-config.ts:L17-L19
+   function parseConfigXE(): number
+
+13. [gamma/packages/y/] yThree · function  [symbol]
+   gamma/packages/y/src/parse/y.ts:L13-L15
+   function yThree(): number
+
+14. [gamma/packages/x/] parseConfigXF · function  [symbol]
+   gamma/packages/x/src/parse-config.ts:L21-L23
+   function parseConfigXF(): number
+
+15. [gamma/packages/y/] yTwo · function  [symbol]
+   gamma/packages/y/src/parse/y.ts:L9-L11
+   function yTwo(): number
+
+16. [gamma/packages/x/] parseConfigXG · function  [symbol]
+   gamma/packages/x/src/parse-config.ts:L25-L27
+   function parseConfigXG(): number
+
+17. [gamma/packages/x/] parseConfigXH · function  [symbol]
+   gamma/packages/x/src/parse-config.ts:L29-L31
+   function parseConfigXH(): number
+
+18. [gamma/packages/x/] parse-config.ts · file  [symbol]
+   gamma/packages/x/src/parse-config.ts
+
+matched in: gamma/packages/x/ (9) · gamma/packages/y/ (6) · gamma/ (3)

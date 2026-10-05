@@ -1,0 +1,2 @@
+{"type":"user","message":{"role":"user","content":"how does run compute the result"}}
+{"type":"assistant","uuid":"u1","message":{"role":"assistant","content":[{"type":"text","text":"🌱 sieve saved ~12k tokens this turn, 1 call."}]}}

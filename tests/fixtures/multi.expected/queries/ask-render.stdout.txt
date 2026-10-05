@@ -1,0 +1,37 @@
+sieve ask — "render"  (lexical)
+
+1. [packages/alpha/] renderPage · function  [symbol]
+   packages/alpha/src/render.ts:L1-L3
+   function renderPage(): string
+
+2. [packages/beta/] renderReport · function  [symbol]
+   packages/beta/src/render.ts:L1-L3
+   function renderReport(): string
+
+3. [packages/beta/] renderTable · function  [symbol]
+   packages/beta/src/format.ts:L1-L3
+   function renderTable(): string
+
+4. [packages/alpha/] renderMenu · function  [symbol]
+   packages/alpha/src/layout.ts:L1-L3
+   function renderMenu(): string
+
+5. [packages/alpha/] renderFooter · function  [symbol]
+   packages/alpha/src/render.ts:L9-L11
+   function renderFooter(): string
+
+6. [packages/beta/] renderChart · function  [symbol]
+   packages/beta/src/render.ts:L5-L7
+   function renderChart(): string
+
+7. [packages/beta/] formatRow · function  [symbol]
+   packages/beta/src/format.ts:L5-L7
+   function formatRow(): string
+
+8. [packages/alpha/] layoutGrid · function  [symbol]
+   packages/alpha/src/layout.ts:L5-L7
+   function layoutGrid(): string
+
+matched in: packages/alpha/ (4) · packages/beta/ (4)
+also matched: (root) — narrow with --in (root)
+also matched: packages/gamma/ — narrow with --in packages/gamma/

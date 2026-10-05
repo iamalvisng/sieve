@@ -1,0 +1,10 @@
+[sieve] saved ≈ 53 tokens
+
+"import" — 3 hits in 2 symbols across 2 files (searched 7 indexed files)
+
+py/main.py (module level) · 0 in-edges
+  L1: from py.helpers import add
+
+src/app.ts (module level) · 0 in-edges
+  L1: import { quadruple } from "./util";
+  L2: import { z } from "zod";

@@ -1,0 +1,5 @@
+# Query list for tests/fixtures/wide. One query per line.
+# Format: <id><TAB><arguments after "sieve">
+# The fixture holds 19 one-file directories and 13 called symbols, so the
+# map defaults (max-dirs 16, hotspots 12) both drop something (P1-28).
+map	map

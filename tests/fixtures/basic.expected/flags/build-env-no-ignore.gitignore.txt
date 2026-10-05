@@ -1,0 +1,2 @@
+# sieve's local graph cache — regenerable, not committed (run `sieve build`).
+/sieve/

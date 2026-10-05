@@ -1,0 +1,3 @@
+[mcp_servers.sieve]
+command = "sieve"
+args = ["mcp"]

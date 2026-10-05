@@ -1,0 +1,12 @@
+[sieve] saved ≈ 218 tokens
+
+repo map — 5 files · 21 symbols · 21 edges · typescript
+
+## packages/alpha/
+packages/alpha/nested/1 files · 5 symbols
+packages/alpha/src/ 1 files · 5 symbols
+
+## packages/beta/
+packages/beta/src/b.ts1 files · 5 symbols
+
+hotspots: 

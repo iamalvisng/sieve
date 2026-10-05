@@ -1,0 +1,5 @@
+sieve stats — session x
+  sieve reads:   0
+  source reads:  0   (Read / Grep / Glob)
+  mix:           no retrieval yet
+  tokens saved:  ~0

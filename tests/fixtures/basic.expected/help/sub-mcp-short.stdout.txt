@@ -1,0 +1,11 @@
+Usage: sieve mcp [options] [dir]
+
+Serve the graph over MCP (stdio) — exposes sieve_find_code, sieve_trace_calls,
+sieve_find_all, sieve_file_api, sieve_repo_map, sieve_why and
+sieve_check_freshness as tools
+
+Arguments:
+  dir         repository root (default: nearest ancestor with a sieve/ index)
+
+Options:
+  -h, --help  display help for command

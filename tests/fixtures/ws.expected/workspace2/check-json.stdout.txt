@@ -1,0 +1,4 @@
+workspace check — 2 repo(s)
+
+alpha/: OK
+beta/: OK

@@ -1,0 +1,10 @@
+blast radius — working tree vs HEAD (full closure)
+  changed: 2 files in 1 area, 2 seed symbols
+  impacted: 3 symbols in 1 area
+
+✗ extra — 2 changed files, 0/2 reached by a test
+
+l1 — 3 symbols in 1 file
+  calls ← l1 (ts/chain.ts:L2-L2) [depth 1]
+  calls ← l2 (ts/chain.ts:L3-L3) [depth 2]
+  calls ← l3 (ts/chain.ts:L4-L4) [depth 3]

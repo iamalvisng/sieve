@@ -1,0 +1,3 @@
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"golden","version":"1"}}}
+{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"sieve_trace_calls","arguments":{"symbol":"greet","depth":"all"}}}
+{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"sieve_trace_calls","arguments":{"symbol":"Dog.speak","direction":"out"}}}

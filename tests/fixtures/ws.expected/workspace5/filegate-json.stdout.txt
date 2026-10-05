@@ -1,0 +1,36 @@
+{
+  "query": "zeta omega sigma rho kappa lambda mu nu xi pi",
+  "mode": "lexical",
+  "hits": [
+    {
+      "kind": "symbol",
+      "title": "zeta-omega-sigma-rho.ts · file",
+      "pointer": "beta/src/zeta-omega-sigma-rho.ts",
+      "snippet": "",
+      "score": 1.5,
+      "scope": "beta"
+    },
+    {
+      "kind": "symbol",
+      "title": "zetaOmega · function",
+      "pointer": "beta/src/zeta-omega-sigma-rho.ts:L1-L3",
+      "snippet": "function zetaOmega(): number",
+      "score": 1.5,
+      "scope": "beta"
+    },
+    {
+      "kind": "symbol",
+      "title": "betaFour · function",
+      "pointer": "beta/src/zeta-omega-sigma-rho.ts:L5-L7",
+      "snippet": "function betaFour(): number",
+      "score": 1.5,
+      "scope": "beta"
+    }
+  ],
+  "scopes": {
+    "federated": [
+      "beta"
+    ],
+    "alsoMatched": []
+  }
+}

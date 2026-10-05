@@ -1,0 +1,158 @@
+{
+  "query": "parse config",
+  "mode": "lexical",
+  "hits": [
+    {
+      "kind": "symbol",
+      "title": "parseConfigRb · function",
+      "pointer": "gamma/src/root2.ts:L1-L3",
+      "snippet": "function parseConfigRb(): number",
+      "score": 1,
+      "scope": "gamma"
+    },
+    {
+      "kind": "symbol",
+      "title": "parseConfigRa · function",
+      "pointer": "gamma/src/root.ts:L1-L3",
+      "snippet": "function parseConfigRa(): number",
+      "score": 1,
+      "scope": "gamma"
+    },
+    {
+      "kind": "symbol",
+      "title": "parseConfigXA · function",
+      "pointer": "gamma/packages/x/src/parse-config.ts:L1-L3",
+      "snippet": "function parseConfigXA(): number",
+      "score": 1,
+      "scope": "gamma/packages/x"
+    },
+    {
+      "kind": "symbol",
+      "title": "configY · function",
+      "pointer": "gamma/packages/y/src/parse/y.ts:L1-L3",
+      "snippet": "function configY(): number",
+      "score": 1,
+      "scope": "gamma/packages/y"
+    },
+    {
+      "kind": "symbol",
+      "title": "parseTail · function",
+      "pointer": "gamma/src/root2.ts:L5-L7",
+      "snippet": "function parseTail(): number",
+      "score": 0.9838709677419354,
+      "scope": "gamma"
+    },
+    {
+      "kind": "symbol",
+      "title": "parseConfigXB · function",
+      "pointer": "gamma/packages/x/src/parse-config.ts:L5-L7",
+      "snippet": "function parseConfigXB(): number",
+      "score": 1,
+      "scope": "gamma/packages/x"
+    },
+    {
+      "kind": "symbol",
+      "title": "y.ts · file",
+      "pointer": "gamma/packages/y/src/parse/y.ts",
+      "snippet": "",
+      "score": 1,
+      "scope": "gamma/packages/y"
+    },
+    {
+      "kind": "symbol",
+      "title": "parseConfigXC · function",
+      "pointer": "gamma/packages/x/src/parse-config.ts:L9-L11",
+      "snippet": "function parseConfigXC(): number",
+      "score": 1,
+      "scope": "gamma/packages/x"
+    },
+    {
+      "kind": "symbol",
+      "title": "yFour · function",
+      "pointer": "gamma/packages/y/src/parse/y.ts:L17-L19",
+      "snippet": "function yFour(): number",
+      "score": 1,
+      "scope": "gamma/packages/y"
+    },
+    {
+      "kind": "symbol",
+      "title": "parseConfigXD · function",
+      "pointer": "gamma/packages/x/src/parse-config.ts:L13-L15",
+      "snippet": "function parseConfigXD(): number",
+      "score": 1,
+      "scope": "gamma/packages/x"
+    },
+    {
+      "kind": "symbol",
+      "title": "yOne · function",
+      "pointer": "gamma/packages/y/src/parse/y.ts:L5-L7",
+      "snippet": "function yOne(): number",
+      "score": 1,
+      "scope": "gamma/packages/y"
+    },
+    {
+      "kind": "symbol",
+      "title": "parseConfigXE · function",
+      "pointer": "gamma/packages/x/src/parse-config.ts:L17-L19",
+      "snippet": "function parseConfigXE(): number",
+      "score": 1,
+      "scope": "gamma/packages/x"
+    },
+    {
+      "kind": "symbol",
+      "title": "yThree · function",
+      "pointer": "gamma/packages/y/src/parse/y.ts:L13-L15",
+      "snippet": "function yThree(): number",
+      "score": 1,
+      "scope": "gamma/packages/y"
+    },
+    {
+      "kind": "symbol",
+      "title": "parseConfigXF · function",
+      "pointer": "gamma/packages/x/src/parse-config.ts:L21-L23",
+      "snippet": "function parseConfigXF(): number",
+      "score": 1,
+      "scope": "gamma/packages/x"
+    },
+    {
+      "kind": "symbol",
+      "title": "yTwo · function",
+      "pointer": "gamma/packages/y/src/parse/y.ts:L9-L11",
+      "snippet": "function yTwo(): number",
+      "score": 1,
+      "scope": "gamma/packages/y"
+    },
+    {
+      "kind": "symbol",
+      "title": "parseConfigXG · function",
+      "pointer": "gamma/packages/x/src/parse-config.ts:L25-L27",
+      "snippet": "function parseConfigXG(): number",
+      "score": 1,
+      "scope": "gamma/packages/x"
+    },
+    {
+      "kind": "symbol",
+      "title": "parseConfigXH · function",
+      "pointer": "gamma/packages/x/src/parse-config.ts:L29-L31",
+      "snippet": "function parseConfigXH(): number",
+      "score": 1,
+      "scope": "gamma/packages/x"
+    },
+    {
+      "kind": "symbol",
+      "title": "parse-config.ts · file",
+      "pointer": "gamma/packages/x/src/parse-config.ts",
+      "snippet": "",
+      "score": 1,
+      "scope": "gamma/packages/x"
+    }
+  ],
+  "scopes": {
+    "federated": [
+      "gamma",
+      "gamma/packages/x",
+      "gamma/packages/y"
+    ],
+    "alsoMatched": []
+  }
+}

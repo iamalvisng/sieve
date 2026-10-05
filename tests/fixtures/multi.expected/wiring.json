@@ -1,0 +1,627 @@
+{
+  "meta": {
+    "version": 1,
+    "nodeCount": 27,
+    "edgeCount": 33,
+    "languages": [
+      "typescript"
+    ],
+    "scopes": [
+      {
+        "prefix": "packages/alpha",
+        "label": "packages/alpha",
+        "markers": [
+          "package.json"
+        ]
+      },
+      {
+        "prefix": "packages/gamma",
+        "label": "packages/gamma",
+        "markers": [
+          "package.json"
+        ]
+      },
+      {
+        "prefix": "packages/beta",
+        "label": "packages/beta",
+        "markers": [
+          "package.json"
+        ]
+      },
+      {
+        "prefix": "",
+        "label": "",
+        "markers": [
+          "package.json"
+        ]
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "packages/alpha/src/layout.ts",
+      "name": "layout.ts",
+      "kind": "file",
+      "path": "packages/alpha/src/layout.ts",
+      "span": "L1-L13",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "bfac41c854d17d58f99a9e21beacd509917c0cc5336c86c7e1b1b9c1572dc8c5",
+      "chars": 259,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/alpha/src/layout.ts#layoutGrid",
+      "name": "layoutGrid",
+      "kind": "function",
+      "path": "packages/alpha/src/layout.ts",
+      "span": "L5-L7",
+      "signature": "function layoutGrid(): string",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "00063fb874f21e1998193126329ee4afcaeabaa5ca65cb1bc94576e33b41de59",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/alpha/src/layout.ts#paintCanvas",
+      "name": "paintCanvas",
+      "kind": "function",
+      "path": "packages/alpha/src/layout.ts",
+      "span": "L10-L12",
+      "signature": "function paintCanvas(): string",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "88830b09c2ea51df1a23671223bf6b10432c584633ad88df158e46a3deba07bf",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/alpha/src/layout.ts#renderMenu",
+      "name": "renderMenu",
+      "kind": "function",
+      "path": "packages/alpha/src/layout.ts",
+      "span": "L1-L3",
+      "signature": "function renderMenu(): string",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "bdac9760b40b99dc72697b6f7ab089889fcd16a1c6ded1fb7d154c795e9cdd9a",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/alpha/src/render.ts",
+      "name": "render.ts",
+      "kind": "file",
+      "path": "packages/alpha/src/render.ts",
+      "span": "L1-L12",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "2ae2ec7cf54ffb6844f2c3eb4806e634bd15f90736cba6879b2219fecc185d09",
+      "chars": 209,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/alpha/src/render.ts#renderFooter",
+      "name": "renderFooter",
+      "kind": "function",
+      "path": "packages/alpha/src/render.ts",
+      "span": "L9-L11",
+      "signature": "function renderFooter(): string",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "2e053c2082afe1907acb58018ba74bb6ca662b9a96cf3cbe07f1736fed8063d8",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/alpha/src/render.ts#renderHeader",
+      "name": "renderHeader",
+      "kind": "function",
+      "path": "packages/alpha/src/render.ts",
+      "span": "L5-L7",
+      "signature": "function renderHeader(): string",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "33dd61ffec659e810e2eb7a77b9aefdae0ae73700c24bb538ecd14d1d1429f8c",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/alpha/src/render.ts#renderPage",
+      "name": "renderPage",
+      "kind": "function",
+      "path": "packages/alpha/src/render.ts",
+      "span": "L1-L3",
+      "signature": "function renderPage(): string",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "99f82bec65969c8f093ae416968f092fe0aa136e23f7d7216db3ef980d2cf510",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/beta/src/format.ts",
+      "name": "format.ts",
+      "kind": "file",
+      "path": "packages/beta/src/format.ts",
+      "span": "L1-L12",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "64fff1bb2ab3da9af5b847c0d3f7f3882c4bfdfc7e7025d80fb65c102be61777",
+      "chars": 187,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/beta/src/format.ts#formatCell",
+      "name": "formatCell",
+      "kind": "function",
+      "path": "packages/beta/src/format.ts",
+      "span": "L9-L11",
+      "signature": "function formatCell(): string",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "5b74217cc5b4ccb9631ee32406be72d2871ee0c7bd3e12a4e70a2ca9fbc9f492",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/beta/src/format.ts#formatRow",
+      "name": "formatRow",
+      "kind": "function",
+      "path": "packages/beta/src/format.ts",
+      "span": "L5-L7",
+      "signature": "function formatRow(): string",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "e87d0596187516603ce96f1121b880d63e554e3b9c56b314e8297a5f7ad3ac52",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/beta/src/format.ts#renderTable",
+      "name": "renderTable",
+      "kind": "function",
+      "path": "packages/beta/src/format.ts",
+      "span": "L1-L3",
+      "signature": "function renderTable(): string",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "68b612903d7d96bc83b8bb5f7273722fba624a3064d0a1f15331cbdaa34f075a",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/beta/src/render.ts",
+      "name": "render.ts",
+      "kind": "file",
+      "path": "packages/beta/src/render.ts",
+      "span": "L1-L12",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "412da24b6cfc770fcc93b92889c870bb9de31f223bb4b15ccc0ae02b04fb56d5",
+      "chars": 199,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/beta/src/render.ts#exportPdf",
+      "name": "exportPdf",
+      "kind": "function",
+      "path": "packages/beta/src/render.ts",
+      "span": "L9-L11",
+      "signature": "function exportPdf(): string",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "d93e91b13b745092589f65c4408755e3e626c5977b1eab2b723a829104b3d040",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/beta/src/render.ts#renderChart",
+      "name": "renderChart",
+      "kind": "function",
+      "path": "packages/beta/src/render.ts",
+      "span": "L5-L7",
+      "signature": "function renderChart(): string",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "136c6c616d88ed370f20753bee56a1dfe5b0c5b83b64a39981153508f76bcc61",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/beta/src/render.ts#renderReport",
+      "name": "renderReport",
+      "kind": "function",
+      "path": "packages/beta/src/render.ts",
+      "span": "L1-L3",
+      "signature": "function renderReport(): string",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "cffc0fd2f51b398889e1a190562e3148a0d68db56eb460e16cca29825366f55a",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/gamma/src/data.ts",
+      "name": "data.ts",
+      "kind": "file",
+      "path": "packages/gamma/src/data.ts",
+      "span": "L1-L12",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "b6f02c9ecf844986b6b8cc6486b29f034da2c641ef058b01e6d6b1d6ec2c1cc7",
+      "chars": 251,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/gamma/src/data.ts#buildIndex",
+      "name": "buildIndex",
+      "kind": "function",
+      "path": "packages/gamma/src/data.ts",
+      "span": "L1-L3",
+      "signature": "function buildIndex(): number[]",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "cc579b2d703c5711394b7d719f4e458ca864dd734a7716aba434a55eed0931d7",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/gamma/src/data.ts#filterList",
+      "name": "filterList",
+      "kind": "function",
+      "path": "packages/gamma/src/data.ts",
+      "span": "L9-L11",
+      "signature": "function filterList(items: number[]): number[]",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "5db7b14bddbe1706b00f2ba23b615945e142d9f657baaa097b3669e996b78a23",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/gamma/src/data.ts#sortItems",
+      "name": "sortItems",
+      "kind": "function",
+      "path": "packages/gamma/src/data.ts",
+      "span": "L5-L7",
+      "signature": "function sortItems(items: number[]): number[]",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "ed8c268708c442fbc748fd6823699f54e3c5ed1d6a17481b54adf746e5cbdc55",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/gamma/src/util.ts",
+      "name": "util.ts",
+      "kind": "file",
+      "path": "packages/gamma/src/util.ts",
+      "span": "L1-L13",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "fdb50bd990208b93849981eab3de3155892aa06fec1f0e28b1c05e5ccf14db14",
+      "chars": 313,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/gamma/src/util.ts#mergeData",
+      "name": "mergeData",
+      "kind": "function",
+      "path": "packages/gamma/src/util.ts",
+      "span": "L2-L4",
+      "signature": "function mergeData(a: number[], b: number[]): number[]",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "1686076a9c34954fc3aee6dd7dfd7ec5dde96c79c63ef62919a7415a8d0641ae",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/gamma/src/util.ts#summarize",
+      "name": "summarize",
+      "kind": "function",
+      "path": "packages/gamma/src/util.ts",
+      "span": "L10-L12",
+      "signature": "function summarize(items: number[]): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "dd0764be7f7724fa6baf4cd47f962f838fafa2ef59ddc5e06294a5ea50866fb9",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/gamma/src/util.ts#validateInput",
+      "name": "validateInput",
+      "kind": "function",
+      "path": "packages/gamma/src/util.ts",
+      "span": "L6-L8",
+      "signature": "function validateInput(value: unknown): boolean",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "b588906f85321ea52a7d28499de4e916044dc7a7a1731d3157904f114f813a5c",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "src/index.ts",
+      "name": "index.ts",
+      "kind": "file",
+      "path": "src/index.ts",
+      "span": "L1-L11",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "4096f0b75c201300900d6312292bf7db2d87d7d1c71b664ffc1ba9343d4383be",
+      "chars": 260,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "src/index.ts#buildAlphaPage",
+      "name": "buildAlphaPage",
+      "kind": "function",
+      "path": "src/index.ts",
+      "span": "L4-L6",
+      "signature": "function buildAlphaPage(): string",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "523cd00e38f961e51224b58e1aa5c74f9c124d8791c1353c91ca037e42524e75",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "src/index.ts#buildBetaReport",
+      "name": "buildBetaReport",
+      "kind": "function",
+      "path": "src/index.ts",
+      "span": "L8-L10",
+      "signature": "function buildBetaReport(): string",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "4302ca0ed1caa779f3ff01c66b4b01abb5f13d042949ca4c75d6063a0296893b",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "packages/alpha/src/layout.ts",
+      "target": "packages/alpha/src/layout.ts#layoutGrid",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/alpha/src/layout.ts",
+      "target": "packages/alpha/src/layout.ts#paintCanvas",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/alpha/src/layout.ts",
+      "target": "packages/alpha/src/layout.ts#renderMenu",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/alpha/src/layout.ts#layoutGrid",
+      "target": "packages/alpha/src/layout.ts#paintCanvas",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/alpha/src/layout.ts#renderMenu",
+      "target": "packages/alpha/src/layout.ts#layoutGrid",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/alpha/src/render.ts",
+      "target": "packages/alpha/src/render.ts#renderFooter",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/alpha/src/render.ts",
+      "target": "packages/alpha/src/render.ts#renderHeader",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/alpha/src/render.ts",
+      "target": "packages/alpha/src/render.ts#renderPage",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/alpha/src/render.ts#renderPage",
+      "target": "packages/alpha/src/render.ts#renderFooter",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/alpha/src/render.ts#renderPage",
+      "target": "packages/alpha/src/render.ts#renderHeader",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/beta/src/format.ts",
+      "target": "packages/beta/src/format.ts#formatCell",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/beta/src/format.ts",
+      "target": "packages/beta/src/format.ts#formatRow",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/beta/src/format.ts",
+      "target": "packages/beta/src/format.ts#renderTable",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/beta/src/format.ts#formatRow",
+      "target": "packages/beta/src/format.ts#formatCell",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/beta/src/format.ts#renderTable",
+      "target": "packages/beta/src/format.ts#formatRow",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/beta/src/render.ts",
+      "target": "packages/beta/src/render.ts#exportPdf",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/beta/src/render.ts",
+      "target": "packages/beta/src/render.ts#renderChart",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/beta/src/render.ts",
+      "target": "packages/beta/src/render.ts#renderReport",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/beta/src/render.ts#renderReport",
+      "target": "packages/beta/src/render.ts#exportPdf",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/beta/src/render.ts#renderReport",
+      "target": "packages/beta/src/render.ts#renderChart",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/gamma/src/data.ts",
+      "target": "packages/gamma/src/data.ts#buildIndex",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/gamma/src/data.ts",
+      "target": "packages/gamma/src/data.ts#filterList",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/gamma/src/data.ts",
+      "target": "packages/gamma/src/data.ts#sortItems",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/gamma/src/data.ts#buildIndex",
+      "target": "packages/gamma/src/data.ts#sortItems",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/gamma/src/util.ts",
+      "target": "packages/gamma/src/util.ts#mergeData",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/gamma/src/util.ts",
+      "target": "packages/gamma/src/util.ts#summarize",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/gamma/src/util.ts",
+      "target": "packages/gamma/src/util.ts#validateInput",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/index.ts",
+      "target": "src/index.ts#buildAlphaPage",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/index.ts",
+      "target": "src/index.ts#buildBetaReport",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/index.ts",
+      "target": "packages/alpha/src/render.ts",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/index.ts",
+      "target": "packages/beta/src/render.ts",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/index.ts#buildAlphaPage",
+      "target": "packages/alpha/src/render.ts#renderPage",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/index.ts#buildBetaReport",
+      "target": "packages/beta/src/render.ts#renderReport",
+      "relation": "calls",
+      "confidence": "extracted"
+    }
+  ]
+}

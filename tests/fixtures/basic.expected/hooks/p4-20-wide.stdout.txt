@@ -1,0 +1,1 @@
+{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"[sieve] blast radius for a.ts, who depends on it:\n • imports ← a.ts (a.ts)\n • calls ← all (a.ts)\n • imports ← a.ts (a.ts)\n • calls ← g1 (a.ts)\n • calls ← g2 (a.ts)\n • calls ← g3 (a.ts)\n • calls ← g4 (a.ts)\n • calls ← g5 (a.ts)\n • +2 more"}}

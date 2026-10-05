@@ -1,0 +1,6 @@
+{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"sieve_find_all","arguments":{"pattern":"return"}}}
+{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"sieve_find_all","arguments":{"pattern":"nothingHere"}}}
+{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"sieve_trace_calls","arguments":{"symbol":"shared"}}}
+{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"sieve_trace_calls","arguments":{"symbol":"zzz"}}}
+{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"sieve_repo_map","arguments":{}}}
+{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"sieve_check_freshness","arguments":{}}}

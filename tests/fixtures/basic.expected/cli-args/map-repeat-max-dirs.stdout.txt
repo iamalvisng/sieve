@@ -1,0 +1,9 @@
+[sieve] saved ≈ 75 tokens
+
+repo map — 7 files · 14 symbols · 23 edges · javascript, python, tsx, typescript
+
+src/                4 files · 8 symbols   hubs: double (util.ts, 1←), quadruple (util.ts, 1←), run (app.ts, 1←)
+py/                 2 files · 5 symbols   hubs: add (helpers.py, 1←), Calculator (main.py, 1←), total (main.py, 1←)
+… +1 more directory not shown (raise max-dirs to see more)
+
+hotspots: add · function · py/helpers.py:L1-L2 · 1←  Calculator · class · py/main.py:L4-L6 · 1←  double · function · src/util.ts:L1-L3 · 1←  quadruple · function · src/util.ts:L5-L7 · 1←  run · method · src/app.ts:L11-L13 · 1←  total · method · py/main.py:L5-L6 · 1←

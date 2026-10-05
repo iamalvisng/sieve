@@ -1,0 +1,13 @@
+{
+  "lastQuery": "how does betaOne compute its number",
+  "perAgentQuery": {},
+  "toolReads": 0,
+  "sourceReads": 0,
+  "savedTokens": 0,
+  "injectedPointers": [
+    "packages/beta/src/b.ts:L1-L2",
+    "packages/alpha/src/a.ts:L1-L2",
+    "tools/gamma/src/g.ts:L1-L2"
+  ],
+  "nudges": 0
+}

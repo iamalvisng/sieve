@@ -1,0 +1,76 @@
+sieve ask — "latinString"  (lexical)
+
+1. latinString · function  [symbol]
+   ts/latin.ts:L2-L4
+   function latinString(): string
+
+```
+export function latinString(): string {
+  return "caf�";
+}
+```
+
+2. latin-name.ts · file  [symbol]
+   ts/latin-name.ts
+
+3. greet · method  [symbol]
+   ts/base.ts:L6-L8
+   greet(): string
+
+```
+  greet(): string {
+    return "hi";
+  }
+```
+
+4. twice · function  [symbol]
+   ts/same.ts:L3-L5
+   function twice(n: number | string): number
+
+```
+function twice(n: number | string): number {
+  return 2;
+}
+```
+
+5. describe · method  [symbol]
+   ts/derived.ts:L8-L10
+   describe(): string
+
+```
+  describe(): string {
+    return super.greet();
+  }
+```
+
+6. latinCaller · function  [symbol]
+   ts/latin.ts:L5-L7
+   function latinCaller(): number
+
+```
+export function latinCaller(): number {
+  return latinString().length; // caf�
+}
+```
+
+7. caf�Name · function  [symbol]
+   ts/latin-name.ts:L1-L3
+   function caf�Name(): number
+
+```
+export function caf�Name(): number {
+  return 1;
+}
+```
+
+8. Base · class  [symbol]
+   ts/base.ts:L5-L9
+   class Base
+
+```
+export class Base {
+  greet(): string {
+    return "hi";
+  }
+}
+```

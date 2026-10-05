@@ -1,0 +1,1 @@
+error: option '--base <ref>' argument missing

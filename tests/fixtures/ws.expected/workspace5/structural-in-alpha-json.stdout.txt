@@ -1,0 +1,21 @@
+{
+  "query": "who calls parseConfig",
+  "mode": "lexical",
+  "hits": [
+    {
+      "kind": "caller",
+      "title": "loadConfig",
+      "pointer": "alpha/src/a.ts:L5-L7",
+      "snippet": "function loadConfig(path: string): string",
+      "relation": "calls",
+      "score": 1,
+      "scope": "alpha"
+    }
+  ],
+  "scopes": {
+    "federated": [
+      "alpha"
+    ],
+    "alsoMatched": []
+  }
+}

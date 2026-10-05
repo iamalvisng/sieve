@@ -1,0 +1,19 @@
+"big" — 6 hits in 6 symbols across 1 files (searched 3 indexed files)
+
+bigOne · function · packages/big/index.ts:L1-L2 · 0 in-edges
+  L1: export function bigOne(): number {
+
+bigTwo · function · packages/big/index.ts:L4-L5 · 0 in-edges
+  L4: export function bigTwo(): number {
+
+bigThree · function · packages/big/index.ts:L7-L8 · 0 in-edges
+  L7: export function bigThree(): number {
+
+bigFour · function · packages/big/index.ts:L10-L11 · 0 in-edges
+  L10: export function bigFour(): number {
+
+bigFive · function · packages/big/index.ts:L13-L14 · 0 in-edges
+  L13: export function bigFive(): number {
+
+bigSix · function · packages/big/index.ts:L16-L17 · 0 in-edges
+  L16: export function bigSix(): number {

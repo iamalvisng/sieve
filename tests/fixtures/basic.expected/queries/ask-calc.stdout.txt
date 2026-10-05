@@ -1,0 +1,17 @@
+sieve ask — "calculator total"  (lexical)
+
+1. Calculator · class  [symbol]
+   py/main.py:L4-L6
+   class Calculator
+
+2. add · function  [symbol]
+   py/helpers.py:L1-L2
+   def add(a, b)
+
+3. total · method  [symbol]
+   py/main.py:L5-L6
+   def total(self, a, b)
+
+4. run · function  [symbol]
+   py/main.py:L9-L11
+   def run()

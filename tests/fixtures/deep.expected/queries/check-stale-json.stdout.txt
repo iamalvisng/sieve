@@ -1,0 +1,32 @@
+{
+  "context": {
+    "ok": false,
+    "missing": false,
+    "contentDrift": [
+      {
+        "path": "src/util.ts",
+        "from": "3bc1c754",
+        "to": "063e6572"
+      }
+    ],
+    "removed": [],
+    "coverage": [],
+    "indexDrift": []
+  },
+  "graph": {
+    "ok": false,
+    "missing": false,
+    "added": [],
+    "removed": [],
+    "changed": [],
+    "stale": [
+      "src/util.ts"
+    ],
+    "pending": 2,
+    "pendingIds": [
+      "py/helpers.py",
+      "py/main.py"
+    ],
+    "nodes": 25
+  }
+}

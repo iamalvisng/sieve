@@ -1,0 +1,11 @@
+# Ask divergence queries for tests/fixtures/multi (DV6).
+# Format: <id><TAB><arguments after "sieve">
+dv6-zero	ask "zzzz_nothing_here"
+dv6-zero-json	ask "zzzz_nothing_here" --json
+dv6-calls-in	ask "who calls zzz" --in packages/alpha
+# DV3 with --in: the single-scope branch of the multi-scope path keeps
+# the lexical mode with -n 0.
+dv3-n0-in	ask "render" -n 0 --in packages/alpha
+# P1-02: the default limit is 8; "render" has 12 hits at -n 20.
+dv-limit-default	ask "render" --json
+dv-limit-20	ask "render" --json -n 20

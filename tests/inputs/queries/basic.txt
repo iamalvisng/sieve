@@ -1,0 +1,53 @@
+# Query list for tests/fixtures/basic. One query per line.
+# Format: <id><TAB><arguments after "sieve">
+grep-add	grep "add" --fixed
+grep-regex	grep "dou.le"
+grep-icase	grep "APP" -i --fixed
+grep-in	grep "add" --fixed --in py
+grep-in-bad	grep "add" --fixed --in nowhere
+grep-zero	grep "zzzz_no_such" --fixed
+grep-badre	grep "(["
+grep-json	grep "add" --fixed --json
+grep-module	grep "import" --fixed
+ask-run	ask "how does run compute the result"
+ask-calc	ask "calculator total"
+ask-n1	ask "double" -n 1
+ask-in	ask "helper" --in py
+ask-in-bad	ask "helper" --in nowhere
+ask-zero	ask "zzzz_no_such_thing_anywhere"
+ask-json	ask "double" --json
+ask-source	ask "quadruple" --source
+skeleton-app	skeleton src/app.ts
+skeleton-base	skeleton app.ts
+skeleton-none	skeleton nope.ts
+skeleton-json	skeleton src/util.ts --json
+callers-double	callers double
+callers-out	callers quadruple --direction out
+callers-depth2	callers add --depth 2
+callers-all	callers add --depth all
+callers-d2	callers add -d 2
+callers-full	callers double --depth full
+callers-max	callers double --depth max
+callers-norefresh	callers add --no-refresh
+callers-depth0	callers add --depth 0
+callers-file-out	callers app.ts --direction out
+callers-none	callers zzz_nope
+callers-json	callers double --json
+callers-in	callers add --in py
+callers-baddir	callers add --direction sideways
+callers-total	callers Calculator.total
+map	map
+map-json	map --json
+map-max2	map --max-dirs 2
+map-max1	map --max-dirs 1
+check	check
+check-json	check --json
+# P1-02: each ask flag by its long name (P1-02).
+ask-nograph	ask "double" --no-graph-rank
+ask-norefresh	ask "double" --no-refresh
+ask-full	ask "double" --full
+ask-limit2	ask "double" --limit 2
+# P1-03, P1-04, P1-06: a structural hit and a structural fallthrough.
+ask-calls	ask "who calls double"
+ask-calls-miss	ask "who calls zzznothing"
+callers-p3-23-file-depth2	callers util.ts --depth 2

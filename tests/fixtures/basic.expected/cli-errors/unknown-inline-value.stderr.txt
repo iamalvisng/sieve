@@ -1,0 +1,2 @@
+error: unknown option '--limt=3'
+(Did you mean --limit?)

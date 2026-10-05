@@ -1,0 +1,12 @@
+workspace map — 1 repo(s)
+
+## alpha/
+[sieve] saved ≈ 10 tokens
+
+repo map — 1 files · 5 symbols · 8 edges · typescript
+
+src/a.ts            1 files · 5 symbols   hubs: alphaAdd (a.ts, 1←), shared (a.ts, 1←), useShared (a.ts, 1←)
+
+hotspots: alphaAdd · function · src/a.ts:L1-L3 · 1←  shared · function · src/a.ts:L9-L11 · 1←  useShared · function · src/a.ts:L13-L15 · 1←
+
+1 of 2 workspace repos have graphs; run sieve build to cover beta

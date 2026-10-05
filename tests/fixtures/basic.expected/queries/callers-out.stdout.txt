@@ -1,0 +1,4 @@
+[sieve] saved ≈ 15 tokens
+
+quadruple · function · src/util.ts:L5-L7
+  calls → double (src/util.ts:L1-L3)

@@ -1,0 +1,2 @@
+error: unknown option '--fixd'
+(Did you mean --fixed?)

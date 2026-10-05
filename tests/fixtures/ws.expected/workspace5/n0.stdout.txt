@@ -1,0 +1,5 @@
+sieve ask — "parse config"  (empty)
+
+no matching nodes across 3 workspace repo(s) — try different words, or `sieve build` at a child
+
+[sieve] no hits — don't re-ask with new wording; switch tool: `sieve grep "<literal>"` for every occurrence · `sieve skeleton <file>` for a file's full API · `sieve callers <symbol>` for who-uses.

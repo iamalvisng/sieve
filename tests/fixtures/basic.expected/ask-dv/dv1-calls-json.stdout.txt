@@ -1,0 +1,16 @@
+{
+  "query": "who calls double",
+  "mode": "structural",
+  "subject": "double",
+  "hits": [
+    {
+      "kind": "caller",
+      "title": "quadruple",
+      "pointer": "src/util.ts:L5-L7",
+      "snippet": "function quadruple(n: number): number",
+      "relation": "calls",
+      "score": 1
+    }
+  ],
+  "note": "callers / references of double"
+}

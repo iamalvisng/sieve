@@ -1,0 +1,11 @@
+[sieve] saved ≈ 65 tokens
+
+## alpha/
+shared · function · src/a.ts:L9-L11
+  calls ← useShared (src/a.ts:L13-L15)
+
+[sieve] saved ≈ 69 tokens
+
+## beta/
+shared · function · src/b.ts:L9-L11
+  calls ← useShared (src/b.ts:L13-L15)

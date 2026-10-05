@@ -1,0 +1,33 @@
+sieve ask — "parse config"  (lexical)
+
+1. [gamma/] Config pipeline  [concept]
+   gamma/src/root.ts
+   Gamma parses a config, then passes the parsed config along.
+
+2. [gamma/packages/x/] parseConfigX · function  [symbol]
+   gamma/packages/x/src/parse-config.ts:L1-L3
+   function parseConfigX(text: string): string
+
+3. [gamma/packages/y/] configY · function  [symbol]
+   gamma/packages/y/src/parse/y.ts:L1-L3
+   function configY(): number
+
+4. [gamma/] parseConfigRoot · function  [symbol]
+   gamma/src/root.ts:L1-L3
+   function parseConfigRoot(text: string): string
+
+5. [gamma/packages/x/] loadConfigX · function  [symbol]
+   gamma/packages/x/src/parse-config.ts:L5-L7
+   function loadConfigX(path: string): string
+
+6. [gamma/packages/y/] y.ts · file  [symbol]
+   gamma/packages/y/src/parse/y.ts
+
+7. [gamma/packages/x/] parse-config.ts · file  [symbol]
+   gamma/packages/x/src/parse-config.ts
+
+8. [gamma/packages/y/] yFour · function  [symbol]
+   gamma/packages/y/src/parse/y.ts:L17-L19
+   function yFour(): number
+
+matched in: gamma/packages/x/ (3) · gamma/packages/y/ (3) · gamma/ (2)

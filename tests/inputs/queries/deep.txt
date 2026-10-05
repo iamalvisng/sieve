@@ -1,0 +1,12 @@
+# Query list for tests/fixtures/deep. One query per line.
+# Format: <id><TAB><arguments after "sieve">
+# These seven queries pin the deep-tier consumers from
+# the deep-tier note section 5.5. Every one
+# runs against the offline-replay build (tests/parity/refresh.sh deep).
+check-deep	check
+ask-concept	ask "how does run compute the result"
+ask-source-crux	ask "quadruple" --source
+ask-source-full	ask "quadruple" --source --full
+skeleton-deep	skeleton src/app.ts
+map-deep	map
+grep-deep	grep "add" --fixed

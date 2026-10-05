@@ -1,0 +1,1 @@
+✗ no symbol "zzz_nope" in the graph — check spelling or run sieve build

@@ -1,0 +1,83 @@
+{
+  "pattern": "return",
+  "filesSearched": 2,
+  "totalHits": 4,
+  "groups": [
+    {
+      "symbol": {
+        "id": "src/a.ts#alphaAdd",
+        "name": "alphaAdd",
+        "kind": "function",
+        "path": "alpha/src/a.ts",
+        "span": "L1-L3"
+      },
+      "path": "alpha/src/a.ts",
+      "inDegree": 1,
+      "hits": [
+        {
+          "line": 2,
+          "text": "return a + b;"
+        }
+      ]
+    },
+    {
+      "symbol": {
+        "id": "src/b.ts#betaGreet",
+        "name": "betaGreet",
+        "kind": "function",
+        "path": "beta/src/b.ts",
+        "span": "L1-L3"
+      },
+      "path": "beta/src/b.ts",
+      "inDegree": 1,
+      "hits": [
+        {
+          "line": 2,
+          "text": "return `hi ${name}`;"
+        }
+      ]
+    },
+    {
+      "symbol": {
+        "id": "src/a.ts#alphaTwice",
+        "name": "alphaTwice",
+        "kind": "function",
+        "path": "alpha/src/a.ts",
+        "span": "L5-L7"
+      },
+      "path": "alpha/src/a.ts",
+      "inDegree": 0,
+      "hits": [
+        {
+          "line": 6,
+          "text": "return alphaAdd(n, n);"
+        }
+      ]
+    },
+    {
+      "symbol": {
+        "id": "src/b.ts#betaShout",
+        "name": "betaShout",
+        "kind": "function",
+        "path": "beta/src/b.ts",
+        "span": "L5-L7"
+      },
+      "path": "beta/src/b.ts",
+      "inDegree": 0,
+      "hits": [
+        {
+          "line": 6,
+          "text": "return betaGreet(name).toUpperCase();"
+        }
+      ]
+    }
+  ],
+  "truncated": {
+    "files": 0,
+    "hits": 0
+  },
+  "saved": {
+    "files": 2,
+    "baselineChars": 319
+  }
+}

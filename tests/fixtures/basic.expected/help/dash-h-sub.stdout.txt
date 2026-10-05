@@ -1,0 +1,56 @@
+Usage: sieve [options] [command]
+
+Index a repo into a symbol graph with call edges, for coding agents.
+
+Options:
+  -v, --version                     output the version number
+  --dir <path>                      context graph directory (default:
+                                    <repo>/sieve)
+  -h, --help                        display help for command
+
+Commands:
+  telemetry [action]                Show that Sieve sends no usage data. The
+                                    command records nothing.
+  version                           Print the installed version
+  build [options] [dir]             Build sieve/ from your code — wiring graph +
+                                    per-file cards ($0, no key).
+  ask [options] <query> [dir]       Query the sieve/ graph — returns ranked
+                                    nodes + exact file:line, routed to prose or
+                                    wiring ($0, no key)
+  skeleton [options] <file> [dir]   Signatures-only view of one file from the
+                                    wiring graph — the cheapest way to see a
+                                    file's API surface
+  check [options] [dir]             Fail if sieve/ is stale relative to the code
+                                    (for CI)
+  stats [options] [dir]             Show this agent session's sieve-vs-source
+                                    usage mix and tokens saved
+  viz [options] [dir]               Serve an interactive visualization of the
+                                    context graph (and graph.json when present)
+  mcp [dir]                         Serve the graph over MCP (stdio) — exposes
+                                    sieve_find_code, sieve_trace_calls,
+                                    sieve_find_all, sieve_file_api,
+                                    sieve_repo_map, sieve_why and
+                                    sieve_check_freshness as tools
+  callers [options] <symbol> [dir]  Who calls/references a symbol ($0, no LLM).
+                                    --direction out gives callees (what it
+                                    calls); --depth N (or all) walks
+                                    transitively for full blast radius
+  blast [options] [dir]             Blast radius of a diff: what depends on the
+                                    lines this change touched ($0, no LLM).
+                                    Built for CI — `--format markdown` is a PR
+                                    comment with a Mermaid diagram.
+  grep [options] <pattern> [dir]    Regex search over indexed files, hits
+                                    grouped by enclosing symbol and ranked by
+                                    coupling ($0, no LLM)
+  map [options] [dir]               Token-budgeted repo orientation — directory
+                                    clusters, per-directory hubs, and global
+                                    hotspots from the wiring graph ($0, no LLM)
+  why [options] [symbol] [dir]      Show the decision entries that explain a
+                                    symbol
+  init [options] [dir]              Wire Sieve into the AI coding agents used
+                                    with this repo (instruction files + MCP
+                                    server; full hooks + statusline + MCP for
+                                    Claude Code)
+  uninstall [options] [dir]         Remove every file and config entry sieve has
+                                    written to this repo (the inverse of init)
+  help [command]                    display help for command

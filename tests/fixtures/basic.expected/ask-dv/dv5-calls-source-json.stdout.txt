@@ -1,0 +1,21 @@
+{
+  "query": "who calls double",
+  "mode": "structural",
+  "subject": "double",
+  "hits": [
+    {
+      "kind": "caller",
+      "title": "quadruple",
+      "pointer": "src/util.ts:L5-L7",
+      "snippet": "function quadruple(n: number): number",
+      "relation": "calls",
+      "score": 1,
+      "code": "export function quadruple(n: number): number {\n  return double(double(n));\n}"
+    }
+  ],
+  "note": "callers / references of double",
+  "saved": {
+    "files": 1,
+    "baselineChars": 140
+  }
+}

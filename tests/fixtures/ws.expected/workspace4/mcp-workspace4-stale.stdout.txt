@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"workspace check — 2 repo(s)\n\nalpha/: STALE (1 added, 1 changed)\nbeta/: OK\n"}],"isError":false}}

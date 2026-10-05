@@ -1,0 +1,19 @@
+{
+  "query": "series notes filler padding words",
+  "mode": "lexical",
+  "hits": [
+    {
+      "kind": "concept",
+      "title": "Widget Notes",
+      "pointer": "src/widget.ts",
+      "snippet": "The widget helpers add one to a number and sum a fixed series.",
+      "related": [
+        "gadget-notes",
+        "sprocket-notes"
+      ],
+      "score": 1
+    }
+  ],
+  "coverage": 0.322007659378223,
+  "coverageStrong": 0.1610038296891115
+}

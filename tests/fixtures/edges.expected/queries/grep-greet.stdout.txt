@@ -1,0 +1,15 @@
+[sieve] saved ≈ 76 tokens
+
+"greet" — 4 hits in 4 symbols across 3 files (searched 12 indexed files)
+
+Base.greet · method · ts/base.ts:L6-L8 · 1 in-edges
+  L6: greet(): string {
+
+outer · function · ts/calls.ts:L7-L19 · 1 in-edges
+  L11: b.greet();
+
+Circle.area · method · ts/derived.ts:L4-L6 · 1 in-edges
+  L5: return this.greet().length;
+
+Circle.describe · method · ts/derived.ts:L8-L10 · 0 in-edges
+  L9: return super.greet();

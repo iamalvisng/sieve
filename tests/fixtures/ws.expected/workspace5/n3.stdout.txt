@@ -1,0 +1,18 @@
+sieve ask — "parse config"  (lexical)
+
+1. [alpha/] parseConfigFile · function  [symbol]
+   alpha/src/a.ts:L9-L11
+   function parseConfigFile(path: string): string
+
+2. [gamma/] parseConfigRoot · function  [symbol]
+   gamma/src/root.ts:L1-L3
+   function parseConfigRoot(text: string): string
+
+3. [gamma/packages/x/] parseConfigX · function  [symbol]
+   gamma/packages/x/src/parse-config.ts:L1-L3
+   function parseConfigX(text: string): string
+
+matched in: alpha/ (1) · gamma/ (1) · gamma/packages/x/ (1)
+also matched: beta/ — narrow with --in beta/
+
+[sieve] only 3 hits — don't re-ask with new wording; switch tool: `sieve grep "<literal>"` for every occurrence · `sieve skeleton <file>` for a file's full API · `sieve callers <symbol>` for who-uses.

@@ -1,0 +1,935 @@
+{
+  "meta": {
+    "version": 1,
+    "nodeCount": 41,
+    "edgeCount": 53,
+    "languages": [
+      "python",
+      "typescript"
+    ],
+    "scopes": [
+      {
+        "prefix": "",
+        "label": "",
+        "markers": []
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "py/base.py",
+      "name": "base.py",
+      "kind": "file",
+      "path": "py/base.py",
+      "span": "L1-L4",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "01b890012ecdaf6c86194c00e9a321b6db12accd52ce10a4d9ed7516364db78d",
+      "chars": 56,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "py/base.py#Animal",
+      "name": "Animal",
+      "kind": "class",
+      "path": "py/base.py",
+      "span": "L1-L3",
+      "signature": "class Animal",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "e220b2f4e1177ba01704b309b3241b2db570500084d2150cca02286711913f56",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "py/base.py#Animal.speak",
+      "name": "speak",
+      "kind": "method",
+      "path": "py/base.py",
+      "span": "L2-L3",
+      "signature": "def speak(self)",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "72703a295c758621bca278e2a797abbeee318f5b3d5b01e2e4e1b7cbbcd2acbd",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null,
+      "owner": "Animal"
+    },
+    {
+      "id": "py/derived.py",
+      "name": "derived.py",
+      "kind": "file",
+      "path": "py/derived.py",
+      "span": "L1-L21",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "d88e2a3f124285c7dd25e1b9de3adc5f528f4a7dca34efd8d6f999e8dffe1c24",
+      "chars": 320,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "py/derived.py#Dog",
+      "name": "Dog",
+      "kind": "class",
+      "path": "py/derived.py",
+      "span": "L6-L11",
+      "signature": "class Dog(Animal)",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "35bb693ccbb0df2cb0a3626eaff92df26779a6896cad5a41cffd7206c16f261d",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "py/derived.py#Dog.speak",
+      "name": "speak",
+      "kind": "method",
+      "path": "py/derived.py",
+      "span": "L7-L8",
+      "signature": "def speak(self)",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "4dadf0fc7321f4a59b1444e3759783307e8cb929edc4b3e6d50930dae86de180",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null,
+      "owner": "Dog"
+    },
+    {
+      "id": "py/derived.py#Dog.twice",
+      "name": "twice",
+      "kind": "method",
+      "path": "py/derived.py",
+      "span": "L10-L11",
+      "signature": "def twice(self)",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "a0776367e1fb33cc7df0a447e8c09748f3606dcb548f0e13561be6901ac5c95d",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null,
+      "owner": "Dog"
+    },
+    {
+      "id": "py/derived.py#make",
+      "name": "make",
+      "kind": "function",
+      "path": "py/derived.py",
+      "span": "L14-L16",
+      "signature": "def make()",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "ebd3bdde47e6761a891f938d6a427fea3e80120e5f52f66711148917243cb04d",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "py/derived.py#paths",
+      "name": "paths",
+      "kind": "function",
+      "path": "py/derived.py",
+      "span": "L19-L20",
+      "signature": "def paths()",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "0aecb0f61f7a2bec50388974f730db3749f58cc38ea1fddaf7a599e9e89b6015",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "py/pkg/__init__.py",
+      "name": "__init__.py",
+      "kind": "file",
+      "path": "py/pkg/__init__.py",
+      "span": "L1-L1",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "chars": 0,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "py/pkg/mod.py",
+      "name": "mod.py",
+      "kind": "file",
+      "path": "py/pkg/mod.py",
+      "span": "L1-L3",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "b6631639de17fb869c43278f858c465cc5b71c8ec51c8c25d803905361f8a544",
+      "chars": 27,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "py/pkg/mod.py#helper",
+      "name": "helper",
+      "kind": "function",
+      "path": "py/pkg/mod.py",
+      "span": "L1-L2",
+      "signature": "def helper()",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "2b41f631f4a93d4140b1665e536d4a9c55708d9c72034e899586306c302ed1e7",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "py/rel.py",
+      "name": "rel.py",
+      "kind": "file",
+      "path": "py/rel.py",
+      "span": "L1-L7",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "ce4063fb59be32c1f180700ae365dbfd1d22eaa1d112a54c93dbcf5566e77b46",
+      "chars": 79,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "py/rel.py#use",
+      "name": "use",
+      "kind": "function",
+      "path": "py/rel.py",
+      "span": "L5-L6",
+      "signature": "def use()",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "fc7cac1d0b5240a089fdd5351025ba874bf675c23a27146d37b1c2a502bc575e",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/base.ts",
+      "name": "base.ts",
+      "kind": "file",
+      "path": "ts/base.ts",
+      "span": "L1-L10",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "cc9ce8b1ed89ceaa8f97317f7558cadc8cbb4f832f2d888572f539eef7b40427",
+      "chars": 109,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/base.ts#Base",
+      "name": "Base",
+      "kind": "class",
+      "path": "ts/base.ts",
+      "span": "L5-L9",
+      "signature": "class Base",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "2af73199d3105831b54c18d80c4b109dde38bf3539b6a92c952b6459f3405e6e",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/base.ts#Base.greet",
+      "name": "greet",
+      "kind": "method",
+      "path": "ts/base.ts",
+      "span": "L6-L8",
+      "signature": "greet(): string",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "e8baedc925e0228c1d01094607e682f34224dc9303c29e1146f5e7b94c6fbd30",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null,
+      "owner": "Base"
+    },
+    {
+      "id": "ts/base.ts#Shape",
+      "name": "Shape",
+      "kind": "interface",
+      "path": "ts/base.ts",
+      "span": "L1-L3",
+      "signature": "interface Shape",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "834112c8963a3b7a7bbfce02072b5776c4fa218bedd498d0a9b1995abfa9f04a",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/calls.ts",
+      "name": "calls.ts",
+      "kind": "file",
+      "path": "ts/calls.ts",
+      "span": "L1-L20",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "244ec1c7bc666fff4d9374f230f3611fb51045089189c1b73c9a141374ac1103",
+      "chars": 391,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/calls.ts#outer",
+      "name": "outer",
+      "kind": "function",
+      "path": "ts/calls.ts",
+      "span": "L7-L19",
+      "signature": "function outer(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "91c79b1ff960604f2eb23e64f6412d559ad98af2d339d841f8e42a08d2b2f303",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/calls.ts#outer.inner",
+      "name": "inner",
+      "kind": "function",
+      "path": "ts/calls.ts",
+      "span": "L16-L18",
+      "signature": "function inner(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "988caf9b21da7b0a09cd63984825fbb2d52347e3d073c5e19e32722e4961f3fa",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/derived.ts",
+      "name": "derived.ts",
+      "kind": "file",
+      "path": "ts/derived.ts",
+      "span": "L1-L12",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "72b37855ea7ab2476144d86def7c016b171c4a7a228b718bde4d1867db8aa432",
+      "chars": 202,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/derived.ts#Circle",
+      "name": "Circle",
+      "kind": "class",
+      "path": "ts/derived.ts",
+      "span": "L3-L11",
+      "signature": "class Circle extends Base implements Shape",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "3f30487be09318f6717272c3d086ba37a6b144362cd2525e284f7e7c3720ec96",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/derived.ts#Circle.area",
+      "name": "area",
+      "kind": "method",
+      "path": "ts/derived.ts",
+      "span": "L4-L6",
+      "signature": "area(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "3c72d773bd344a64e71ad9b24fa1cbf8e1087b13df429413779300c8bce4e393",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null,
+      "owner": "Circle"
+    },
+    {
+      "id": "ts/derived.ts#Circle.describe",
+      "name": "describe",
+      "kind": "method",
+      "path": "ts/derived.ts",
+      "span": "L8-L10",
+      "signature": "describe(): string",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "df023ab658fb3aae52dbddd44f0b655efd60a73eb6e1cc84adc46bc9a594ae20",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null,
+      "owner": "Circle"
+    },
+    {
+      "id": "ts/dup_a.ts",
+      "name": "dup_a.ts",
+      "kind": "file",
+      "path": "ts/dup_a.ts",
+      "span": "L1-L4",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "64cde3c1d84c3b0bf74986f78e1bf70cc5bd39906fe643e9bf652aba801c234b",
+      "chars": 49,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/dup_a.ts#shared",
+      "name": "shared",
+      "kind": "function",
+      "path": "ts/dup_a.ts",
+      "span": "L1-L3",
+      "signature": "function shared(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "342a9a955c5a00bca49661c7bdd8640103a0a3029f5a8ab29900ceaf0eb9f279",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/dup_b.ts",
+      "name": "dup_b.ts",
+      "kind": "file",
+      "path": "ts/dup_b.ts",
+      "span": "L1-L4",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "64cde3c1d84c3b0bf74986f78e1bf70cc5bd39906fe643e9bf652aba801c234b",
+      "chars": 49,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/dup_b.ts#shared",
+      "name": "shared",
+      "kind": "function",
+      "path": "ts/dup_b.ts",
+      "span": "L1-L3",
+      "signature": "function shared(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "342a9a955c5a00bca49661c7bdd8640103a0a3029f5a8ab29900ceaf0eb9f279",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/latin-name.ts",
+      "name": "latin-name.ts",
+      "kind": "file",
+      "path": "ts/latin-name.ts",
+      "span": "L1-L4",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "18115196b3478258ce8a28078dbcfb841ffb13ec14a8d550be91d285bdffce74",
+      "chars": 51,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/latin-name.ts#caf�Name",
+      "name": "caf�Name",
+      "kind": "function",
+      "path": "ts/latin-name.ts",
+      "span": "L1-L3",
+      "signature": "function caf�Name(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "2647a9e0ea0affe26da3f62d777af8b0bb12c1eb3b97e7dc2031e5b688d37927",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/latin.ts",
+      "name": "latin.ts",
+      "kind": "file",
+      "path": "ts/latin.ts",
+      "span": "L1-L9",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "a7a10e0f5cfcc77cf5338529fc5087be73052cda7b03c7cc3ea5bac79d6c6ad9",
+      "chars": 184,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/latin.ts#latinCaller",
+      "name": "latinCaller",
+      "kind": "function",
+      "path": "ts/latin.ts",
+      "span": "L5-L7",
+      "signature": "function latinCaller(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "df5ce78b533d2c652a4317944e3da1a4777e822fa2d00e5cf3e5f277ce5a0351",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/latin.ts#latinString",
+      "name": "latinString",
+      "kind": "function",
+      "path": "ts/latin.ts",
+      "span": "L2-L4",
+      "signature": "function latinString(): string",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "11aea199c02e499b9c944e640a6905888c035834b49da7dbdd1ac79f7c1d2187",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/same.ts",
+      "name": "same.ts",
+      "kind": "file",
+      "path": "ts/same.ts",
+      "span": "L1-L16",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "65d4a36f64d9744fe32b8cdd4d5d1868dfd931bcee974897ca61626f9c1516b7",
+      "chars": 237,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/same.ts#callTwice",
+      "name": "callTwice",
+      "kind": "function",
+      "path": "ts/same.ts",
+      "span": "L7-L9",
+      "signature": "function callTwice(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "ee9a419ae36e4f337bdf6e2ebea0f272169f5b6ab8c66fda54dd171ec45eeafa",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/same.ts#Local",
+      "name": "Local",
+      "kind": "class",
+      "path": "ts/same.ts",
+      "span": "L11-L13",
+      "signature": "class Local",
+      "exported": false,
+      "origin": "ast",
+      "body_hash": "5a87369da5c2a71f3fcb7366986ab4474ebae14ce3e06f526b175ee4ec7d7b87",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/same.ts#Local.run",
+      "name": "run",
+      "kind": "method",
+      "path": "ts/same.ts",
+      "span": "L12-L12",
+      "signature": "run()",
+      "exported": false,
+      "origin": "ast",
+      "body_hash": "adc43d3352bd45c8c22c060162e3032a665c1bdec92f7af15c5bdfe62727a05c",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null,
+      "owner": "Local"
+    },
+    {
+      "id": "ts/same.ts#twice",
+      "name": "twice",
+      "kind": "function",
+      "path": "ts/same.ts",
+      "span": "L3-L5",
+      "signature": "function twice(n: number | string): number",
+      "exported": false,
+      "origin": "ast",
+      "body_hash": "7ec8f1eb5c4a296d51fe1fab97b7a63401a9cf1223463a22b18ae4f69f8e6b86",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/use_dup.ts",
+      "name": "use_dup.ts",
+      "kind": "file",
+      "path": "ts/use_dup.ts",
+      "span": "L1-L4",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "69119ee76b1442758807e3dcdd9567fef2e5f9a576a4332c29d24a1949cb8762",
+      "chars": 59,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/use_dup.ts#useShared",
+      "name": "useShared",
+      "kind": "function",
+      "path": "ts/use_dup.ts",
+      "span": "L1-L3",
+      "signature": "function useShared(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "395b502f24836d2b673b567003a1c2c283bf62640c4ce38714aff0d515907f08",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "py/base.py",
+      "target": "py/base.py#Animal",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "py/base.py#Animal",
+      "target": "py/base.py#Animal.speak",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "py/derived.py",
+      "target": "py/derived.py#Dog",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "py/derived.py",
+      "target": "py/derived.py#make",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "py/derived.py",
+      "target": "py/derived.py#paths",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "py/derived.py",
+      "target": "base",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "py/derived.py",
+      "target": "os",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "py/derived.py",
+      "target": "os.path",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "py/derived.py#Dog",
+      "target": "py/derived.py#Dog.speak",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "py/derived.py#Dog",
+      "target": "py/derived.py#Dog.twice",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "py/derived.py#Dog",
+      "target": "py/base.py#Animal",
+      "relation": "extends",
+      "confidence": "inferred"
+    },
+    {
+      "source": "py/derived.py#Dog.twice",
+      "target": "py/derived.py#Dog.speak",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "py/derived.py#make",
+      "target": "py/derived.py#Dog",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "py/derived.py#make",
+      "target": "py/derived.py#Dog.speak",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "py/pkg/mod.py",
+      "target": "py/pkg/mod.py#helper",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "py/rel.py",
+      "target": "py/rel.py#use",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "py/rel.py",
+      "target": ".",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "py/rel.py",
+      "target": "pkg.mod",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "py/rel.py#use",
+      "target": "py/pkg/mod.py#helper",
+      "relation": "calls",
+      "confidence": "inferred"
+    },
+    {
+      "source": "ts/base.ts",
+      "target": "ts/base.ts#Base",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/base.ts",
+      "target": "ts/base.ts#Shape",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/base.ts#Base",
+      "target": "ts/base.ts#Base.greet",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/calls.ts",
+      "target": "ts/calls.ts#outer",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/calls.ts",
+      "target": "./helpers",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/calls.ts",
+      "target": "./missing",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/calls.ts",
+      "target": "./side",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/calls.ts",
+      "target": "ts/base.ts",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/calls.ts",
+      "target": "ts/derived.ts",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/calls.ts#outer",
+      "target": "ts/calls.ts#outer",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/calls.ts#outer",
+      "target": "ts/calls.ts#outer.inner",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/calls.ts#outer",
+      "target": "ts/derived.ts#Circle.area",
+      "relation": "calls",
+      "confidence": "inferred"
+    },
+    {
+      "source": "ts/calls.ts#outer",
+      "target": "ts/calls.ts#outer.inner",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/calls.ts#outer",
+      "target": "ts/derived.ts#Circle",
+      "relation": "references",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/derived.ts",
+      "target": "ts/derived.ts#Circle",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/derived.ts",
+      "target": "ts/base.ts",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/derived.ts#Circle",
+      "target": "ts/derived.ts#Circle.area",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/derived.ts#Circle",
+      "target": "ts/derived.ts#Circle.describe",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/derived.ts#Circle",
+      "target": "ts/base.ts#Base",
+      "relation": "extends",
+      "confidence": "inferred"
+    },
+    {
+      "source": "ts/derived.ts#Circle",
+      "target": "ts/base.ts#Shape",
+      "relation": "implements",
+      "confidence": "inferred"
+    },
+    {
+      "source": "ts/derived.ts#Circle",
+      "target": "ts/base.ts#Base",
+      "relation": "references",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/derived.ts#Circle.area",
+      "target": "ts/base.ts#Base.greet",
+      "relation": "calls",
+      "confidence": "inferred"
+    },
+    {
+      "source": "ts/dup_a.ts",
+      "target": "ts/dup_a.ts#shared",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/dup_b.ts",
+      "target": "ts/dup_b.ts#shared",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/latin-name.ts",
+      "target": "ts/latin-name.ts#caf�Name",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/latin.ts",
+      "target": "ts/latin.ts#latinCaller",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/latin.ts",
+      "target": "ts/latin.ts#latinString",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/latin.ts#latinCaller",
+      "target": "ts/latin.ts#latinString",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/same.ts",
+      "target": "ts/same.ts#callTwice",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/same.ts",
+      "target": "ts/same.ts#Local",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/same.ts",
+      "target": "ts/same.ts#twice",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/same.ts#callTwice",
+      "target": "ts/same.ts#twice",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/same.ts#Local",
+      "target": "ts/same.ts#Local.run",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/use_dup.ts",
+      "target": "ts/use_dup.ts#useShared",
+      "relation": "contains",
+      "confidence": "extracted"
+    }
+  ]
+}

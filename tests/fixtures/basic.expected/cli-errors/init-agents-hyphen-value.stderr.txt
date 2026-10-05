@@ -1,0 +1,1 @@
+✗ unknown agent id(s): -x — valid: agents, adal, cursor, gemini, grok, hermes, antigravity, copilot, kiro, windsurf, claude

@@ -1,0 +1,9 @@
+blast radius — working tree vs HEAD (depth 1)
+  changed: 4 files in 3 areas, 4 seed symbols
+  impacted: 0 symbols in 0 areas
+
+✗ extra — 2 changed files, 0/2 reached by a test
+✗ alpha — 1 changed file, 0/1 reached by a test
+✗ Zulu — 1 changed file, 0/1 reached by a test
+
+no indexed dependents outside the changed files themselves

@@ -1,0 +1,1 @@
+✗ invalid pattern "[z-a]": Invalid regular expression: /[z-a]/: Range out of order in character class

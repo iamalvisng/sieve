@@ -1,0 +1,5 @@
+blast radius — HEAD...HEAD (depth 1)
+  changed: 0 files in 0 areas, 0 seed symbols
+  impacted: 0 symbols in 0 areas
+
+no indexed dependents outside the changed files themselves

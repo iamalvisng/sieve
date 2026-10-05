@@ -1,0 +1,4 @@
+✓ alpha/: 3 nodes, 3 edges, 1 cards [typescript]
+✓ beta/: 3 nodes, 3 edges, 1 cards [typescript]
+✓ workspace: 2 repos federated → sieve/workspace.json
+  sieve/ is git-ignored — each teammate runs `sieve build` to regenerate it locally.

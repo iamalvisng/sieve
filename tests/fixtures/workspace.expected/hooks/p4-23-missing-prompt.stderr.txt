@@ -1,0 +1,1 @@
+[sieve] prompt hook: lastFile "zzz-missing.ts" not found in the graph — skipping scope hint

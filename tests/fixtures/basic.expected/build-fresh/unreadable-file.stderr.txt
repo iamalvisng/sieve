@@ -1,0 +1,2 @@
+parsing 1/8: packages/shared/index.ts                          parsing 2/8: py/helpers.py                                     parsing 3/8: py/main.py                                        parsing 4/8: src/app.ts                                        parsing 5/8: src/legacy.mjs                                    parsing 6/8: src/util.ts                                       parsing 7/8: src/view.tsx                                      parsing 8/8: src/x.ts                                          
+✗ src/x.ts: EACCES: permission denied, open '<TMP>/src/x.ts'

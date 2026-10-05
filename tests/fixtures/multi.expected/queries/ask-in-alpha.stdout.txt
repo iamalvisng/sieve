@@ -1,0 +1,24 @@
+sieve ask — "render"  (lexical)
+
+1. renderPage · function  [symbol]
+   packages/alpha/src/render.ts:L1-L3
+   function renderPage(): string
+
+2. renderMenu · function  [symbol]
+   packages/alpha/src/layout.ts:L1-L3
+   function renderMenu(): string
+
+3. renderFooter · function  [symbol]
+   packages/alpha/src/render.ts:L9-L11
+   function renderFooter(): string
+
+4. layoutGrid · function  [symbol]
+   packages/alpha/src/layout.ts:L5-L7
+   function layoutGrid(): string
+
+5. renderHeader · function  [symbol]
+   packages/alpha/src/render.ts:L5-L7
+   function renderHeader(): string
+
+6. render.ts · file  [symbol]
+   packages/alpha/src/render.ts

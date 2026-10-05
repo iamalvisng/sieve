@@ -1,0 +1,5 @@
+# Query list for tests/fixtures/scopes. One query per line.
+# Format: <id><TAB><arguments after "sieve">
+grep-big	grep "big" --fixed -i
+ask-big	ask "big function"
+ask-in-big	ask "function" --in packages/big

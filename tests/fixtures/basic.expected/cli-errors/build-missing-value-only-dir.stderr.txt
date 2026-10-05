@@ -1,0 +1,1 @@
+error: option '--only-dir <path>' argument missing

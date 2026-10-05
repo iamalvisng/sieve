@@ -1,0 +1,12 @@
+[package]
+name = "sieve-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+icu_collator = "2"
+sha2 = "0.10"
+serde_yaml_ng = "0.10"

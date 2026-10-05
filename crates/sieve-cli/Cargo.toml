@@ -1,0 +1,28 @@
+[package]
+name = "sieve-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Code intelligence for coding agents: a symbol graph with call edges."
+homepage = "https://github.com/iamalvisng/sieve"
+readme = "../../README.md"
+
+[[bin]]
+name = "sieve"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sieve-core = { path = "../sieve-core" }
+sieve-parse = { path = "../sieve-parse" }
+sieve-query = { path = "../sieve-query" }
+sieve-savings = { path = "../sieve-savings" }
+sieve-daemon = { path = "../sieve-daemon" }
+
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/sieve-cli-{ target }{ archive-suffix }"
+bin-dir = "sieve-cli-{ target }/{ bin }{ binary-ext }"
+pkg-fmt = "txz"

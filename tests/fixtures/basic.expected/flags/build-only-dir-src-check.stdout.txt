@@ -1,0 +1,3 @@
+deep layer: not built — wiring graph is the source of truth
+
+graph check: OK — the wiring graph is in sync with the code. (meaning tier 0% complete — 12 of 12 node(s) pending: src/app.ts, src/app.ts#App, src/app.ts#App.constructor, src/app.ts#App.run, src/app.ts#main, src/legacy.mjs, src/legacy.mjs#legacyGreet, src/util.ts, … +4 more.)

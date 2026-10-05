@@ -1,0 +1,15 @@
+blast radius — working tree vs HEAD (depth 1)
+  changed: 3 files in 2 areas, 3 seed symbols
+  impacted: 2 symbols in 2 areas
+
+✗ extra — 2 changed files, 0/2 reached by a test
+✗ helper — 1 changed file, 0/1 reached by a test
+
+alpha — 1 symbol in 1 file
+  calls ← alpha (lib/alpha.ts:L2-L2) [depth 1]
+
+Zulu — 1 symbol in 1 file
+  calls ← Zulu (lib2/zulu.ts:L2-L2) [depth 1]
+
+who to tag
+  Other Person — 3 areas · 3 commits, last 1mo ago

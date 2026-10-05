@@ -1,0 +1,6 @@
+workspace check — 2 repo(s)
+
+alpha/: OK
+beta/: not built (run sieve build)
+
+1 of 2 workspace repos have graphs; run sieve build to cover beta

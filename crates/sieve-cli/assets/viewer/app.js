@@ -1,0 +1,500 @@
+// The Sieve symbol map. Plain JavaScript. The page needs no build step and
+// makes no request outside its own server. It draws the context graph and
+// the code graph as a force layout on one canvas.
+
+const PALETTE = {
+  night: "#1a1b26", text: "#c0caf5", mute: "#565f89", edge: "#3b4261",
+  blue: "#7aa2f7", cyan: "#7dcfff", purple: "#bb9af7", green: "#9ece6a",
+  orange: "#ff9e64", red: "#f7768e", accent: "#e8b86d",
+};
+const SYMBOL_HUE = {
+  function: PALETTE.blue, method: PALETTE.cyan, class: PALETTE.purple,
+  struct: PALETTE.orange, trait: PALETTE.orange, interface: PALETTE.orange,
+  type: PALETTE.orange, enum: PALETTE.orange, constant: PALETTE.green,
+  variable: PALETTE.green, module: "#9aa5c8", file: "#9aa5c8",
+};
+const BLAST_HUE = { changed: PALETTE.red, affected: PALETTE.orange };
+const SPARE_HUES = [PALETTE.blue, PALETTE.cyan, PALETTE.purple, PALETTE.green, "#e0af68", "#73daca"];
+const MAX_NODES = 3000;
+const VIEW_LABEL = { context: "Context", code: "Code", outline: "Outline" };
+
+// An exported page carries its data in this global. A live page asks the server.
+const EMBEDDED = window.__SIEVE_DATA__;
+
+const part = (id) => document.getElementById(id);
+const plane = part("plane");
+const pen = plane.getContext("2d");
+
+// Builds one element. Text always goes in as text, never as markup.
+function mk(tag, attrs, ...children) {
+  const node = document.createElement(tag);
+  for (const [name, val] of Object.entries(attrs || {})) {
+    if (name === "text") node.textContent = val;
+    else if (name.startsWith("on")) node.addEventListener(name.slice(2), val);
+    else node.setAttribute(name, val);
+  }
+  for (const child of children) if (child) node.append(child);
+  return node;
+}
+
+const app = {
+  info: {}, contextDoc: null, codeDoc: null,
+  views: [], view: "context", map: null,
+  cam: { k: 1, x: 0, y: 0 }, picked: null, needle: "",
+  heat: 0, redraw: true, grab: null, manual: false,
+};
+
+// Reads a span such as "L6-L11" into its first and last line.
+function parseSpan(span) {
+  const m = /^L?(\d+)(?:-L?(\d+))?$/.exec(String(span || ""));
+  if (!m) return { from: 0, to: 0 };
+  const from = parseInt(m[1], 10);
+  return { from, to: m[2] ? parseInt(m[2], 10) : from };
+}
+const spanText = (span) => {
+  const { from, to } = parseSpan(span);
+  return !from ? "" : to > from ? from + "-" + to : "L" + from;
+};
+
+async function fetchJson(url) {
+  try {
+    const res = await fetch(url);
+    return res.ok ? await res.json() : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+// Loads both graphs, then shows a view. A reload keeps the view, the
+// selection and the camera, so a live change does not reset the page.
+async function boot(keep) {
+  if (EMBEDDED) {
+    app.contextDoc = EMBEDDED.contextGraph;
+    app.codeDoc = EMBEDDED.codeGraph;
+  } else {
+    app.contextDoc = await fetchJson("/api/context-graph");
+    app.codeDoc = await fetchJson("/api/code-graph");
+  }
+  const info = (app.contextDoc && app.contextDoc.meta) || {};
+  app.info = info;
+  part("repo-name").textContent = info.repoName || "";
+  part("repo-note").textContent = info.subtitle || "";
+  document.title = "Sieve symbol map" + (info.repoName ? " - " + info.repoName : "");
+  const wanted = info.tabs || ["context", "code", "outline"];
+  app.views = wanted.filter((v) => (v === "context" ? app.contextDoc : app.codeDoc));
+  if (!app.views.length) app.views = ["context"];
+  paintTabs();
+  const start = info.defaultTab && app.views.includes(info.defaultTab) ? info.defaultTab : app.views[0];
+  if (!keep) {
+    app.map = null;
+    showView(start);
+    return;
+  }
+  const old = app.map, oldPick = app.picked && app.picked.id, cam = { ...app.cam }, manual = app.manual;
+  const view = app.views.includes(keep) ? keep : start;
+  app.map = null;
+  showView(view);
+  if (old && app.map && old.kind === app.map.kind) {
+    // Nodes that stay keep their place, so the picture does not jump.
+    for (const n of app.map.nodes) {
+      const was = old.byId.get(n.id);
+      if (was) { n.x = was.x; n.y = was.y; }
+    }
+    app.heat = 0.25;
+  }
+  app.cam = cam;
+  app.manual = manual;
+  if (oldPick && app.map) choose(app.map.byId.get(oldPick) || null, false);
+}
+
+// Builds the layout model of one graph kind.
+function makeMap(kind) {
+  const raw = kind === "context" ? readContext() : readCode();
+  const degree = new Map();
+  for (const e of raw.edges) {
+    degree.set(e.a, (degree.get(e.a) || 0) + 1);
+    degree.set(e.b, (degree.get(e.b) || 0) + 1);
+  }
+  let nodes = raw.nodes;
+  if (nodes.length > MAX_NODES) {
+    nodes = nodes.slice().sort((p, q) => (degree.get(q.id) || 0) - (degree.get(p.id) || 0)).slice(0, MAX_NODES);
+  }
+  const byId = new Map();
+  nodes.forEach((n, i) => {
+    n.deg = degree.get(n.id) || 0;
+    n.r = Math.min(12, 3 + Math.sqrt(n.deg) * 1.5) + (n.type === "changed" ? 3 : 0);
+    // A fixed spiral start gives the same picture on every load.
+    const angle = i * 2.399963, dist = 14 * Math.sqrt(i + 1);
+    n.x = Math.cos(angle) * dist; n.y = Math.sin(angle) * dist;
+    n.vx = 0; n.vy = 0; n.from = []; n.to = [];
+    byId.set(n.id, n);
+  });
+  const links = [];
+  for (const e of raw.edges) {
+    const a = byId.get(e.a), b = byId.get(e.b);
+    if (!a || !b || a === b) continue;
+    const link = { a, b, rel: e.rel };
+    links.push(link); a.to.push(link); b.from.push(link);
+  }
+  return { kind, nodes, links, byId, total: raw.nodes.length, capped: raw.nodes.length > nodes.length, emptyNote: raw.emptyNote };
+}
+
+function readContext() {
+  const doc = app.contextDoc || { nodes: [], edges: [], meta: {} };
+  const seen = [];
+  const nodes = doc.nodes.map((n) => {
+    if (!seen.includes(n.type)) seen.push(n.type);
+    return { id: n.id, label: n.name, type: n.type, raw: n,
+      hue: BLAST_HUE[n.type] || SPARE_HUES[seen.indexOf(n.type) % SPARE_HUES.length] };
+  });
+  const edges = doc.edges.map((e) => ({ a: e.source, b: e.target, rel: e.relation }));
+  return { nodes, edges, emptyNote: (doc.meta && doc.meta.emptyNote) || "" };
+}
+
+function readCode() {
+  const doc = app.codeDoc || { nodes: [], edges: [] };
+  const nodes = doc.nodes.map((n) => ({ id: n.id, label: n.name, type: n.kind, raw: n,
+    hue: SYMBOL_HUE[n.kind] || PALETTE.mute }));
+  const edges = doc.edges.map((e) => ({ a: e.source, b: e.target, rel: e.relation }));
+  return { nodes, edges, emptyNote: "" };
+}
+
+function paintTabs() {
+  part("views").replaceChildren(...app.views.map((v) =>
+    mk("button", { class: "tab", text: VIEW_LABEL[v] || v, "data-view": v, onclick: () => showView(v) })));
+}
+
+function showView(view) {
+  app.view = view;
+  app.picked = null;
+  for (const b of part("views").children) b.setAttribute("aria-current", String(b.dataset.view === view));
+  part("listing").hidden = view !== "outline";
+  const kind = view === "context" ? "context" : "code";
+  if (!app.map || app.map.kind !== kind) {
+    app.map = makeMap(kind);
+    app.cam = { k: 1, x: plane.clientWidth / 2, y: plane.clientHeight / 2 };
+    app.manual = false;
+    app.heat = 1;
+  }
+  if (view === "outline") paintListing();
+  paintKey();
+  paintStatus();
+  paintDetail();
+  app.redraw = true;
+}
+
+function paintKey() {
+  const hues = new Map();
+  for (const n of app.map.nodes) if (!hues.has(n.type)) hues.set(n.type, n.hue);
+  const rows = [...hues].map(([type, hue]) =>
+    mk("span", {}, mk("i", { class: "dot", style: "background:" + hue }), type));
+  if (hues.has("changed")) {
+    rows.unshift(mk("span", { text: "Changed: edited by the change. Affected: reaches the change." }));
+  }
+  part("key").replaceChildren(...rows);
+}
+
+function paintStatus() {
+  const m = app.map;
+  const bits = [m.nodes.length + " nodes, " + m.links.length + " edges"];
+  if (m.capped) bits.push("The drawing shows the " + MAX_NODES + " best linked of " + m.total + " nodes. The outline still lists all.");
+  if (!m.nodes.length && m.emptyNote) bits.push(m.emptyNote);
+  if (m.kind === "context") {
+    const changed = m.nodes.filter((n) => n.type === "changed").length;
+    const affected = m.nodes.filter((n) => n.type === "affected").length;
+    if (changed || affected) bits.unshift(changed + " changed, " + affected + " affected");
+  }
+  part("status").textContent = bits.join("  /  ");
+}
+
+// The detail panel.
+
+function jumpTo(node, text) {
+  return mk("a", { class: "jump", text, onclick: () => choose(node, true) });
+}
+
+function block(title, rows) {
+  return rows.length ? [mk("h3", { text: title }), ...rows] : [];
+}
+
+function paintDetail() {
+  const box = part("detail"), n = app.picked;
+  if (!n) {
+    box.replaceChildren(mk("p", { class: "mute", text: "Click a node to see its details." }));
+    return;
+  }
+  const raw = n.raw, kind = app.map.kind;
+  const out = [mk("h2", { text: n.label }), mk("div", { class: "kind-tag", text: n.type })];
+  if (kind === "code") {
+    out.push(mk("div", { class: "mute", text: raw.path + (raw.span ? ":" + spanText(raw.span) : "") }));
+    if (raw.signature) out.push(mk("pre", { class: "code-box", text: raw.signature }));
+    if (raw.summary) out.push(mk("p", { text: raw.summary }));
+    const calls = (links, end, yes) => links.filter((l) => (l.rel === "calls") === yes)
+      .map((l) => jumpTo(l[end], l[end].label + (yes ? "" : "  (" + l.rel + ")")));
+    out.push(...block("Callers", calls(n.from, "a", true)));
+    out.push(...block("Callees", calls(n.to, "b", true)));
+    out.push(...block("Other incoming", calls(n.from, "a", false)));
+    out.push(...block("Other outgoing", calls(n.to, "b", false)));
+  } else {
+    if (raw.summary) out.push(mk("p", { text: raw.summary }));
+    out.push(...block("Sources", (raw.sources || []).map((s) => mk("div", { class: "mute", text: s }))));
+    out.push(...block("Owners", (raw.owners || []).map((o) =>
+      mk("div", { text: o.name + (o.handle ? " (" + o.handle + ")" : "") + ", " + o.commits + " commits, last " + o.last }))));
+    out.push(...block("Evidence", (raw.evidence || []).flatMap((ev) => [
+      mk("div", { class: "mute", text: ev.label + (ev.note ? " - " + ev.note : "") }),
+      mk("pre", { class: "code-box" },
+        ...ev.lines.map((l) => mk("div", { class: l.sign === "+" ? "plus" : l.sign === "-" ? "minus" : "",
+          text: (l.n == null ? "" : l.n + " ") + l.sign + " " + l.text })),
+        ev.more ? mk("div", { class: "mute", text: "+" + ev.more + " more lines" }) : null),
+    ])));
+    out.push(...block("Depended on by", n.from.map((l) => jumpTo(l.a, l.a.label + "  (" + l.rel + ")"))));
+    out.push(...block("Depends on", n.to.map((l) => jumpTo(l.b, l.b.label + "  (" + l.rel + ")"))));
+  }
+  box.replaceChildren(...out);
+}
+
+function choose(node, recenter) {
+  app.picked = node;
+  if (node && recenter) {
+    app.cam.x = plane.clientWidth / 2 - node.x * app.cam.k;
+    app.cam.y = plane.clientHeight / 2 - node.y * app.cam.k;
+    app.manual = true;
+  }
+  paintDetail();
+  app.redraw = true;
+}
+
+// The outline lists every symbol, grouped by file. It reads the raw graph,
+// so it also lists the nodes that the drawing cap cut.
+
+function paintListing() {
+  const doc = app.codeDoc, box = part("listing");
+  if (!doc) { box.replaceChildren(mk("p", { class: "mute", text: "No code graph." })); return; }
+  const byFile = new Map();
+  for (const n of doc.nodes) {
+    if (n.kind === "file") continue;
+    if (!byFile.has(n.path)) byFile.set(n.path, []);
+    byFile.get(n.path).push(n);
+  }
+  const needle = app.needle, groups = [];
+  for (const [path, list] of [...byFile].sort((p, q) => (p[0] < q[0] ? -1 : 1))) {
+    const hit = list.filter((s) => !needle || s.name.toLowerCase().includes(needle));
+    if (!hit.length) continue;
+    hit.sort((p, q) => parseSpan(p.span).from - parseSpan(q.span).from);
+    groups.push(mk("details", needle ? { class: "file-group", open: "" } : { class: "file-group" },
+      mk("summary", { text: path + " (" + hit.length + ")" }),
+      ...hit.map((s) => mk("div", { class: "symbol-row", text: s.kind + " " + s.name + "  " + spanText(s.span),
+        onclick: () => openSymbol(s) }))));
+  }
+  box.replaceChildren(...(groups.length ? groups : [mk("p", { class: "mute", text: "Nothing matches." })]));
+}
+
+function openSymbol(sym) {
+  showView("code");
+  const node = app.map.byId.get(sym.id);
+  if (node) { choose(node, true); return; }
+  const box = part("detail");
+  box.replaceChildren(mk("h2", { text: sym.name }), mk("div", { class: "kind-tag", text: sym.kind }),
+    mk("div", { class: "mute", text: sym.path + ":" + spanText(sym.span) }),
+    mk("p", { text: "This node is not in the drawing. The node cap hid it." }));
+}
+
+// Force layout. Each step pushes near nodes apart (a grid keeps this near
+// linear), pulls linked nodes together and pulls all nodes to the centre.
+// The heat value falls each step, so the picture settles.
+
+const PUSH = 400, REACH = 90, PULL = 0.04, REST = 42, CENTER = 0.012, DRAG = 0.82, COOLING = 0.985;
+
+function advance() {
+  const m = app.map, ns = m.nodes, heat = app.heat;
+  const cells = new Map();
+  const cellKey = (cx, cy) => (cx + 32768) * 65536 + (cy + 32768);
+  for (const n of ns) {
+    const k = cellKey(Math.floor(n.x / REACH), Math.floor(n.y / REACH));
+    const bucket = cells.get(k);
+    if (bucket) bucket.push(n); else cells.set(k, [n]);
+  }
+  for (const n of ns) {
+    const cx = Math.floor(n.x / REACH), cy = Math.floor(n.y / REACH);
+    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+      const bucket = cells.get(cellKey(cx + i, cy + j));
+      if (!bucket) continue;
+      for (const o of bucket) {
+        if (o === n) continue;
+        let dx = n.x - o.x, dy = n.y - o.y, sq = dx * dx + dy * dy;
+        if (sq > REACH * REACH) continue;
+        if (sq < 0.01) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; sq = dx * dx + dy * dy + 0.01; }
+        const d = Math.sqrt(sq), push = (PUSH / d) * heat;
+        n.vx += (dx / d) * push; n.vy += (dy / d) * push;
+      }
+    }
+  }
+  for (const l of m.links) {
+    const dx = l.b.x - l.a.x, dy = l.b.y - l.a.y, d = Math.sqrt(dx * dx + dy * dy) || 0.01;
+    const pull = (d - REST) * PULL * heat, fx = (dx / d) * pull, fy = (dy / d) * pull;
+    l.a.vx += fx; l.a.vy += fy; l.b.vx -= fx; l.b.vy -= fy;
+  }
+  for (const n of ns) {
+    if (n.pinned) { n.vx = 0; n.vy = 0; continue; }
+    n.vx = (n.vx - n.x * CENTER * heat) * DRAG;
+    n.vy = (n.vy - n.y * CENTER * heat) * DRAG;
+    const speed = Math.hypot(n.vx, n.vy);
+    if (speed > 30) { n.vx *= 30 / speed; n.vy *= 30 / speed; }
+    n.x += n.vx; n.y += n.vy;
+  }
+  app.heat *= COOLING;
+}
+
+function fitAll() {
+  const ns = app.map.nodes;
+  if (!ns.length) return;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const n of ns) { x0 = Math.min(x0, n.x); y0 = Math.min(y0, n.y); x1 = Math.max(x1, n.x); y1 = Math.max(y1, n.y); }
+  const w = plane.clientWidth, h = plane.clientHeight;
+  const k = Math.min(2, 0.9 * Math.min(w / Math.max(1, x1 - x0), h / Math.max(1, y1 - y0)));
+  app.cam = { k, x: w / 2 - ((x0 + x1) / 2) * k, y: h / 2 - ((y0 + y1) / 2) * k };
+}
+
+// Drawing.
+
+const isHit = (n) => !app.needle || n.label.toLowerCase().includes(app.needle);
+
+function paint() {
+  const ratio = window.devicePixelRatio || 1, W = plane.clientWidth, H = plane.clientHeight;
+  if (plane.width !== Math.round(W * ratio) || plane.height !== Math.round(H * ratio)) {
+    plane.width = Math.round(W * ratio); plane.height = Math.round(H * ratio);
+  }
+  const cam = app.cam, m = app.map, pick = app.picked, searching = !!app.needle;
+  pen.setTransform(ratio, 0, 0, ratio, 0, 0);
+  pen.fillStyle = PALETTE.night; pen.fillRect(0, 0, W, H);
+  pen.setTransform(ratio * cam.k, 0, 0, ratio * cam.k, ratio * cam.x, ratio * cam.y);
+  const close = new Set();
+  if (pick) { close.add(pick); for (const l of pick.from) close.add(l.a); for (const l of pick.to) close.add(l.b); }
+  pen.lineWidth = 1 / cam.k;
+  for (const l of m.links) {
+    const lit = pick && (l.a === pick || l.b === pick);
+    pen.globalAlpha = lit ? 0.9 : pick || searching ? 0.08 : l.rel === "contains" ? 0.12 : 0.35;
+    pen.strokeStyle = lit ? PALETTE.accent : l.rel === "calls" ? PALETTE.blue : PALETTE.mute;
+    pen.beginPath(); pen.moveTo(l.a.x, l.a.y); pen.lineTo(l.b.x, l.b.y); pen.stroke();
+  }
+  for (const n of m.nodes) {
+    const found = searching && isHit(n);
+    pen.globalAlpha = (pick && !close.has(n)) || (searching && !found) ? 0.18 : 1;
+    pen.fillStyle = n.hue;
+    pen.beginPath(); pen.arc(n.x, n.y, n.r, 0, 6.2832); pen.fill();
+    if (n === pick || found) { pen.strokeStyle = PALETTE.accent; pen.lineWidth = 2 / cam.k; pen.stroke(); }
+    else if (n.type === "changed") { pen.strokeStyle = PALETTE.text; pen.lineWidth = 1.5 / cam.k; pen.stroke(); }
+  }
+  // Labels: the selection, its neighbours and the matches. Zoomed in, all.
+  pen.globalAlpha = 1; pen.fillStyle = PALETTE.text;
+  pen.font = 11 / cam.k + "px ui-monospace, Menlo, monospace";
+  for (const n of m.nodes) {
+    const sx = n.x * cam.k + cam.x, sy = n.y * cam.k + cam.y;
+    if (sx < -50 || sy < -20 || sx > W + 50 || sy > H + 20) continue;
+    if (close.has(n) || (searching && isHit(n)) || cam.k > 1.6 || (cam.k > 0.8 && n.deg > 6)) {
+      pen.fillText(n.label, n.x + n.r + 2, n.y + 3);
+    }
+  }
+  pen.globalAlpha = 1;
+}
+
+function tick() {
+  if (app.map) {
+    if (app.heat > 0.01) {
+      advance();
+      if (app.heat > 0.3) advance();
+      app.redraw = true;
+      if (!app.manual && app.heat < 0.4) fitAll();
+    } else if (app.heat > 0) {
+      if (!app.manual) fitAll();
+      app.heat = 0; app.redraw = true;
+    }
+    if (app.redraw) { app.redraw = false; if (app.view !== "outline") paint(); }
+  }
+  requestAnimationFrame(tick);
+}
+
+// Pointer input.
+
+function toWorld(px, py) {
+  return [(px - app.cam.x) / app.cam.k, (py - app.cam.y) / app.cam.k];
+}
+
+function nodeAt(px, py) {
+  const [x, y] = toWorld(px, py), slack = 3 / app.cam.k, ns = app.map.nodes;
+  for (let i = ns.length - 1; i >= 0; i--) {
+    const n = ns[i], dx = n.x - x, dy = n.y - y, r = n.r + slack;
+    if (dx * dx + dy * dy <= r * r) return n;
+  }
+  return null;
+}
+
+function where(ev) {
+  const box = plane.getBoundingClientRect();
+  return [ev.clientX - box.left, ev.clientY - box.top];
+}
+
+plane.addEventListener("pointerdown", (ev) => {
+  if (!app.map) return;
+  const [px, py] = where(ev);
+  plane.setPointerCapture(ev.pointerId);
+  app.grab = { node: nodeAt(px, py), px, py, moved: false, cx: app.cam.x, cy: app.cam.y };
+  plane.setAttribute("data-moving", "");
+});
+
+plane.addEventListener("pointermove", (ev) => {
+  const g = app.grab;
+  if (!g) return;
+  const [px, py] = where(ev);
+  if (Math.abs(px - g.px) + Math.abs(py - g.py) > 3) g.moved = true;
+  if (!g.moved) return;
+  app.manual = true;
+  if (g.node) {
+    [g.node.x, g.node.y] = toWorld(px, py);
+    g.node.pinned = true;
+    app.heat = Math.max(app.heat, 0.3);
+  } else {
+    app.cam.x = g.cx + px - g.px; app.cam.y = g.cy + py - g.py;
+  }
+  app.redraw = true;
+});
+
+plane.addEventListener("pointerup", () => {
+  const g = app.grab;
+  app.grab = null;
+  plane.removeAttribute("data-moving");
+  if (!g) return;
+  if (g.node) g.node.pinned = false;
+  if (!g.moved) choose(g.node, false);
+});
+
+plane.addEventListener("wheel", (ev) => {
+  ev.preventDefault();
+  if (!app.map) return;
+  const [px, py] = where(ev), cam = app.cam;
+  const k = Math.max(0.05, Math.min(12, cam.k * Math.exp(-ev.deltaY * 0.0015)));
+  cam.x = px - ((px - cam.x) / cam.k) * k; cam.y = py - ((py - cam.y) / cam.k) * k; cam.k = k;
+  app.manual = true; app.redraw = true;
+}, { passive: false });
+
+part("finder").addEventListener("input", (ev) => {
+  app.needle = ev.target.value.trim().toLowerCase();
+  if (app.view === "outline") paintListing();
+  app.redraw = true;
+});
+
+part("finder").addEventListener("keydown", (ev) => {
+  if (ev.key !== "Enter" || !app.needle || !app.map) return;
+  const first = app.map.nodes.find(isHit);
+  if (first) choose(first, true);
+});
+
+window.addEventListener("resize", () => { app.redraw = true; });
+
+boot().then(() => {
+  requestAnimationFrame(tick);
+  // A live server sends an event when the graph changes.
+  if (!EMBEDDED && window.EventSource) {
+    new EventSource("/events").onmessage = () => boot(app.view);
+  }
+});

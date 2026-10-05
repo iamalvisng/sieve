@@ -1,0 +1,4 @@
+· skipped the graph build — run sieve build
+✓ claude   .claude/, .mcp.json
+· restart your agents so a new session picks up sieve
+· commit .claude/ .mcp.json to share it — sieve/ stays local and git-ignored

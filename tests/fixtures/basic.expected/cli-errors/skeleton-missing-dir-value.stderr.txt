@@ -1,0 +1,1 @@
+error: option '--dir <path>' argument missing

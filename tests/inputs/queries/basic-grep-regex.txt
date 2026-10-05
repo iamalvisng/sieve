@@ -1,0 +1,30 @@
+# grep regex-engine parity queries (P1-12, P3-16). They run in a copy of
+# the built basic fixture plus tests/parity/grep-regex/regex-cases.ts at
+# src/regex-cases.ts. Format: <id><TAB><arguments after "sieve">. The
+# pattern sits in single quotes; an optional "-i" follows it. The unit
+# test in crates/sieve-query/src/grep.rs reads this list and the goldens
+# under tests/fixtures/basic.expected/grep-regex/.
+grep-rx-lookahead	grep 'hit(?=me)' --in src/regex-cases.ts
+grep-rx-lookbehind	grep '(?<=hit)me' --in src/regex-cases.ts
+grep-rx-backref	grep '(a)\1' --in src/regex-cases.ts
+grep-rx-named	grep '(?<n>a)\k<n>' --in src/regex-cases.ts
+grep-rx-brace	grep '{' --in src/regex-cases.ts
+grep-rx-class-dash	grep '[\d-z]' --in src/regex-cases.ts
+grep-rx-p-literal	grep '\p{L}' --in src/regex-cases.ts
+grep-rx-ascii-b	grep 'wordé\b' --in src/regex-cases.ts
+grep-rx-dot-cr	grep 'x.' --in src/regex-cases.ts
+grep-rx-icase-kelvin	grep 'k' -i --in src/regex-cases.ts
+grep-rx-err-inline-flag	grep '(?i)a' --in src/regex-cases.ts
+grep-rx-err-quant-order	grep 'a{2,1}' --in src/regex-cases.ts
+grep-rx-err-range	grep '[z-a]' --in src/regex-cases.ts
+grep-rx-err-double-star	grep 'a**' --in src/regex-cases.ts
+grep-rx-err-open-group	grep '(a' --in src/regex-cases.ts
+grep-rx-err-close-group	grep 'a)' --in src/regex-cases.ts
+grep-rx-err-open-class	grep '([' --in src/regex-cases.ts
+grep-rx-err-lead-star	grep '*a' --in src/regex-cases.ts
+grep-rx-err-trailing-slash	grep '\' --in src/regex-cases.ts
+grep-rx-err-dup-name	grep '(?<n>a)(?<n>b)' --in src/regex-cases.ts
+grep-rx-err-bad-kref	grep '(?<n>a)\k<zz>' --in src/regex-cases.ts
+grep-rx-err-bad-group	grep '(?' --in src/regex-cases.ts
+grep-rx-err-bad-name	grep '(?<1>a)' --in src/regex-cases.ts
+grep-rx-err-lookbehind-quant	grep '(?<=a)*' --in src/regex-cases.ts

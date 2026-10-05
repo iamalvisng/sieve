@@ -1,0 +1,15 @@
+{
+  "lastQuery": "how does run compute the result",
+  "perAgentQuery": {
+    "scout": "how does run compute the result"
+  },
+  "toolReads": 0,
+  "sourceReads": 0,
+  "savedTokens": 0,
+  "injectedPointers": [
+    "src/app.ts:L11-L13",
+    "py/main.py:L9-L11",
+    "src/util.ts:L5-L7"
+  ],
+  "nudges": 0
+}

@@ -1,0 +1,2 @@
+no hits for "nothingHere" in 1 indexed files. The pattern may be too specific — retry sieve grep with a bare symbol name or short substring (drop the receiver, full signature, and regex anchors). All indexed code was searched; use raw grep -rn only for genuinely unindexed files (docs, configs, brand-new files)
+1 of 2 workspace repos have graphs; run sieve build to cover beta

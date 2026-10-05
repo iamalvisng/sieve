@@ -1,0 +1,60 @@
+{
+  "pattern": "add",
+  "filesSearched": 7,
+  "totalHits": 3,
+  "groups": [
+    {
+      "symbol": {
+        "id": "py/helpers.py#add",
+        "name": "add",
+        "kind": "function",
+        "path": "py/helpers.py",
+        "span": "L1-L2"
+      },
+      "path": "py/helpers.py",
+      "inDegree": 1,
+      "hits": [
+        {
+          "line": 1,
+          "text": "def add(a, b):"
+        }
+      ]
+    },
+    {
+      "symbol": {
+        "id": "py/main.py#Calculator.total",
+        "name": "Calculator.total",
+        "kind": "method",
+        "path": "py/main.py",
+        "span": "L5-L6"
+      },
+      "path": "py/main.py",
+      "inDegree": 1,
+      "hits": [
+        {
+          "line": 6,
+          "text": "return add(a, b)"
+        }
+      ]
+    },
+    {
+      "symbol": null,
+      "path": "py/main.py",
+      "inDegree": 0,
+      "hits": [
+        {
+          "line": 1,
+          "text": "from py.helpers import add"
+        }
+      ]
+    }
+  ],
+  "truncated": {
+    "files": 0,
+    "hits": 0
+  },
+  "saved": {
+    "files": 2,
+    "baselineChars": 230
+  }
+}

@@ -1,0 +1,120 @@
+{
+  "query": "render",
+  "mode": "lexical",
+  "hits": [
+    {
+      "kind": "symbol",
+      "title": "renderPage · function",
+      "pointer": "packages/alpha/src/render.ts:L1-L3",
+      "snippet": "function renderPage(): string",
+      "score": 1,
+      "scope": "packages/alpha"
+    },
+    {
+      "kind": "symbol",
+      "title": "renderReport · function",
+      "pointer": "packages/beta/src/render.ts:L1-L3",
+      "snippet": "function renderReport(): string",
+      "score": 0.9866759999793938,
+      "scope": "packages/beta"
+    },
+    {
+      "kind": "symbol",
+      "title": "renderTable · function",
+      "pointer": "packages/beta/src/format.ts:L1-L3",
+      "snippet": "function renderTable(): string",
+      "score": 0.519042254082416,
+      "scope": "packages/beta"
+    },
+    {
+      "kind": "symbol",
+      "title": "renderMenu · function",
+      "pointer": "packages/alpha/src/layout.ts:L1-L3",
+      "snippet": "function renderMenu(): string",
+      "score": 0.5018434229744195,
+      "scope": "packages/alpha"
+    },
+    {
+      "kind": "symbol",
+      "title": "renderFooter · function",
+      "pointer": "packages/alpha/src/render.ts:L9-L11",
+      "snippet": "function renderFooter(): string",
+      "score": 0.8255402111579943,
+      "scope": "packages/alpha"
+    },
+    {
+      "kind": "symbol",
+      "title": "renderChart · function",
+      "pointer": "packages/beta/src/render.ts:L5-L7",
+      "snippet": "function renderChart(): string",
+      "score": 0.8409577453024539,
+      "scope": "packages/beta"
+    },
+    {
+      "kind": "symbol",
+      "title": "formatRow · function",
+      "pointer": "packages/beta/src/format.ts:L5-L7",
+      "snippet": "function formatRow(): string",
+      "score": 0.08504733261539815,
+      "scope": "packages/beta"
+    },
+    {
+      "kind": "symbol",
+      "title": "layoutGrid · function",
+      "pointer": "packages/alpha/src/layout.ts:L5-L7",
+      "snippet": "function layoutGrid(): string",
+      "score": 0.06708940999513434,
+      "scope": "packages/alpha"
+    },
+    {
+      "kind": "symbol",
+      "title": "renderHeader · function",
+      "pointer": "packages/alpha/src/render.ts:L5-L7",
+      "snippet": "function renderHeader(): string",
+      "score": 0.8255402111579943,
+      "scope": "packages/alpha"
+    },
+    {
+      "kind": "symbol",
+      "title": "render.ts · file",
+      "pointer": "packages/beta/src/render.ts",
+      "snippet": "",
+      "score": 0.5614231358471923,
+      "scope": "packages/beta"
+    },
+    {
+      "kind": "symbol",
+      "title": "render.ts · file",
+      "pointer": "packages/alpha/src/render.ts",
+      "snippet": "",
+      "score": 0.5493565026876327,
+      "scope": "packages/alpha"
+    },
+    {
+      "kind": "symbol",
+      "title": "exportPdf · function",
+      "pointer": "packages/beta/src/render.ts:L9-L11",
+      "snippet": "function exportPdf(): string",
+      "score": 0.34955210408406306,
+      "scope": "packages/beta"
+    }
+  ],
+  "scopes": {
+    "federated": [
+      "packages/alpha",
+      "packages/beta"
+    ],
+    "alsoMatched": [
+      {
+        "scope": "",
+        "bestId": "src/index.ts"
+      },
+      {
+        "scope": "packages/gamma",
+        "bestId": "packages/gamma/src/util.ts"
+      }
+    ]
+  },
+  "coverage": 1,
+  "coverageStrong": 1
+}

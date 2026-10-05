@@ -1,0 +1,39 @@
+{
+  "file": "src/a.ts",
+  "entries": [
+    {
+      "name": "alphaAdd",
+      "kind": "function",
+      "span": "L1-L3",
+      "signature": "function alphaAdd(a: number, b: number): number"
+    },
+    {
+      "name": "alphaTwice",
+      "kind": "function",
+      "span": "L5-L7",
+      "signature": "function alphaTwice(n: number): number"
+    },
+    {
+      "name": "shared",
+      "kind": "function",
+      "span": "L9-L11",
+      "signature": "function shared(): number"
+    },
+    {
+      "name": "useShared",
+      "kind": "function",
+      "span": "L13-L15",
+      "signature": "function useShared(): number"
+    },
+    {
+      "name": "useSharedTwice",
+      "kind": "function",
+      "span": "L17-L19",
+      "signature": "function useSharedTwice(): number"
+    }
+  ],
+  "saved": {
+    "files": 1,
+    "baselineChars": 343
+  }
+}

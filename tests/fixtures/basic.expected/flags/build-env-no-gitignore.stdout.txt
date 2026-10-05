@@ -1,0 +1,4 @@
+✓ wiring: 21 nodes (9 function, 7 file, 3 method, 2 class), 23 edges, 7 cards [javascript, python, tsx, typescript]
+  parsed: 7 of 7 files (0 replayed from cache)
+  → <TMP>/sieve
+  sieve/ is a local cache — add it to your gitignore if you want it untracked.

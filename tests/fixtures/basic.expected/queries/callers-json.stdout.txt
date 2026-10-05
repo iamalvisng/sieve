@@ -1,0 +1,29 @@
+{
+  "query": "double",
+  "matches": [
+    {
+      "symbol": {
+        "id": "src/util.ts#double",
+        "name": "double",
+        "kind": "function",
+        "path": "src/util.ts",
+        "span": "L1-L3"
+      },
+      "hits": [
+        {
+          "id": "src/util.ts#quadruple",
+          "relation": "calls",
+          "depth": 1,
+          "name": "quadruple",
+          "kind": "function",
+          "path": "src/util.ts",
+          "span": "L5-L7"
+        }
+      ]
+    }
+  ],
+  "saved": {
+    "files": 1,
+    "baselineChars": 140
+  }
+}

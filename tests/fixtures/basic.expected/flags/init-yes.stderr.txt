@@ -1,0 +1,5 @@
+✓ graph ready · 21 nodes, 23 edges
+✓ claude   .claude/, .mcp.json
+· restart your agents so a new session picks up sieve
+· commit .claude/ .mcp.json to share it — sieve/ stays local and git-ignored
+· skipped agents, adal, cursor, gemini, grok, hermes, antigravity, copilot, kiro, windsurf (no marker in this repo) — add with --agents <name>

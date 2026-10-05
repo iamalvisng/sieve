@@ -1,0 +1,14 @@
+✓ graph ready · 21 nodes, 23 edges
+✓ claude        .claude/, .mcp.json · + 2 in ~/
+✓ agents        AGENTS.md
+✓ adal          .adal/skills/sieve/SKILL.md
+✓ cursor        .cursor/rules/sieve.mdc, .cursor/mcp.json +1 more
+✓ gemini        GEMINI.md, .gemini/settings.json
+✓ grok          .grok/skills/sieve/SKILL.md, .grok/config.toml
+✓ hermes        AGENTS.md
+✓ antigravity   AGENTS.md · + 2 in ~/.gemini/
+✓ copilot       .github/copilot-instructions.md
+✓ kiro          .kiro/steering/sieve.md, .kiro/settings/mcp.json
+✓ windsurf      .windsurf/rules/sieve.md
+· restart your agents so a new session picks up sieve
+· commit .claude/ .mcp.json AGENTS.md .adal/ +7 more to share it — sieve/ stays local and git-ignored

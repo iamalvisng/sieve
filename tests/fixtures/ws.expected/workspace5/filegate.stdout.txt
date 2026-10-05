@@ -1,0 +1,16 @@
+sieve ask — "zeta omega sigma rho kappa lambda mu nu xi pi"  (lexical)
+
+1. [beta/] zeta-omega-sigma-rho.ts · file  [symbol]
+   beta/src/zeta-omega-sigma-rho.ts
+
+2. [beta/] zetaOmega · function  [symbol]
+   beta/src/zeta-omega-sigma-rho.ts:L1-L3
+   function zetaOmega(): number
+
+3. [beta/] betaFour · function  [symbol]
+   beta/src/zeta-omega-sigma-rho.ts:L5-L7
+   function betaFour(): number
+
+matched in: beta/ (3)
+
+[sieve] only 3 hits — don't re-ask with new wording; switch tool: `sieve grep "<literal>"` for every occurrence · `sieve skeleton <file>` for a file's full API · `sieve callers <symbol>` for who-uses.

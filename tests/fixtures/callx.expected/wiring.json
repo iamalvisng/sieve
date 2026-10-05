@@ -1,0 +1,208 @@
+{
+  "meta": {
+    "version": 1,
+    "nodeCount": 8,
+    "edgeCount": 12,
+    "languages": [
+      "typescript"
+    ],
+    "scopes": [
+      {
+        "prefix": "",
+        "label": "",
+        "markers": []
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "src/base.ts",
+      "name": "base.ts",
+      "kind": "file",
+      "path": "src/base.ts",
+      "span": "L1-L6",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "37ce4195db7b71bed3f089288f0e34253458453313898b3d1b50e977314d64d4",
+      "chars": 61,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "src/base.ts#Widget",
+      "name": "Widget",
+      "kind": "class",
+      "path": "src/base.ts",
+      "span": "L1-L5",
+      "signature": "class Widget",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "e97a263cccb1e948cf20062601d201fad9cfe23a5adab0743eb4c51053640b93",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "src/base.ts#Widget.size",
+      "name": "size",
+      "kind": "method",
+      "path": "src/base.ts",
+      "span": "L2-L4",
+      "signature": "size(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "08c8ead51ae0ffa09d294e40a6ae144c45f6c54e704c25fb6426ac28c47db4b4",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null,
+      "owner": "Widget"
+    },
+    {
+      "id": "src/calc.ts",
+      "name": "calc.ts",
+      "kind": "file",
+      "path": "src/calc.ts",
+      "span": "L1-L20",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "9f48bc84018855d6de950312f0f3b20076fa01271bc63277ab2fc57b675a07c2",
+      "chars": 359,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "src/calc.ts#alpha",
+      "name": "alpha",
+      "kind": "function",
+      "path": "src/calc.ts",
+      "span": "L17-L19",
+      "signature": "function alpha(n: number): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "2df165d08e421a6f915f0b40e5d78843d87d1dc1b56d800661d0e75cd4c8dd41",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "src/calc.ts#double",
+      "name": "double",
+      "kind": "function",
+      "path": "src/calc.ts",
+      "span": "L3-L5",
+      "signature": "function double(n: number): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "22d2a2375208c37540a2cbbef8adba08ff9d4620d3589e99134da93f04f7aaa4",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "src/calc.ts#doubled",
+      "name": "doubled",
+      "kind": "function",
+      "path": "src/calc.ts",
+      "span": "L7-L9",
+      "signature": "function doubled(n: number): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "bf88af1eda627b27be5018174262b62e3ce8d2d13fca52bc387e58d605ec0284",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "src/calc.ts#zed",
+      "name": "zed",
+      "kind": "function",
+      "path": "src/calc.ts",
+      "span": "L11-L15",
+      "signature": "function zed(n: number): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "f977a4d88c23b2cc6425899c16c994e8e3701251490856f309a5469c9353b407",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "src/base.ts",
+      "target": "src/base.ts#Widget",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/base.ts#Widget",
+      "target": "src/base.ts#Widget.size",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/calc.ts",
+      "target": "src/calc.ts#alpha",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/calc.ts",
+      "target": "src/calc.ts#double",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/calc.ts",
+      "target": "src/calc.ts#doubled",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/calc.ts",
+      "target": "src/calc.ts#zed",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/calc.ts",
+      "target": "src/base.ts",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/calc.ts#alpha",
+      "target": "src/calc.ts#double",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/calc.ts#zed",
+      "target": "src/base.ts#Widget.size",
+      "relation": "calls",
+      "confidence": "inferred"
+    },
+    {
+      "source": "src/calc.ts#zed",
+      "target": "src/calc.ts#double",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/calc.ts#zed",
+      "target": "src/calc.ts#doubled",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/calc.ts#zed",
+      "target": "src/base.ts#Widget",
+      "relation": "references",
+      "confidence": "extracted"
+    }
+  ]
+}

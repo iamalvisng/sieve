@@ -1,0 +1,7 @@
+"latinString" — 2 hits in 2 symbols across 1 files (searched 14 indexed files)
+
+latinString · function · ts/latin.ts:L2-L4 · 1 in-edges
+  L2: export function latinString(): string {
+
+latinCaller · function · ts/latin.ts:L5-L7 · 0 in-edges
+  L6: return latinString().length; // caf�

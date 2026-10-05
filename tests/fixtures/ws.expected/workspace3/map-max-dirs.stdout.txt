@@ -1,0 +1,19 @@
+workspace map — 2 repo(s)
+
+## alpha/
+[sieve] saved ≈ 10 tokens
+
+repo map — 1 files · 5 symbols · 8 edges · typescript
+
+src/a.ts            1 files · 5 symbols   hubs: alphaAdd (a.ts, 1←), shared (a.ts, 1←), useShared (a.ts, 1←)
+
+hotspots: alphaAdd · function · src/a.ts:L1-L3 · 1←  shared · function · src/a.ts:L9-L11 · 1←  useShared · function · src/a.ts:L13-L15 · 1←
+
+## beta/
+[sieve] saved ≈ 13 tokens
+
+repo map — 1 files · 5 symbols · 8 edges · typescript
+
+src/b.ts            1 files · 5 symbols   hubs: betaGreet (b.ts, 1←), shared (b.ts, 1←), useShared (b.ts, 1←)
+
+hotspots: betaGreet · function · src/b.ts:L1-L3 · 1←  shared · function · src/b.ts:L9-L11 · 1←  useShared · function · src/b.ts:L13-L15 · 1←

@@ -1,0 +1,7 @@
+[sieve] saved ≈ 45 tokens
+
+double · function · src/calc.ts:L3-L5
+  calls ← alpha (src/calc.ts:L17-L19)
+      18: return double(n);
+  calls ← zed (src/calc.ts:L11-L15)
+      14: return double(a) + w.size();

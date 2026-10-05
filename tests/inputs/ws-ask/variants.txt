@@ -1,0 +1,11 @@
+# variant<TAB>overlays (comma list, - for none)<TAB>post (comma list)<TAB>unbuilt child
+base	-	-	-
+unbuilt	-	-	beta
+concept	-	alpha-concept	-
+concept-gamma	-	gamma-concept	-
+ties	ties	-	-
+weaky	weaky	-	-
+many	many	-	-
+filegate	filegate	-	-
+edited	-	edited	-
+crux	-	crux	-

@@ -1,0 +1,16 @@
+### sieve blast radius
+
+**Nothing outside this diff depends on it.** 1 area changed; no indexed dependents at depth 1.
+Tests: **no test reaches extra**.
+
+<details>
+<summary><strong>Test signal</strong> per changed area — 1 ✗</summary>
+
+_Reached = a node under a test path has a resolved edge into the changed symbol. It undercounts anything called indirectly — through a CLI, a spawned process or a dynamic import — so read a low ratio as “look here”, never as a coverage gate._
+
+- ✗ **extra** — 0 of 2 reached · no test file reaches it
+  - not reached: `extra`, `newFn`
+
+</details>
+
+<sub>`sieve blast` · working tree vs HEAD · depth 1 · 2 changed files</sub>

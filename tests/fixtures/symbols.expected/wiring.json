@@ -1,0 +1,809 @@
+{
+  "meta": {
+    "version": 1,
+    "nodeCount": 40,
+    "edgeCount": 35,
+    "languages": [
+      "python",
+      "typescript"
+    ],
+    "scopes": [
+      {
+        "prefix": "",
+        "label": "",
+        "markers": []
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "py/nested.py",
+      "name": "nested.py",
+      "kind": "file",
+      "path": "py/nested.py",
+      "span": "L1-L14",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "ceaa57963d47df31465f8bbd2ab1a1b3bdcd135c7c727c94e84ec8b8434ef0a8",
+      "chars": 142,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "py/nested.py#fetch",
+      "name": "fetch",
+      "kind": "function",
+      "path": "py/nested.py",
+      "span": "L6-L7",
+      "signature": "async def fetch()",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "0dbc24ad4c3602a8247e609c87787b2385a5267b1d2cde0b93672d7b579d1e91",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "py/nested.py#guarded",
+      "name": "guarded",
+      "kind": "function",
+      "path": "py/nested.py",
+      "span": "L2-L3",
+      "signature": "def guarded()",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "d83960ff5bdd90077a033dac9eb3e4905765780a8e05936df2f25ce4a92f8dde",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "py/nested.py#Outer",
+      "name": "Outer",
+      "kind": "class",
+      "path": "py/nested.py",
+      "span": "L10-L13",
+      "signature": "class Outer",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "383fa204e7244e03c60d2744f3d491da93adbdd45327b6cc5f6b1e4b04616d66",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "py/nested.py#Outer.Inner",
+      "name": "Inner",
+      "kind": "class",
+      "path": "py/nested.py",
+      "span": "L11-L13",
+      "signature": "class Inner",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "dab7ed05ce52bd32e644e7d637b7d9b7c784964911dc0a6d5b10f3373d261c94",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "py/nested.py#Outer.Inner.go",
+      "name": "go",
+      "kind": "method",
+      "path": "py/nested.py",
+      "span": "L12-L13",
+      "signature": "def go(self)",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "dd1e82267ccbc98200edf43ad713afb2b5df1682aaa69f7c69867b687bf79e88",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null,
+      "owner": "Inner"
+    },
+    {
+      "id": "py/private.py",
+      "name": "private.py",
+      "kind": "file",
+      "path": "py/private.py",
+      "span": "L1-L25",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "21f976c0add2d17e5b12cd5a560d956aecd1b337104064d0af7b29faff1719bf",
+      "chars": 287,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "py/private.py#_helper",
+      "name": "_helper",
+      "kind": "function",
+      "path": "py/private.py",
+      "span": "L1-L2",
+      "signature": "def _helper()",
+      "exported": false,
+      "origin": "ast",
+      "body_hash": "23689b887917eb09fbaad55d8e7f3674cb1006988ac60cdf431d15601513a1bf",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "py/private.py#_Private",
+      "name": "_Private",
+      "kind": "class",
+      "path": "py/private.py",
+      "span": "L5-L6",
+      "signature": "class _Private",
+      "exported": false,
+      "origin": "ast",
+      "body_hash": "24d8c337bb5591a5668ccff8a3ecad9221d788cba60bf5cca1d5484acedc5b38",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "py/private.py#Public",
+      "name": "Public",
+      "kind": "class",
+      "path": "py/private.py",
+      "span": "L9-L24",
+      "signature": "class Public",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "3b6154db920c487c7dd50965c6696b03143012fce88fc04348840046d0a0f461",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "py/private.py#Public.__init__",
+      "name": "__init__",
+      "kind": "method",
+      "path": "py/private.py",
+      "span": "L10-L11",
+      "signature": "def __init__(self)",
+      "exported": false,
+      "origin": "ast",
+      "body_hash": "2cfdd33cccb5f4b9f6cf56b5df4c897a98451bfb65b7bc4af6eb4971dcc68742",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null,
+      "owner": "Public"
+    },
+    {
+      "id": "py/private.py#Public.make",
+      "name": "make",
+      "kind": "method",
+      "path": "py/private.py",
+      "span": "L14-L15",
+      "signature": "def make()",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "a8b1562da783a6168cd12ddc2e851f5e3056ae91bea8c23844dba863afec3513",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null,
+      "owner": "Public"
+    },
+    {
+      "id": "py/private.py#Public.outer",
+      "name": "outer",
+      "kind": "method",
+      "path": "py/private.py",
+      "span": "L21-L24",
+      "signature": "def outer(self)",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "47c32edadc050670e13dcf6c12b929e04a6d9665b08f95309f3a59b9686ebc46",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null,
+      "owner": "Public"
+    },
+    {
+      "id": "py/private.py#Public.outer.inner",
+      "name": "inner",
+      "kind": "function",
+      "path": "py/private.py",
+      "span": "L22-L23",
+      "signature": "def inner()",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "f1e77e9b82e824d890fefd6a9c8677675e8c0a0e6a8692a01c157e202e1a6eec",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "py/private.py#Public.size",
+      "name": "size",
+      "kind": "method",
+      "path": "py/private.py",
+      "span": "L18-L19",
+      "signature": "def size(self)",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "069f14769d00df3eeeeba904d8a66b7edc09252d3119295d8c51c63678b03b29",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null,
+      "owner": "Public"
+    },
+    {
+      "id": "ts/accessors.ts",
+      "name": "accessors.ts",
+      "kind": "file",
+      "path": "ts/accessors.ts",
+      "span": "L1-L16",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "225080cc5fbbf83e9ee56a378d2101eee1b39865b68985c58e2e3f351a42702d",
+      "chars": 174,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/accessors.ts#Box",
+      "name": "Box",
+      "kind": "class",
+      "path": "ts/accessors.ts",
+      "span": "L1-L15",
+      "signature": "class Box",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "22eb3f6c0ab667801c634925d5e0c217401c65574d5b05f3ab8579f47d9585ce",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/accessors.ts#Box._hidden",
+      "name": "_hidden",
+      "kind": "method",
+      "path": "ts/accessors.ts",
+      "span": "L12-L14",
+      "signature": "private _hidden()",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "2775c528abc978db3f69df6b7c90c1ee77dddfc31fe2724d2f5cd9bab2cf8fbc",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null,
+      "owner": "Box"
+    },
+    {
+      "id": "ts/accessors.ts#Box.value",
+      "name": "value",
+      "kind": "method",
+      "path": "ts/accessors.ts",
+      "span": "L4-L6",
+      "signature": "get value()",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "73ad5915e99617df440d9b88f08128b1b4fa5c72c0ac9c044ccebd62a422dd39",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null,
+      "owner": "Box"
+    },
+    {
+      "id": "ts/accessors.ts#Box.value~2",
+      "name": "value",
+      "kind": "method",
+      "path": "ts/accessors.ts",
+      "span": "L8-L10",
+      "signature": "set value(v: number)",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "eb915f6c6c3cd8c982ef99e2bbcd0457092339ca992b146051bbe8e19bd28f20",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null,
+      "owner": "Box"
+    },
+    {
+      "id": "ts/arrows.ts",
+      "name": "arrows.ts",
+      "kind": "file",
+      "path": "ts/arrows.ts",
+      "span": "L1-L13",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "4e12ab4fd1cac738710adf0f3305f9800ca8630f1c5ae6e87a54902b78f74aa4",
+      "chars": 199,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/arrows.ts#arrow",
+      "name": "arrow",
+      "kind": "function",
+      "path": "ts/arrows.ts",
+      "span": "L1-L1",
+      "signature": "arrow = (n: number): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "bb26f235cc3cd6d91e84582178d09ccec0c867dec3e502030bb40d2f0f283307",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/arrows.ts#fnExpr",
+      "name": "fnExpr",
+      "kind": "function",
+      "path": "ts/arrows.ts",
+      "span": "L3-L5",
+      "signature": "fnExpr = function (n: number)",
+      "exported": false,
+      "origin": "ast",
+      "body_hash": "79fe1fd08f8a355d605528d0188b87c6e14a3faa81b3ced3a682acfa021c1cfe",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/arrows.ts#named",
+      "name": "named",
+      "kind": "function",
+      "path": "ts/arrows.ts",
+      "span": "L7-L12",
+      "signature": "function named()",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "6ea4de9681b2fb78b0c9fbd56ae0a092cb4e9b948ba131ed3f76fd68dbf03030",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/arrows.ts#named.inner",
+      "name": "inner",
+      "kind": "function",
+      "path": "ts/arrows.ts",
+      "span": "L8-L10",
+      "signature": "function inner()",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "a10514115b1c72ab5555f9dfb1360a0709a9ed49a4ec3f33d94f4c71b1f32678",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/decorated.ts",
+      "name": "decorated.ts",
+      "kind": "file",
+      "path": "ts/decorated.ts",
+      "span": "L1-L11",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "167f3c2bf041326f5a3cb4809c9679e061d133d203bb82ea97be35e1265ae347",
+      "chars": 122,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/decorated.ts#Injectable",
+      "name": "Injectable",
+      "kind": "function",
+      "path": "ts/decorated.ts",
+      "span": "L1-L3",
+      "signature": "function Injectable()",
+      "exported": false,
+      "origin": "ast",
+      "body_hash": "ddeaaabae83cbc2f0cd492007d6733135108dbc860316143b18c5a29e05bb433",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/decorated.ts#Service",
+      "name": "Service",
+      "kind": "class",
+      "path": "ts/decorated.ts",
+      "span": "L6-L10",
+      "signature": "class Service",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "c63beece4f920c13425c6b75fce413610d188cbcc60b4fc9ede7fb3185097d30",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/decorated.ts#Service.run",
+      "name": "run",
+      "kind": "method",
+      "path": "ts/decorated.ts",
+      "span": "L7-L9",
+      "signature": "run()",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "cd54746924c2dfd42b45f9632e104d96e85da0174d000408386a4349bf3c491f",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null,
+      "owner": "Service"
+    },
+    {
+      "id": "ts/namespace.ts",
+      "name": "namespace.ts",
+      "kind": "file",
+      "path": "ts/namespace.ts",
+      "span": "L1-L10",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "fadea6ec5ae54ffa17f724208286b72d3a4f47b70794352aa0fee814d05f4949",
+      "chars": 194,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/namespace.ts#inner",
+      "name": "inner",
+      "kind": "function",
+      "path": "ts/namespace.ts",
+      "span": "L2-L2",
+      "signature": "function inner(): void",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "460a0863593656d24c83818a4acf22d36e695fc8699dfcd6b8b74ae7b600ff33",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/namespace.ts#over",
+      "name": "over",
+      "kind": "function",
+      "path": "ts/namespace.ts",
+      "span": "L9-L9",
+      "signature": "function over(a: unknown): void",
+      "exported": false,
+      "origin": "ast",
+      "body_hash": "ce35e5918e3bf07c42407e365d7539879b49f1b27fea05986dcc8373fca63c11",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/object.ts",
+      "name": "object.ts",
+      "kind": "file",
+      "path": "ts/object.ts",
+      "span": "L1-L21",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "1cc71e7d4aa4229a2df3606bd2ae6e17c58493b56c0ffbbca50bce5e493051ff",
+      "chars": 227,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/object.ts#Base",
+      "name": "Base",
+      "kind": "class",
+      "path": "ts/object.ts",
+      "span": "L18-L20",
+      "signature": "abstract class Base",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "e30e3915a1784b1c2908c90ea8383b6881bd13c60e9b7dcc1717aec8e29a81fc",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/object.ts#Color",
+      "name": "Color",
+      "kind": "enum",
+      "path": "ts/object.ts",
+      "span": "L13-L16",
+      "signature": "enum Color",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "388be331b19dc879e13a08dc1c766c006eea0e732590f0f9eb7afe338778a0ae",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/object.ts#Id",
+      "name": "Id",
+      "kind": "type",
+      "path": "ts/object.ts",
+      "span": "L11-L11",
+      "signature": "type Id = string;",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "5523ea48d53daf5feb07b97722afdca07962196256e32f7976829053983c8bd3",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/object.ts#onClick",
+      "name": "onClick",
+      "kind": "method",
+      "path": "ts/object.ts",
+      "span": "L2-L4",
+      "signature": "onClick()",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "7871044cad5ece646cfcb82c75788b3667cc367ab9c0b04b358200404bc08c0d",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/object.ts#Shape",
+      "name": "Shape",
+      "kind": "interface",
+      "path": "ts/object.ts",
+      "span": "L7-L9",
+      "signature": "interface Shape",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "834112c8963a3b7a7bbfce02072b5776c4fa218bedd498d0a9b1995abfa9f04a",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/UPPER.TS",
+      "name": "UPPER.TS",
+      "kind": "file",
+      "path": "ts/UPPER.TS",
+      "span": "L1-L4",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "46575b4048f030d93ca89a5f720c6dfb4a30a7860a13a644d9ae58dc50b57a75",
+      "chars": 33,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "ts/UPPER.TS#upper",
+      "name": "upper",
+      "kind": "function",
+      "path": "ts/UPPER.TS",
+      "span": "L1-L3",
+      "signature": "function upper()",
+      "exported": false,
+      "origin": "ast",
+      "body_hash": "1c5af822817b663f294abba3df7a2025999261416f4083f63f41be4f60c728a7",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "py/nested.py",
+      "target": "py/nested.py#fetch",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "py/nested.py",
+      "target": "py/nested.py#guarded",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "py/nested.py",
+      "target": "py/nested.py#Outer",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "py/nested.py#Outer",
+      "target": "py/nested.py#Outer.Inner",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "py/nested.py#Outer.Inner",
+      "target": "py/nested.py#Outer.Inner.go",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "py/private.py",
+      "target": "py/private.py#_helper",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "py/private.py",
+      "target": "py/private.py#_Private",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "py/private.py",
+      "target": "py/private.py#Public",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "py/private.py#Public",
+      "target": "py/private.py#Public.__init__",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "py/private.py#Public",
+      "target": "py/private.py#Public.make",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "py/private.py#Public",
+      "target": "py/private.py#Public.outer",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "py/private.py#Public",
+      "target": "py/private.py#Public.size",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "py/private.py#Public.outer",
+      "target": "py/private.py#Public.outer.inner",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "py/private.py#Public.outer",
+      "target": "py/private.py#Public.outer.inner",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/accessors.ts",
+      "target": "ts/accessors.ts#Box",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/accessors.ts#Box",
+      "target": "ts/accessors.ts#Box._hidden",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/accessors.ts#Box",
+      "target": "ts/accessors.ts#Box.value",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/accessors.ts#Box",
+      "target": "ts/accessors.ts#Box.value~2",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/arrows.ts",
+      "target": "ts/arrows.ts#arrow",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/arrows.ts",
+      "target": "ts/arrows.ts#fnExpr",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/arrows.ts",
+      "target": "ts/arrows.ts#named",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/arrows.ts#named",
+      "target": "ts/arrows.ts#named.inner",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/arrows.ts#named",
+      "target": "ts/arrows.ts#named.inner",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/decorated.ts",
+      "target": "ts/decorated.ts#Injectable",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/decorated.ts",
+      "target": "ts/decorated.ts#Injectable",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/decorated.ts",
+      "target": "ts/decorated.ts#Service",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/decorated.ts#Service",
+      "target": "ts/decorated.ts#Service.run",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/namespace.ts",
+      "target": "ts/namespace.ts#inner",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/namespace.ts",
+      "target": "ts/namespace.ts#over",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/object.ts",
+      "target": "ts/object.ts#Base",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/object.ts",
+      "target": "ts/object.ts#Color",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/object.ts",
+      "target": "ts/object.ts#Id",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/object.ts",
+      "target": "ts/object.ts#onClick",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/object.ts",
+      "target": "ts/object.ts#Shape",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "ts/UPPER.TS",
+      "target": "ts/UPPER.TS#upper",
+      "relation": "contains",
+      "confidence": "extracted"
+    }
+  ]
+}

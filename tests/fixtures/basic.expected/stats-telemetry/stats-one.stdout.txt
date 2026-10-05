@@ -1,0 +1,7 @@
+sieve stats — session x
+  sieve reads:   3
+  source reads:  1   (Read / Grep / Glob)
+  mix:           75% sieve
+  tokens saved:  ~12,345
+  value saved:   ~$0.06
+  last query:    ask bigwidget

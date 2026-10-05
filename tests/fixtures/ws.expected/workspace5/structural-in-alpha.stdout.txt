@@ -1,0 +1,9 @@
+sieve ask — "who calls parseConfig"  (lexical)
+
+1. [alpha/] loadConfig  [caller]
+   alpha/src/a.ts:L5-L7
+   function loadConfig(path: string): string
+
+matched in: alpha/ (1)
+
+[sieve] only 1 hit — don't re-ask with new wording; switch tool: `sieve grep "<literal>"` for every occurrence · `sieve skeleton <file>` for a file's full API · `sieve callers <symbol>` for who-uses.

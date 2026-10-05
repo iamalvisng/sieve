@@ -1,0 +1,13 @@
+{
+  "lastQuery": "how does zetaPlanner compute its number",
+  "perAgentQuery": {},
+  "toolReads": 0,
+  "sourceReads": 0,
+  "savedTokens": 0,
+  "injectedPointers": [
+    "src/zeta.ts:L1-L3",
+    "tools/gamma/src/g.ts:L13-L14",
+    "src/index.ts:L1-L2"
+  ],
+  "nudges": 0
+}

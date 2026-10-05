@@ -1,0 +1,18 @@
+[sieve] saved ≈ 46 tokens
+
+"inner" — 5 hits in 5 symbols across 3 files (searched 8 indexed files)
+
+Public.outer.inner · function · py/private.py:L22-L23 · 1 in-edges
+  L22: def inner():
+
+named.inner · function · ts/arrows.ts:L8-L10 · 1 in-edges
+  L8: function inner() {
+
+Public.outer · method · py/private.py:L21-L24 · 0 in-edges
+  L24: return inner()
+
+named · function · ts/arrows.ts:L7-L12 · 0 in-edges
+  L11: return inner();
+
+inner · function · ts/namespace.ts:L2-L2 · 0 in-edges
+  L2: export function inner(): void {}

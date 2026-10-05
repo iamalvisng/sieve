@@ -1,0 +1,275 @@
+{
+  "meta": {
+    "version": 1,
+    "nodeCount": 12,
+    "edgeCount": 13,
+    "languages": [
+      "javascript",
+      "tsx",
+      "typescript"
+    ],
+    "scopes": [
+      {
+        "prefix": "",
+        "label": "",
+        "markers": []
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "src/app.ts",
+      "name": "app.ts",
+      "kind": "file",
+      "path": "src/app.ts",
+      "span": "L1-L21",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "75f16c73e7e2c06c27b4a5ccf2ce9612a9ff19e1cd98630e2f6704cd53614a37",
+      "chars": 307,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "src/app.ts#App",
+      "name": "App",
+      "kind": "class",
+      "path": "src/app.ts",
+      "span": "L4-L14",
+      "signature": "class App",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "33d02551fb3246f2af0b4079504f7495630323dddf0e727c3a00ec00c99e69ca",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "src/app.ts#App.constructor",
+      "name": "constructor",
+      "kind": "method",
+      "path": "src/app.ts",
+      "span": "L7-L9",
+      "signature": "constructor(name: string)",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "6bbf2330622df079cf671bb06513230064028882778bffa7c0efc0e26ae8ca96",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null,
+      "owner": "App"
+    },
+    {
+      "id": "src/app.ts#App.run",
+      "name": "run",
+      "kind": "method",
+      "path": "src/app.ts",
+      "span": "L11-L13",
+      "signature": "run(n: number): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "7eed27f6b384f8afdfd5b2d7614715bf49a9bbe266fc87cdae31d24230e48b8d",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null,
+      "owner": "App"
+    },
+    {
+      "id": "src/app.ts#main",
+      "name": "main",
+      "kind": "function",
+      "path": "src/app.ts",
+      "span": "L16-L20",
+      "signature": "function main(): void",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "efbb13c874c2933a3dce87aae82557a94c5ef34fbef4eeab8a04f4d91f127061",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "src/legacy.mjs",
+      "name": "legacy.mjs",
+      "kind": "file",
+      "path": "src/legacy.mjs",
+      "span": "L1-L4",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "7f39e8be25b12e87f0ee3b021d4e09b1bb244ebab520520b225f2900958dc45d",
+      "chars": 64,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "src/legacy.mjs#legacyGreet",
+      "name": "legacyGreet",
+      "kind": "function",
+      "path": "src/legacy.mjs",
+      "span": "L1-L3",
+      "signature": "function legacyGreet(name)",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "992bd5d79b4e2a8a0ccb376101b2a41eb4d3376f60712577a7a7237651c786da",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "src/util.ts",
+      "name": "util.ts",
+      "kind": "file",
+      "path": "src/util.ts",
+      "span": "L1-L8",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "3bc1c754159982185ef50395a883bce5f1d070d9254056ef430c3758709150e4",
+      "chars": 140,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "src/util.ts#double",
+      "name": "double",
+      "kind": "function",
+      "path": "src/util.ts",
+      "span": "L1-L3",
+      "signature": "function double(n: number): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "22d2a2375208c37540a2cbbef8adba08ff9d4620d3589e99134da93f04f7aaa4",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "src/util.ts#quadruple",
+      "name": "quadruple",
+      "kind": "function",
+      "path": "src/util.ts",
+      "span": "L5-L7",
+      "signature": "function quadruple(n: number): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "60b66b52fd6427cb5d2a42ba7e22dae99c806081e8ab6fd9f7bc08a154982a25",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "src/view.tsx",
+      "name": "view.tsx",
+      "kind": "file",
+      "path": "src/view.tsx",
+      "span": "L1-L4",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "9482e2e497c8997064b28666b61bf03c9f884bb6119a96a6431943a1620d4b63",
+      "chars": 94,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "src/view.tsx#Greeting",
+      "name": "Greeting",
+      "kind": "function",
+      "path": "src/view.tsx",
+      "span": "L1-L3",
+      "signature": "function Greeting(props: { name: string })",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "6a9af1f634f9e28023cf57575f4e779f519e2e802d86824c46f8ea5107424dbc",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "src/app.ts",
+      "target": "src/app.ts#App",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/app.ts",
+      "target": "src/app.ts#main",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/app.ts",
+      "target": "src/util.ts",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/app.ts",
+      "target": "zod",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/app.ts#App",
+      "target": "src/app.ts#App.constructor",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/app.ts#App",
+      "target": "src/app.ts#App.run",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/app.ts#App.run",
+      "target": "src/util.ts#quadruple",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/app.ts#main",
+      "target": "src/app.ts#App.run",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/legacy.mjs",
+      "target": "src/legacy.mjs#legacyGreet",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/util.ts",
+      "target": "src/util.ts#double",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/util.ts",
+      "target": "src/util.ts#quadruple",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/util.ts#quadruple",
+      "target": "src/util.ts#double",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/view.tsx",
+      "target": "src/view.tsx#Greeting",
+      "relation": "contains",
+      "confidence": "extracted"
+    }
+  ]
+}

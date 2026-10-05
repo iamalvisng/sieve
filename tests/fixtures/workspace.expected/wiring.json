@@ -1,0 +1,525 @@
+{
+  "meta": {
+    "version": 1,
+    "nodeCount": 26,
+    "edgeCount": 21,
+    "languages": [
+      "typescript"
+    ],
+    "scopes": [
+      {
+        "prefix": "packages/alpha",
+        "label": "packages/alpha",
+        "markers": [
+          "package.json"
+        ]
+      },
+      {
+        "prefix": "packages/beta",
+        "label": "packages/beta",
+        "markers": [
+          "package.json"
+        ]
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "packages/alpha/nested/n.ts",
+      "name": "n.ts",
+      "kind": "file",
+      "path": "packages/alpha/nested/n.ts",
+      "span": "L1-L15",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "ad005c4005df804aea6448795dbac9874f318594b8bb7a3cbe63b7d44862e12c",
+      "chars": 268,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/alpha/nested/n.ts#nestedFive",
+      "name": "nestedFive",
+      "kind": "function",
+      "path": "packages/alpha/nested/n.ts",
+      "span": "L13-L14",
+      "signature": "function nestedFive(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "ada9349cf34f20f1cc243cb6b8ecdcd41a51c2c4c73ef01123f85f175e2fd5b2",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/alpha/nested/n.ts#nestedFour",
+      "name": "nestedFour",
+      "kind": "function",
+      "path": "packages/alpha/nested/n.ts",
+      "span": "L10-L11",
+      "signature": "function nestedFour(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "5c1c87c5a90a97f1ddc9b116b210b2bc6244c385bc4a51124bab8ac66524d45f",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/alpha/nested/n.ts#nestedOne",
+      "name": "nestedOne",
+      "kind": "function",
+      "path": "packages/alpha/nested/n.ts",
+      "span": "L1-L2",
+      "signature": "function nestedOne(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "6c84119c18f2f1687aa77d2e834c18bf025eca4d77f8953f8b7df2574a92b09f",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/alpha/nested/n.ts#nestedThree",
+      "name": "nestedThree",
+      "kind": "function",
+      "path": "packages/alpha/nested/n.ts",
+      "span": "L7-L8",
+      "signature": "function nestedThree(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "ef717fea5e540aebe608fc6f5d32b669eab0fb8ac8b1c74cbc2718c67108c531",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/alpha/nested/n.ts#nestedTwo",
+      "name": "nestedTwo",
+      "kind": "function",
+      "path": "packages/alpha/nested/n.ts",
+      "span": "L4-L5",
+      "signature": "function nestedTwo(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "01ab2abf951ac0143ba2fdc796ef32d5e778b4ea0544deaf8dba50e2e34b0eec",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/alpha/src/a.ts",
+      "name": "a.ts",
+      "kind": "file",
+      "path": "packages/alpha/src/a.ts",
+      "span": "L1-L15",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "9eb02fcf0f75ec140deeca4c7a075d223de06f7d032eb583e6bc0c7fec65b2ee",
+      "chars": 263,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/alpha/src/a.ts#alphaFive",
+      "name": "alphaFive",
+      "kind": "function",
+      "path": "packages/alpha/src/a.ts",
+      "span": "L13-L14",
+      "signature": "function alphaFive(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "ab07d56f944d2eb38216af25c6f875d55bf2f15bc59325772e0ca43c03e46650",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/alpha/src/a.ts#alphaFour",
+      "name": "alphaFour",
+      "kind": "function",
+      "path": "packages/alpha/src/a.ts",
+      "span": "L10-L11",
+      "signature": "function alphaFour(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "21130f498e3cc7b6aeeaf3d4ff9614254bfe02700a39d4fe631ce0f3c35c40bc",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/alpha/src/a.ts#alphaOne",
+      "name": "alphaOne",
+      "kind": "function",
+      "path": "packages/alpha/src/a.ts",
+      "span": "L1-L2",
+      "signature": "function alphaOne(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "b6672ce1e9edf226bd2a8de960938883047ed3521c2697b859a4bd80ec817b1c",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/alpha/src/a.ts#alphaThree",
+      "name": "alphaThree",
+      "kind": "function",
+      "path": "packages/alpha/src/a.ts",
+      "span": "L7-L8",
+      "signature": "function alphaThree(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "8fd743c8edb61ee143e5d9182ca73702b2f1688b3441dc22c5d9043ed448750a",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/alpha/src/a.ts#alphaTwo",
+      "name": "alphaTwo",
+      "kind": "function",
+      "path": "packages/alpha/src/a.ts",
+      "span": "L4-L5",
+      "signature": "function alphaTwo(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "59e96b5a77146a68259db6a2b3d014638558eaabb5ca88dca84c14609b7aa08f",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/beta/src/b.ts",
+      "name": "b.ts",
+      "kind": "file",
+      "path": "packages/beta/src/b.ts",
+      "span": "L1-L15",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "d4f10ecdce47adce5042832f33d626ece50cb81911b3719ecc8b721803da9225",
+      "chars": 258,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/beta/src/b.ts#betaFive",
+      "name": "betaFive",
+      "kind": "function",
+      "path": "packages/beta/src/b.ts",
+      "span": "L13-L14",
+      "signature": "function betaFive(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "dd4d380ea6913dd28b1d3cb65b29271b05b1d94ad9765485ef007b821bcf230e",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/beta/src/b.ts#betaFour",
+      "name": "betaFour",
+      "kind": "function",
+      "path": "packages/beta/src/b.ts",
+      "span": "L10-L11",
+      "signature": "function betaFour(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "56878edacff45575415a6e90b9d06a04a820d88f2b2770992444e30948ff09e2",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/beta/src/b.ts#betaOne",
+      "name": "betaOne",
+      "kind": "function",
+      "path": "packages/beta/src/b.ts",
+      "span": "L1-L2",
+      "signature": "function betaOne(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "4f16b02ab89fcaffc1611295056fb46d89eb7f6f8ff6c7f2b86869798dec1735",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/beta/src/b.ts#betaThree",
+      "name": "betaThree",
+      "kind": "function",
+      "path": "packages/beta/src/b.ts",
+      "span": "L7-L8",
+      "signature": "function betaThree(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "a5791f765f12d1691f5eb03d9040d776440e3c67f20ef5206673fb0ce0124605",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/beta/src/b.ts#betaTwo",
+      "name": "betaTwo",
+      "kind": "function",
+      "path": "packages/beta/src/b.ts",
+      "span": "L4-L5",
+      "signature": "function betaTwo(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "e872afbefdfce37868765e7dd82cd004253ba8c2076758d16a4453da3bb9d1ee",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "src/index.ts",
+      "name": "index.ts",
+      "kind": "file",
+      "path": "src/index.ts",
+      "span": "L1-L3",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "f9aed39efd8a231183826ba97e839339da205f8da1cf1a415cc1a0b03849ce5c",
+      "chars": 51,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "src/index.ts#indexOne",
+      "name": "indexOne",
+      "kind": "function",
+      "path": "src/index.ts",
+      "span": "L1-L2",
+      "signature": "function indexOne(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "158cee907a4f1bc6b5d7273c15c83a229e03afdb4186a808566e5bdfa19f08a2",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "tools/gamma/src/g.ts",
+      "name": "g.ts",
+      "kind": "file",
+      "path": "tools/gamma/src/g.ts",
+      "span": "L1-L15",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "f5d08378cee63f747cbf2411ab7bd3c982bffd2fd7dbbb3b1023e2e816840cf2",
+      "chars": 263,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "tools/gamma/src/g.ts#gammaFive",
+      "name": "gammaFive",
+      "kind": "function",
+      "path": "tools/gamma/src/g.ts",
+      "span": "L13-L14",
+      "signature": "function gammaFive(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "baea847c690ddfd0093f51373c205234393b2af75d9fe98365dc2b83e0ba3ea6",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "tools/gamma/src/g.ts#gammaFour",
+      "name": "gammaFour",
+      "kind": "function",
+      "path": "tools/gamma/src/g.ts",
+      "span": "L10-L11",
+      "signature": "function gammaFour(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "018d6a22d58a74e4dd1c9b6efd2dfe839b8460a03a299b2474f209694ae2b9c3",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "tools/gamma/src/g.ts#gammaOne",
+      "name": "gammaOne",
+      "kind": "function",
+      "path": "tools/gamma/src/g.ts",
+      "span": "L1-L2",
+      "signature": "function gammaOne(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "c15c94ca71988340d78c021c52a6b3fac0d237ebf30d55d78a0bcefa9a157afa",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "tools/gamma/src/g.ts#gammaThree",
+      "name": "gammaThree",
+      "kind": "function",
+      "path": "tools/gamma/src/g.ts",
+      "span": "L7-L8",
+      "signature": "function gammaThree(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "d64a3d02e513f7aa17a86b437ce52683f5531e2190ed7a3c056ab08841493b12",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "tools/gamma/src/g.ts#gammaTwo",
+      "name": "gammaTwo",
+      "kind": "function",
+      "path": "tools/gamma/src/g.ts",
+      "span": "L4-L5",
+      "signature": "function gammaTwo(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "57113e3ab38c761e76162701a38c7a13d42279598560d8b48a522482a64815eb",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "packages/alpha/nested/n.ts",
+      "target": "packages/alpha/nested/n.ts#nestedFive",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/alpha/nested/n.ts",
+      "target": "packages/alpha/nested/n.ts#nestedFour",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/alpha/nested/n.ts",
+      "target": "packages/alpha/nested/n.ts#nestedOne",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/alpha/nested/n.ts",
+      "target": "packages/alpha/nested/n.ts#nestedThree",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/alpha/nested/n.ts",
+      "target": "packages/alpha/nested/n.ts#nestedTwo",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/alpha/src/a.ts",
+      "target": "packages/alpha/src/a.ts#alphaFive",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/alpha/src/a.ts",
+      "target": "packages/alpha/src/a.ts#alphaFour",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/alpha/src/a.ts",
+      "target": "packages/alpha/src/a.ts#alphaOne",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/alpha/src/a.ts",
+      "target": "packages/alpha/src/a.ts#alphaThree",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/alpha/src/a.ts",
+      "target": "packages/alpha/src/a.ts#alphaTwo",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/beta/src/b.ts",
+      "target": "packages/beta/src/b.ts#betaFive",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/beta/src/b.ts",
+      "target": "packages/beta/src/b.ts#betaFour",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/beta/src/b.ts",
+      "target": "packages/beta/src/b.ts#betaOne",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/beta/src/b.ts",
+      "target": "packages/beta/src/b.ts#betaThree",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/beta/src/b.ts",
+      "target": "packages/beta/src/b.ts#betaTwo",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/index.ts",
+      "target": "src/index.ts#indexOne",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "tools/gamma/src/g.ts",
+      "target": "tools/gamma/src/g.ts#gammaFive",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "tools/gamma/src/g.ts",
+      "target": "tools/gamma/src/g.ts#gammaFour",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "tools/gamma/src/g.ts",
+      "target": "tools/gamma/src/g.ts#gammaOne",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "tools/gamma/src/g.ts",
+      "target": "tools/gamma/src/g.ts#gammaThree",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "tools/gamma/src/g.ts",
+      "target": "tools/gamma/src/g.ts#gammaTwo",
+      "relation": "contains",
+      "confidence": "extracted"
+    }
+  ]
+}

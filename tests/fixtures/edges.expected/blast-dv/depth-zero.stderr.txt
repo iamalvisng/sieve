@@ -1,0 +1,2 @@
+[sieve] refreshed the graph (1 file changed) before answering
+✗ --depth must be a positive number or "all", got "0"

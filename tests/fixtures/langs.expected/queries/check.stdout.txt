@@ -1,0 +1,3 @@
+deep layer: not built — wiring graph is the source of truth
+
+graph check: OK — the wiring graph is in sync with the code. (meaning tier 0% complete — 276 of 276 node(s) pending: c/app.c, c/app.c#App, c/app.c#greet, c/app.c#main, c/rich.c, c/rich.c#Mode, c/rich.c#Point, c/rich.c#apply, … +268 more.)

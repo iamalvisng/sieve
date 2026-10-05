@@ -1,0 +1,273 @@
+{
+  "totals": {
+    "files": 7,
+    "symbols": 20,
+    "edges": 33,
+    "languages": [
+      "typescript"
+    ]
+  },
+  "dirs": [],
+  "scopes": [
+    {
+      "scope": "packages/alpha/",
+      "dirs": [
+        {
+          "path": "packages/alpha/src/layout.ts",
+          "files": 1,
+          "symbols": 3,
+          "languages": [
+            "typescript"
+          ],
+          "hubs": [
+            {
+              "name": "layoutGrid",
+              "kind": "function",
+              "path": "packages/alpha/src/layout.ts",
+              "span": "L5-L7",
+              "inDegree": 1
+            },
+            {
+              "name": "paintCanvas",
+              "kind": "function",
+              "path": "packages/alpha/src/layout.ts",
+              "span": "L10-L12",
+              "inDegree": 1
+            }
+          ],
+          "isFile": true
+        },
+        {
+          "path": "packages/alpha/src/render.ts",
+          "files": 1,
+          "symbols": 3,
+          "languages": [
+            "typescript"
+          ],
+          "hubs": [
+            {
+              "name": "renderFooter",
+              "kind": "function",
+              "path": "packages/alpha/src/render.ts",
+              "span": "L9-L11",
+              "inDegree": 1
+            },
+            {
+              "name": "renderHeader",
+              "kind": "function",
+              "path": "packages/alpha/src/render.ts",
+              "span": "L5-L7",
+              "inDegree": 1
+            },
+            {
+              "name": "renderPage",
+              "kind": "function",
+              "path": "packages/alpha/src/render.ts",
+              "span": "L1-L3",
+              "inDegree": 1
+            }
+          ],
+          "isFile": true
+        }
+      ],
+      "dropped": 0
+    },
+    {
+      "scope": "packages/gamma/",
+      "dirs": [
+        {
+          "path": "packages/gamma/src/data.ts",
+          "files": 1,
+          "symbols": 3,
+          "languages": [
+            "typescript"
+          ],
+          "hubs": [
+            {
+              "name": "sortItems",
+              "kind": "function",
+              "path": "packages/gamma/src/data.ts",
+              "span": "L5-L7",
+              "inDegree": 1
+            }
+          ],
+          "isFile": true
+        },
+        {
+          "path": "packages/gamma/src/util.ts",
+          "files": 1,
+          "symbols": 3,
+          "languages": [
+            "typescript"
+          ],
+          "hubs": [],
+          "isFile": true
+        }
+      ],
+      "dropped": 0
+    },
+    {
+      "scope": "packages/beta/",
+      "dirs": [
+        {
+          "path": "packages/beta/src/format.ts",
+          "files": 1,
+          "symbols": 3,
+          "languages": [
+            "typescript"
+          ],
+          "hubs": [
+            {
+              "name": "formatCell",
+              "kind": "function",
+              "path": "packages/beta/src/format.ts",
+              "span": "L9-L11",
+              "inDegree": 1
+            },
+            {
+              "name": "formatRow",
+              "kind": "function",
+              "path": "packages/beta/src/format.ts",
+              "span": "L5-L7",
+              "inDegree": 1
+            }
+          ],
+          "isFile": true
+        },
+        {
+          "path": "packages/beta/src/render.ts",
+          "files": 1,
+          "symbols": 3,
+          "languages": [
+            "typescript"
+          ],
+          "hubs": [
+            {
+              "name": "exportPdf",
+              "kind": "function",
+              "path": "packages/beta/src/render.ts",
+              "span": "L9-L11",
+              "inDegree": 1
+            },
+            {
+              "name": "renderChart",
+              "kind": "function",
+              "path": "packages/beta/src/render.ts",
+              "span": "L5-L7",
+              "inDegree": 1
+            },
+            {
+              "name": "renderReport",
+              "kind": "function",
+              "path": "packages/beta/src/render.ts",
+              "span": "L1-L3",
+              "inDegree": 1
+            }
+          ],
+          "isFile": true
+        }
+      ],
+      "dropped": 0
+    },
+    {
+      "scope": "(root)",
+      "dirs": [
+        {
+          "path": "src/index.ts",
+          "files": 1,
+          "symbols": 2,
+          "languages": [
+            "typescript"
+          ],
+          "hubs": [],
+          "isFile": true
+        }
+      ],
+      "dropped": 0
+    }
+  ],
+  "hotspots": [
+    {
+      "name": "exportPdf",
+      "kind": "function",
+      "path": "packages/beta/src/render.ts",
+      "span": "L9-L11",
+      "inDegree": 1
+    },
+    {
+      "name": "formatCell",
+      "kind": "function",
+      "path": "packages/beta/src/format.ts",
+      "span": "L9-L11",
+      "inDegree": 1
+    },
+    {
+      "name": "formatRow",
+      "kind": "function",
+      "path": "packages/beta/src/format.ts",
+      "span": "L5-L7",
+      "inDegree": 1
+    },
+    {
+      "name": "layoutGrid",
+      "kind": "function",
+      "path": "packages/alpha/src/layout.ts",
+      "span": "L5-L7",
+      "inDegree": 1
+    },
+    {
+      "name": "paintCanvas",
+      "kind": "function",
+      "path": "packages/alpha/src/layout.ts",
+      "span": "L10-L12",
+      "inDegree": 1
+    },
+    {
+      "name": "renderChart",
+      "kind": "function",
+      "path": "packages/beta/src/render.ts",
+      "span": "L5-L7",
+      "inDegree": 1
+    },
+    {
+      "name": "renderFooter",
+      "kind": "function",
+      "path": "packages/alpha/src/render.ts",
+      "span": "L9-L11",
+      "inDegree": 1
+    },
+    {
+      "name": "renderHeader",
+      "kind": "function",
+      "path": "packages/alpha/src/render.ts",
+      "span": "L5-L7",
+      "inDegree": 1
+    },
+    {
+      "name": "renderPage",
+      "kind": "function",
+      "path": "packages/alpha/src/render.ts",
+      "span": "L1-L3",
+      "inDegree": 1
+    },
+    {
+      "name": "renderReport",
+      "kind": "function",
+      "path": "packages/beta/src/render.ts",
+      "span": "L1-L3",
+      "inDegree": 1
+    },
+    {
+      "name": "sortItems",
+      "kind": "function",
+      "path": "packages/gamma/src/data.ts",
+      "span": "L5-L7",
+      "inDegree": 1
+    }
+  ],
+  "dropped": 0,
+  "saved": {
+    "files": 7,
+    "baselineChars": 1678
+  }
+}

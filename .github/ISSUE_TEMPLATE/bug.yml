@@ -1,0 +1,37 @@
+name: Bug report
+description: Report a defect in Sieve.
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Sieve version
+      description: Run `sieve version`.
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to repeat
+      description: List the commands you ran.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+      description: Paste the output.
+    validations:
+      required: true

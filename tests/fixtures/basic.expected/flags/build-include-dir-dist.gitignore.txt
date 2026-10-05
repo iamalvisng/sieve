@@ -1,0 +1,5 @@
+# sieve's local repository settings — not committed.
+/.sieve/
+
+# sieve's local graph cache — regenerable, not committed (run `sieve build`).
+/sieve/

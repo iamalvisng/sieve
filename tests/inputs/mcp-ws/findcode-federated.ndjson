@@ -1,0 +1,8 @@
+{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"sieve_find_code","arguments":{"query":"parse config"}}}
+{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"sieve_find_code","arguments":{"query":"parse config","limit":2}}}
+{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"sieve_find_code","arguments":{"query":"parse config","in":"beta"}}}
+{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"sieve_find_code","arguments":{"query":"parse config","in":"zzz"}}}
+{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"sieve_find_code","arguments":{"query":"parse config","limit":3,"full":true}}}
+{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"sieve_find_code","arguments":{"query":"who calls parseConfig","in":"alpha"}}}
+{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"sieve_find_code","arguments":{"query":"parse config","limit":0}}}
+{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"sieve_find_code","arguments":{}}}

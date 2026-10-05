@@ -1,0 +1,143 @@
+{
+  "meta": {
+    "version": 1,
+    "nodeCount": 6,
+    "edgeCount": 6,
+    "languages": [
+      "typescript"
+    ],
+    "scopes": [
+      {
+        "prefix": "",
+        "label": "",
+        "markers": []
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "alpha/src/a.ts",
+      "name": "a.ts",
+      "kind": "file",
+      "path": "alpha/src/a.ts",
+      "span": "L1-L8",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "fa453f4cc0ebe3ce030b5c3af7c2822e02a29753154b52a5581696976171a682",
+      "chars": 151,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "alpha/src/a.ts#alphaAdd",
+      "name": "alphaAdd",
+      "kind": "function",
+      "path": "alpha/src/a.ts",
+      "span": "L1-L3",
+      "signature": "function alphaAdd(a: number, b: number): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "ea523248127d2b042d2c4d4d021984a45431e93c3d444a260f8933af5ea411a7",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "alpha/src/a.ts#alphaTwice",
+      "name": "alphaTwice",
+      "kind": "function",
+      "path": "alpha/src/a.ts",
+      "span": "L5-L7",
+      "signature": "function alphaTwice(n: number): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "62a0b4cc102798b05f26adf625c9169085f2a726aec34aaece5320ced4b44c20",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "beta/src/b.ts",
+      "name": "b.ts",
+      "kind": "file",
+      "path": "beta/src/b.ts",
+      "span": "L1-L8",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "00c82ce7e65ac1d602863096d877e97414b0833f9c7ed1b0ebc44fe12c866e63",
+      "chars": 168,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "beta/src/b.ts#betaGreet",
+      "name": "betaGreet",
+      "kind": "function",
+      "path": "beta/src/b.ts",
+      "span": "L1-L3",
+      "signature": "function betaGreet(name: string): string",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "c27a0057a7e477b81b8ada85bb6f34e36ca78dfa26cfb76d7af3408dde20e7ad",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "beta/src/b.ts#betaShout",
+      "name": "betaShout",
+      "kind": "function",
+      "path": "beta/src/b.ts",
+      "span": "L5-L7",
+      "signature": "function betaShout(name: string): string",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "b57364d5b4d1761c3900ec09e4ecf16d3d2ecb23f364da0dada7810b3bc1704b",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "alpha/src/a.ts",
+      "target": "alpha/src/a.ts#alphaAdd",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "alpha/src/a.ts",
+      "target": "alpha/src/a.ts#alphaTwice",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "alpha/src/a.ts#alphaTwice",
+      "target": "alpha/src/a.ts#alphaAdd",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "beta/src/b.ts",
+      "target": "beta/src/b.ts#betaGreet",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "beta/src/b.ts",
+      "target": "beta/src/b.ts#betaShout",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "beta/src/b.ts#betaShout",
+      "target": "beta/src/b.ts#betaGreet",
+      "relation": "calls",
+      "confidence": "extracted"
+    }
+  ]
+}

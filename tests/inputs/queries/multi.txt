@@ -1,0 +1,18 @@
+# Query list for tests/fixtures/multi. One query per line.
+# Format: <id><TAB><arguments after "sieve">
+ask-render	ask "render"
+ask-render-n3	ask "render" -n 3
+ask-format	ask "format row"
+ask-in-alpha	ask "render" --in packages/alpha
+ask-gamma-body	ask "render page grid"
+ask-json	ask "render" --json
+grep-render	grep "render" --fixed -i
+skeleton-amb	skeleton render.ts
+skeleton-exact	skeleton packages/alpha/src/render.ts
+map	map
+map-max1	map --max-dirs 1
+map-json	map --json
+check	check
+# P1-11, P1-43: a bad --in prefix on a multi-scope repo names the scopes.
+ask-in-bad	ask "render" --in nowhere
+grep-in-bad	grep "add" --fixed --in nowhere

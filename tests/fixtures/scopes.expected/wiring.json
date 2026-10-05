@@ -1,0 +1,235 @@
+{
+  "meta": {
+    "version": 1,
+    "nodeCount": 11,
+    "edgeCount": 8,
+    "languages": [
+      "typescript"
+    ],
+    "scopes": [
+      {
+        "prefix": "packages/big",
+        "label": "packages/big",
+        "markers": [
+          "package.json"
+        ]
+      },
+      {
+        "prefix": "",
+        "label": "",
+        "markers": [
+          "package.json"
+        ]
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "packages/big/index.ts",
+      "name": "index.ts",
+      "kind": "file",
+      "path": "packages/big/index.ts",
+      "span": "L1-L18",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "d539ecda5fcfde1364d36cce0bd13e7b50a985141da4af41eb8fc377c6db0da5",
+      "chars": 303,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/big/index.ts#bigFive",
+      "name": "bigFive",
+      "kind": "function",
+      "path": "packages/big/index.ts",
+      "span": "L13-L14",
+      "signature": "function bigFive(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "fe6ce06d45b6cc4130c99ffed16632a915e9cb521810932543afc52434741170",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/big/index.ts#bigFour",
+      "name": "bigFour",
+      "kind": "function",
+      "path": "packages/big/index.ts",
+      "span": "L10-L11",
+      "signature": "function bigFour(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "86a8b73c61d1fed9c1a735bc7f1812ad05f642555b93bb3e4f3853b2d23527e6",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/big/index.ts#bigOne",
+      "name": "bigOne",
+      "kind": "function",
+      "path": "packages/big/index.ts",
+      "span": "L1-L2",
+      "signature": "function bigOne(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "1442b1c5946683d98e8548e7af3af9e46d3385058e0e3fd2798368d4f80f3064",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/big/index.ts#bigSix",
+      "name": "bigSix",
+      "kind": "function",
+      "path": "packages/big/index.ts",
+      "span": "L16-L17",
+      "signature": "function bigSix(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "38622c0e2b0c31f9beeb8677cbcfce333942636e92229ef18fe01ec58a139172",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/big/index.ts#bigThree",
+      "name": "bigThree",
+      "kind": "function",
+      "path": "packages/big/index.ts",
+      "span": "L7-L8",
+      "signature": "function bigThree(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "047e315ccddd88e6e2374a6115f66e873f350acee66c4c39c2b25d50174b1114",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/big/index.ts#bigTwo",
+      "name": "bigTwo",
+      "kind": "function",
+      "path": "packages/big/index.ts",
+      "span": "L4-L5",
+      "signature": "function bigTwo(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "85bc7309f8130c21c12256db6f31ae73567e26173198f1dad56f41b5a9727e2a",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/tiny/index.ts",
+      "name": "index.ts",
+      "kind": "file",
+      "path": "packages/tiny/index.ts",
+      "span": "L1-L3",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "b9335e94a53786ad6e38d15111469b3e91b4cc4cd1fe38307baadd4028169945",
+      "chars": 50,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "packages/tiny/index.ts#tinyOne",
+      "name": "tinyOne",
+      "kind": "function",
+      "path": "packages/tiny/index.ts",
+      "span": "L1-L2",
+      "signature": "function tinyOne(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "f630130f4cff192a07adaa3696d978ab72ded9159bbd5fdc55ffd5fa7e25ca38",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "src/main.ts",
+      "name": "main.ts",
+      "kind": "file",
+      "path": "src/main.ts",
+      "span": "L1-L3",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "8cd9273e00fa91307cc21e1f6cce257533e944b6873eddb168267ea6f69dc890",
+      "chars": 50,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "src/main.ts#mainRun",
+      "name": "mainRun",
+      "kind": "function",
+      "path": "src/main.ts",
+      "span": "L1-L2",
+      "signature": "function mainRun(): number",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "4b364b976b994a644d038df75c582883797fd3ed3aea1442334814b3f3ba9970",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "packages/big/index.ts",
+      "target": "packages/big/index.ts#bigFive",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/big/index.ts",
+      "target": "packages/big/index.ts#bigFour",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/big/index.ts",
+      "target": "packages/big/index.ts#bigOne",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/big/index.ts",
+      "target": "packages/big/index.ts#bigSix",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/big/index.ts",
+      "target": "packages/big/index.ts#bigThree",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/big/index.ts",
+      "target": "packages/big/index.ts#bigTwo",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "packages/tiny/index.ts",
+      "target": "packages/tiny/index.ts#tinyOne",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "src/main.ts",
+      "target": "src/main.ts#mainRun",
+      "relation": "contains",
+      "confidence": "extracted"
+    }
+  ]
+}

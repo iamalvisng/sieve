@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "sieve": {
+      "command": "sieve",
+      "args": [
+        "mcp"
+      ]
+    }
+  }
+}

@@ -1,0 +1,33 @@
+sieve ask — "how does run compute the result"  (lexical)
+
+1. run · function  [symbol]
+   py/main.py:L9-L11
+   The run function creates an instance of Calculator and returns the result of adding two numbers using the total method.
+
+2. run · method  [symbol]
+   src/app.ts:L11-L13
+   The run method executes a quadrupling operation on a given number.
+
+3. add · function  [symbol]
+   py/helpers.py:L1-L2
+   This function adds two numbers together and returns the result.
+
+4. quadruple · function  [symbol]
+   src/util.ts:L5-L7
+   This function quadruples the input number by applying the double function twice, demonstrating function composition.
+
+5. total · method  [symbol]
+   py/main.py:L5-L6
+   The total method computes the sum of two numbers by utilizing the add helper function.
+
+6. main · function  [symbol]
+   src/app.ts:L16-L20
+   The main function serves as the entry point for the application, creating an App instance and invoking its run method.
+
+7. sub · function  [symbol]
+   py/helpers.py:L5-L6
+   This function subtracts the second number from the first and returns the result.
+
+8. double · function  [symbol]
+   src/util.ts:L1-L3
+   This function doubles the input number, effectively providing a simple multiplication operation.

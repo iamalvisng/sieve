@@ -1,0 +1,1 @@
+✗ invalid pattern "(?i)a": Invalid regular expression: /(?i)a/: Invalid group

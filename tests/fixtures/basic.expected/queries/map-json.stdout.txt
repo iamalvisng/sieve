@@ -1,0 +1,140 @@
+{
+  "totals": {
+    "files": 7,
+    "symbols": 14,
+    "edges": 23,
+    "languages": [
+      "javascript",
+      "python",
+      "tsx",
+      "typescript"
+    ]
+  },
+  "dirs": [
+    {
+      "path": "src",
+      "files": 4,
+      "symbols": 8,
+      "languages": [
+        "javascript",
+        "tsx",
+        "typescript"
+      ],
+      "hubs": [
+        {
+          "name": "double",
+          "kind": "function",
+          "path": "src/util.ts",
+          "span": "L1-L3",
+          "inDegree": 1
+        },
+        {
+          "name": "quadruple",
+          "kind": "function",
+          "path": "src/util.ts",
+          "span": "L5-L7",
+          "inDegree": 1
+        },
+        {
+          "name": "run",
+          "kind": "method",
+          "path": "src/app.ts",
+          "span": "L11-L13",
+          "inDegree": 1
+        }
+      ],
+      "isFile": false
+    },
+    {
+      "path": "py",
+      "files": 2,
+      "symbols": 5,
+      "languages": [
+        "python"
+      ],
+      "hubs": [
+        {
+          "name": "add",
+          "kind": "function",
+          "path": "py/helpers.py",
+          "span": "L1-L2",
+          "inDegree": 1
+        },
+        {
+          "name": "Calculator",
+          "kind": "class",
+          "path": "py/main.py",
+          "span": "L4-L6",
+          "inDegree": 1
+        },
+        {
+          "name": "total",
+          "kind": "method",
+          "path": "py/main.py",
+          "span": "L5-L6",
+          "inDegree": 1
+        }
+      ],
+      "isFile": false
+    },
+    {
+      "path": "packages",
+      "files": 1,
+      "symbols": 1,
+      "languages": [
+        "typescript"
+      ],
+      "hubs": [],
+      "isFile": false
+    }
+  ],
+  "hotspots": [
+    {
+      "name": "add",
+      "kind": "function",
+      "path": "py/helpers.py",
+      "span": "L1-L2",
+      "inDegree": 1
+    },
+    {
+      "name": "Calculator",
+      "kind": "class",
+      "path": "py/main.py",
+      "span": "L4-L6",
+      "inDegree": 1
+    },
+    {
+      "name": "double",
+      "kind": "function",
+      "path": "src/util.ts",
+      "span": "L1-L3",
+      "inDegree": 1
+    },
+    {
+      "name": "quadruple",
+      "kind": "function",
+      "path": "src/util.ts",
+      "span": "L5-L7",
+      "inDegree": 1
+    },
+    {
+      "name": "run",
+      "kind": "method",
+      "path": "src/app.ts",
+      "span": "L11-L13",
+      "inDegree": 1
+    },
+    {
+      "name": "total",
+      "kind": "method",
+      "path": "py/main.py",
+      "span": "L5-L6",
+      "inDegree": 1
+    }
+  ],
+  "dropped": 0,
+  "saved": {
+    "files": 7,
+    "baselineChars": 936
+  }
+}

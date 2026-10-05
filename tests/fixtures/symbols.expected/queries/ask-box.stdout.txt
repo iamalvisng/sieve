@@ -1,0 +1,15 @@
+sieve ask — "box value accessor"  (lexical)
+
+1. Box · class  [symbol]
+   ts/accessors.ts:L1-L15
+   class Box
+
+2. value · method  [symbol]
+   ts/accessors.ts:L4-L6
+   get value()
+
+3. value · method  [symbol]
+   ts/accessors.ts:L8-L10
+   set value(v: number)
+
+[sieve] only 3 hits — don't re-ask with new wording; switch tool: `sieve grep "<literal>"` for every occurrence · `sieve skeleton <file>` for a file's full API · `sieve callers <symbol>` for who-uses.

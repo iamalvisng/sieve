@@ -1,0 +1,1 @@
+✗ invalid pattern "(?<n>a)(?<n>b)": Invalid regular expression: /(?<n>a)(?<n>b)/: Duplicate capture group name
