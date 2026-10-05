@@ -2123,9 +2123,19 @@ mod tests {
 
     #[test]
     fn test_f6_git_output_over_8_mb_is_refused() {
-        // `yes` prints its arguments with no end, so the output passes 8 MB.
+        // `run_prog` puts `-c core.quotePath=false` before its arguments.
+        // GNU `yes` rejects `-c`, so a script that ignores its arguments
+        // runs `yes`. The output has no end and passes 8 MB.
+        let dir = std::env::temp_dir().join(format!("sieve-yes-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("make dir");
+        let script = dir.join("endless");
+        std::fs::write(&script, "#!/bin/sh\nexec yes\n").expect("write script");
+        std::fs::set_permissions(&script, std::os::unix::fs::PermissionsExt::from_mode(0o755))
+            .expect("chmod");
+        let got = run_prog(script.to_str().expect("utf8 path"), &dir, &[]);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(got, Err("output over 8 MB"));
         let dir = std::env::temp_dir();
-        assert_eq!(run_prog("yes", &dir, &[]), Err("output over 8 MB"));
         // The control: a small output is read.
         let ok = run_prog("echo", &dir, &["x"]).expect("echo");
         assert!(ok.ends_with(" x\n"), "{ok}");

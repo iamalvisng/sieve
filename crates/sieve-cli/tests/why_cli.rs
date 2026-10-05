@@ -32,7 +32,8 @@ fn run(cwd: &Path, args: &[&str], stdin_json: Option<&str>) -> Output {
     cmd.args(args)
         .current_dir(cwd)
         .env("HOME", cwd.join("home"))
-        .env("CLAUDE_PROJECT_DIR", cwd);
+        .env("CLAUDE_PROJECT_DIR", cwd)
+        .env("PATH", support::sieve_path());
     if let Some(json) = stdin_json {
         cmd.env("SIEVE_TEST_STDIN", json);
     }

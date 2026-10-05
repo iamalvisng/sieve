@@ -17,6 +17,7 @@ fn run_init(repo: &Path, home: &Path, args: &[&str]) -> Output {
         .arg("--no-build")
         .current_dir(repo)
         .env("HOME", home)
+        .env("PATH", support::sieve_path())
         .output()
         .expect("run sieve init")
 }

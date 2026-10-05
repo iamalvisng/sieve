@@ -27,7 +27,8 @@ fn run(cwd: &Path, home: &Path, args: &[&str], stdin: Option<&str>) -> Output {
     cmd.args(args)
         .current_dir(cwd)
         .env("HOME", home)
-        .env("CLAUDE_PROJECT_DIR", cwd);
+        .env("CLAUDE_PROJECT_DIR", cwd)
+        .env("PATH", support::sieve_path());
     if let Some(stdin) = stdin {
         cmd.env("SIEVE_TEST_STDIN", stdin);
     }

@@ -14,12 +14,26 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-/// Builds a `Command` for the `sieve` binary.
+/// Builds a `Command` for the `sieve` binary. `PATH` starts with the dir of
+/// that binary, so `init` finds `sieve` on a machine with no installed copy.
 #[allow(dead_code)]
 pub fn sieve_command() -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_sieve"));
-    cmd.env("SIEVE_TEST_NOW", TEST_NOW);
+    cmd.env("SIEVE_TEST_NOW", TEST_NOW)
+        .env("PATH", sieve_path());
     cmd
+}
+
+/// The `PATH` value that holds the dir of the test `sieve` binary first,
+/// then the old `PATH`.
+#[allow(dead_code)]
+pub fn sieve_path() -> std::ffi::OsString {
+    let bin = Path::new(env!("CARGO_BIN_EXE_sieve"));
+    let mut dirs: Vec<PathBuf> = bin.parent().map(Path::to_path_buf).into_iter().collect();
+    dirs.extend(std::env::split_paths(
+        &std::env::var_os("PATH").unwrap_or_default(),
+    ));
+    std::env::join_paths(dirs).expect("join PATH")
 }
 
 /// The fixed clock of every golden run: 2026-10-05T12:00:00Z. A golden

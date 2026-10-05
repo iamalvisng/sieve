@@ -22,6 +22,7 @@ fn run(repo: &Path, home: &Path, args: &[&str]) -> Output {
         .args(args)
         .current_dir(repo)
         .env("HOME", home)
+        .env("PATH", support::sieve_path())
         .env("CLAUDE_PROJECT_DIR", repo)
         .output()
         .expect("run sieve")

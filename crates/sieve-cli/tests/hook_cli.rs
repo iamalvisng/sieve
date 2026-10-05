@@ -790,6 +790,9 @@ fn run_statusline(copy: &Path, stdin_json: &str) -> Vec<u8> {
         .arg("statusline")
         .current_dir(copy)
         .env("CLAUDE_PROJECT_DIR", copy)
+        // The goldens hold 24-bit color. CI sets neither variable.
+        .env("COLORTERM", "truecolor")
+        .env_remove("NO_COLOR")
         .env_remove("SIEVE_DIR")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
