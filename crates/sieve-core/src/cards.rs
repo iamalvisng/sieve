@@ -189,11 +189,20 @@ pub fn write_cards(graph: &Graph, out_dir: &Path) -> io::Result<CardStats> {
     }
 
     let mut card_has_symbols: HashMap<PathBuf, bool> = HashMap::new();
+    // Card paths that differ only by case share one card, as on a
+    // case-insensitive file system. The first name seen keeps the file name.
+    // The later node still overwrites the content. This gives the same
+    // output on macOS and Linux.
+    let mut name_by_folded: HashMap<String, String> = HashMap::new();
     let mut files = 0;
     let mut with_symbols = 0;
     for path in path_order {
         let (file_node, symbols) = &by_path[path];
-        let rel = card_path_for(path, &concept_slugs);
+        let own_rel = card_path_for(path, &concept_slugs);
+        let rel = name_by_folded
+            .entry(own_rel.to_lowercase())
+            .or_insert(own_rel)
+            .clone();
         let full_path = out_dir.join(&rel);
         if let Some(parent) = full_path.parent() {
             fs::create_dir_all(parent)?;

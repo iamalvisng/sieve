@@ -57,6 +57,8 @@ fn copy_dir(src: &Path, dst: &Path) {
 fn list_files(dir: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
     walk(dir, dir, &mut out);
+    // `read_dir` order differs by file system, so sort for a stable result.
+    out.sort();
     out
 }
 
