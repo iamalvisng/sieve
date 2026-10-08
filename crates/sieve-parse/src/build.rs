@@ -272,6 +272,12 @@ pub(crate) fn is_claimed(rel: &Path) -> bool {
     claim_label(rel, &to_slash(rel)).is_some()
 }
 
+/// Counts the files in `files` that a build parses. The memory guard uses
+/// this count, so unsupported files (json, css, md) do not inflate it.
+pub(crate) fn claimed_count(files: &[PathBuf]) -> usize {
+    files.iter().filter(|rel| is_claimed(rel)).count()
+}
+
 /// A breadth-tier file's own node: `origin: generic`, `chars` in UTF-8
 /// bytes, and no residual `body_text` (`languages-lsp.md` line 139,
 /// `generic.ts` `fileNode`, `:207-214`).
@@ -363,6 +369,10 @@ pub fn build_graph_cached_with(
 ) -> std::io::Result<BuildReport> {
     let stamp = extractor_stamp();
     let cache_file = cache_path(context_dir, &stamp);
+    let mut files = collect_files(root, context_dir)?;
+    files.retain(|rel| under_only_dirs(&to_slash(rel), &opts.only_dirs));
+    // The memory guard runs before the cache read (S0, B3).
+    crate::guard::check(claimed_count(&files), !opts.no_reuse && cache_file.exists())?;
     let old_cache = if opts.no_reuse {
         ExtractCache {
             version: CACHE_VERSION,
@@ -372,9 +382,6 @@ pub fn build_graph_cached_with(
     } else {
         read_cache(&cache_file, &stamp)
     };
-
-    let mut files = collect_files(root, context_dir)?;
-    files.retain(|rel| under_only_dirs(&to_slash(rel), &opts.only_dirs));
     let total = if opts.progress.is_some() {
         files
             .iter()
@@ -526,7 +533,7 @@ pub fn build_graph_cached_with(
 
 /// Walks `root`, and drops every file under `context_dir` (or a sibling
 /// dir whose name shares its string prefix). See [`build_graph`] for why.
-fn collect_files(root: &Path, context_dir: &Path) -> std::io::Result<Vec<PathBuf>> {
+pub(crate) fn collect_files(root: &Path, context_dir: &Path) -> std::io::Result<Vec<PathBuf>> {
     let context_prefix = resolved_slash_path(context_dir)?;
     let files: Vec<PathBuf> = walk_repo(root)?
         .into_iter()
@@ -1521,6 +1528,30 @@ mod tests {
             graph.meta.scopes.iter().map(|s| s.prefix.clone()).collect();
         assert!(prefixes.contains("tool"), "prefixes: {prefixes:?}");
         assert!(prefixes.contains("packages/a"), "prefixes: {prefixes:?}");
+    }
+
+    /// S0: the guard counts claimed files only, not json beside them.
+    #[test]
+    fn test_s0_guard_counts_only_claimed_files() {
+        let dir = TempDir::new("s0-claimed");
+        for i in 0..10 {
+            write_functions(&dir.path, &format!("src/f{i}.ts"), 1);
+            write_file(&dir.path, &format!("src/d{i}.json"), "{}");
+        }
+        let files = collect_files(&dir.path, &dir.path.join("sieve")).expect("walk");
+        assert_eq!(files.len(), 20);
+        let count = claimed_count(&files);
+        assert_eq!(count, 10);
+        let refused = crate::guard::check_against(count, false, 1_000_000)
+            .expect_err("1 MB ceiling must refuse");
+        assert_eq!(
+            refused.projected,
+            crate::guard::projected_peak_bytes(10, false)
+        );
+        assert_ne!(
+            refused.projected,
+            crate::guard::projected_peak_bytes(20, false)
+        );
     }
 
     /// P1-70: `only_dirs` keeps the files under the prefix and drops the

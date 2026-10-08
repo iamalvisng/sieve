@@ -9,6 +9,7 @@ pub mod comments;
 pub mod container;
 pub mod extract;
 pub mod generic;
+pub mod guard;
 pub mod lsp;
 pub mod refresh;
 pub mod resolve;
@@ -23,7 +24,7 @@ pub use check::{
     format_graph_check_report, ContentDrift, ContextCheck, GraphCheck, PENDING_SAMPLE,
 };
 pub use container::{container_lang_of, extract_container, ContainerLang, CONTAINER_LANGS};
-pub use extract::{Extractor, RawEdge};
+pub use extract::{Extractor, RawEdge, ReExport};
 pub use generic::{generic_lang_of, GenericExtractor, GenericLang, GENERIC_LANGS};
 pub use lsp::{enrich_with_lsp, enrich_with_lsp_report, LspReport};
 pub use refresh::{

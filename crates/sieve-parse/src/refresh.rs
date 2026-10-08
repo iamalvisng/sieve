@@ -103,9 +103,13 @@ pub fn rebuild_graph_only(root: &Path, context_dir: &Path) -> std::io::Result<Re
     // a refresh walks the same set (P1-70).
     let stamp = crate::extractor_stamp();
     let path = fingerprint_path(context_dir, &stamp);
-    let only_dirs = read_fingerprint(&path, &stamp)
-        .and_then(|fp| fp.only_dirs)
-        .unwrap_or_default();
+    let fp = read_fingerprint(&path, &stamp);
+    // The warm guard runs on the fingerprint file count, before the old
+    // cache is parsed (S0, B3).
+    if let Some(fp) = &fp {
+        crate::guard::check(fp.files.len(), true)?;
+    }
+    let only_dirs = fp.and_then(|fp| fp.only_dirs).unwrap_or_default();
     let opts = BuildOptions {
         only_dirs: only_dirs.clone(),
         no_reuse: false,

@@ -173,7 +173,7 @@ Sieve 0.1.0 on an Apple M1 Pro with 16 GB of memory, macOS 26.5.2.
 | Warm build | vite 10033218 | 0.80 s | Median of 5 builds with no change. |
 | `ask` latency | ripgrep 3fce3b5 | 62 ms median, 101 ms max | Wall time of one `sieve ask` process. 30 timings: 10 questions, 3 runs each. |
 | `ask` latency | vite 10033218 | 158 ms median, 185 ms max | The same method. |
-| Exact cross-file calls | vite 10033218 | 1,232 of 1,232 match the TypeScript compiler | Name-level match. Inferred calls are not counted. |
+| Exact cross-file calls | vite 10033218 | 1,272 of 1,272 match the TypeScript compiler | Name-level match. Inferred calls are not counted. |
 
 [docs/guide/benchmarks.md](docs/guide/benchmarks.md) gives the method and the questions, so you can repeat each run.
 

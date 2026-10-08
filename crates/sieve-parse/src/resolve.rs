@@ -7,7 +7,7 @@ use std::path::Path;
 use sieve_core::lang::lang_for_path;
 use sieve_core::{Confidence, Edge, Kind, Node, Relation};
 
-use crate::extract::RawEdge;
+use crate::extract::{RawEdge, ReExport};
 use crate::generic::generic_lang_of;
 
 /// Known source extensions `resolveImport` probes, in probe order (edge
@@ -59,6 +59,16 @@ struct Indexes<'a> {
     /// Ids of the definitions a `contains` raw edge marks as a direct
     /// named export (TS and JS).
     direct_exports: HashSet<&'a str>,
+    /// Ids of the definitions a `contains` raw edge marks as their file's
+    /// default export (TS and JS).
+    default_exports: HashSet<&'a str>,
+    /// A TS or JS file to its re-export records (`Named`, `Star`,
+    /// `StarAs`), each with the repo file id its specifier resolves to, or
+    /// `None` when the specifier is not relative or names no repo file.
+    reexports: HashMap<&'a str, Vec<(&'a ReExport, Option<String>)>>,
+    /// A TS or JS file to the export names that mint no function node
+    /// (`Local` records).
+    local_exports: HashMap<&'a str, HashSet<&'a str>>,
 }
 
 /// Resolves every raw edge into a real graph edge, per the edge note,
@@ -217,8 +227,42 @@ fn build_indexes<'a>(nodes: &'a [Node], raw: &'a [RawEdge]) -> Indexes<'a> {
         .filter_map(|e| e.target_id.as_deref())
         .collect();
 
+    let default_exports: HashSet<&str> = raw
+        .iter()
+        .filter(|e| e.relation == Relation::Contains && e.default_export)
+        .filter_map(|e| e.target_id.as_deref())
+        .collect();
+
+    let mut reexports: HashMap<&str, Vec<(&ReExport, Option<String>)>> = HashMap::new();
+    let mut local_exports: HashMap<&str, HashSet<&str>> = HashMap::new();
+    for edge in raw.iter().filter(|e| e.relation == Relation::Imports) {
+        match &edge.reexport {
+            Some(ReExport::Local { export }) => {
+                local_exports
+                    .entry(edge.file.as_str())
+                    .or_default()
+                    .insert(export.as_str());
+            }
+            Some(record) => {
+                let target = edge
+                    .specifier
+                    .as_deref()
+                    .map(|spec| resolve_import(&node_ids, &edge.file, spec))
+                    .filter(|id| node_ids.contains(id.as_str()));
+                reexports
+                    .entry(edge.file.as_str())
+                    .or_default()
+                    .push((record, target));
+            }
+            None => {}
+        }
+    }
+
     Indexes {
         direct_exports,
+        default_exports,
+        reexports,
+        local_exports,
         node_ids,
         global_name,
         per_file_name,
@@ -285,6 +329,11 @@ fn owner_of(node: &Node) -> Option<String> {
 
 /// Resolves one raw edge by its relation.
 fn resolve_one(raw: &RawEdge, idx: &Indexes, go_modules: &[GoModule]) -> Option<Edge> {
+    // An export record (`export ... from`, a local export name) feeds the
+    // barrel walk only. It never becomes an `imports` graph edge.
+    if raw.reexport.is_some() {
+        return None;
+    }
     match raw.relation {
         Relation::Contains => {
             let target = raw.target_id.clone()?;
@@ -347,18 +396,36 @@ fn resolve_import_dispatch(
 /// else a bare call via `resolve_name`, with a Python `Class` retry on miss.
 fn resolve_calls(raw: &RawEdge, idx: &Indexes) -> Option<Edge> {
     let name = raw.name.as_deref()?;
-    if !raw.via_member {
-        if let Some(specifier) = raw.specifier.as_deref() {
-            if is_node_builtin(specifier) {
-                return None;
-            }
-            if let Some(target) = exact_import_target(raw, name, specifier, idx) {
+    if let Some(specifier) = raw.specifier.as_deref() {
+        if is_node_builtin(specifier) {
+            return None;
+        }
+        if raw.ns_export {
+            // `r.fn()` on a named import: only a `export * as r` namespace
+            // gives an exact edge. Any other result keeps the old path.
+            if let Some(target) = ns_export_target(raw, name, specifier, idx) {
                 return Some(Edge {
                     source: raw.source.clone(),
                     target,
                     relation: Relation::Calls,
                     confidence: Confidence::Extracted,
                 });
+            }
+        } else {
+            let export = raw.import_name.as_deref().unwrap_or(name);
+            match exact_import_target(raw, export, specifier, idx) {
+                ImportTarget::One(target) => {
+                    return Some(Edge {
+                        source: raw.source.clone(),
+                        target,
+                        relation: Relation::Calls,
+                        confidence: Confidence::Extracted,
+                    });
+                }
+                // The local name of an alias, default or namespace import
+                // is free, so a name match on it means nothing.
+                ImportTarget::Zero if raw.import_name.is_some() => return None,
+                _ => {}
             }
         }
     }
@@ -406,31 +473,194 @@ fn resolve_calls(raw: &RawEdge, idx: &Indexes) -> Option<Edge> {
     None
 }
 
-/// The one exported function `name` that a relative `specifier` names. Gives
-/// `None` when the specifier does not resolve to a repo file, or the file
-/// holds no exported function of that name, or holds two or more: the
-/// caller then keeps the name-matched path.
+/// What a relative import specifier gives for one export name.
+enum ImportTarget {
+    /// Exactly one exported function: the call is exact.
+    One(String),
+    /// The specifier names a repo file with no matching export.
+    Zero,
+    /// Anything else: not relative, no repo file, or two or more matches.
+    Other,
+}
+
+/// The longest re-export chain a walk follows.
+const MAX_WALK_DEPTH: u32 = 8;
+
+/// The most `lookup` calls one walk makes.
+const MAX_WALK_LOOKUPS: u32 = 256;
+
+/// What `lookup` finds for one export name in one file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Lookup {
+    /// Exactly one exported function, by id.
+    One(String),
+    /// The name is an `export * as ns` namespace of this file id.
+    Ns(String),
+    /// The name is absent, or a cycle re-entered it.
+    Zero,
+    /// Two or more exported functions in the defining file.
+    Many,
+    /// The walk cannot decide: a limit, an unresolved link, a star
+    /// conflict, or a non-function export of the name. A nested `Stop`
+    /// aborts the whole walk, so no other star wins by default.
+    Stop,
+}
+
+/// The state one walk shares: the `(file, name)` pairs it visited, as the ES
+/// `resolveSet` does, and its lookup count.
+#[derive(Default)]
+struct Walk {
+    seen: HashSet<(String, String)>,
+    lookups: u32,
+}
+
+/// Finds the export `export` (the string `default` means the default export)
+/// of the repo file `file`: its own function, else a re-export record.
+fn lookup(idx: &Indexes, file: &str, export: &str, depth: u32, walk: &mut Walk) -> Lookup {
+    walk.lookups += 1;
+    if depth > MAX_WALK_DEPTH || walk.lookups > MAX_WALK_LOOKUPS {
+        return Lookup::Stop;
+    }
+    if !walk.seen.insert((file.to_string(), export.to_string())) {
+        return Lookup::Zero;
+    }
+    // A file with no definition has no entry: it still gives `Zero`.
+    let empty = HashMap::new();
+    let names = idx.per_file_name.get(file).unwrap_or(&empty);
+    let is_target = |n: &&NodeRef| {
+        n.kind == Kind::Function
+            && if export == "default" {
+                idx.default_exports.contains(n.id.as_str())
+            } else {
+                idx.direct_exports.contains(n.id.as_str())
+            }
+    };
+    let mut candidates: Vec<&NodeRef> = if export == "default" {
+        names.values().flatten().filter(is_target).collect()
+    } else {
+        names
+            .get(export)
+            .map(|v| v.iter().filter(is_target).collect())
+            .unwrap_or_default()
+    };
+    match candidates.len() {
+        0 => {}
+        1 => return Lookup::One(candidates.remove(0).id.clone()),
+        _ => return Lookup::Many,
+    }
+    // A local non-function export of the name beats every star below it,
+    // and a parent star must not pick another star over it.
+    let local = idx
+        .local_exports
+        .get(file)
+        .is_some_and(|set| set.contains(export));
+    let exported_node = names.get(export).is_some_and(|v| {
+        v.iter()
+            .any(|n| n.kind != Kind::Function && idx.direct_exports.contains(n.id.as_str()))
+    });
+    if local || exported_node {
+        return Lookup::Stop;
+    }
+    let records = idx.reexports.get(file).map(Vec::as_slice).unwrap_or(&[]);
+    for (record, target) in records {
+        match record {
+            ReExport::Named {
+                export: out,
+                imported,
+            } if out == export => {
+                let Some(target) = target else {
+                    return Lookup::Stop;
+                };
+                // The explicit export claims the name, so an absent name
+                // in the target must not let a star win.
+                return match lookup(idx, target, imported, depth + 1, walk) {
+                    Lookup::Zero => Lookup::Stop,
+                    found => found,
+                };
+            }
+            ReExport::StarAs { export: out } if out == export => {
+                return match target {
+                    Some(target) => Lookup::Ns(target.clone()),
+                    None => Lookup::Stop,
+                };
+            }
+            _ => {}
+        }
+    }
+    if export == "default" {
+        return Lookup::Zero;
+    }
+    let mut hits: Vec<Lookup> = Vec::new();
+    let mut unknown = false;
+    for (_, target) in records
+        .iter()
+        .filter(|(record, _)| matches!(record, ReExport::Star))
+    {
+        let Some(target) = target else {
+            unknown = true;
+            continue;
+        };
+        match lookup(idx, target, export, depth + 1, walk) {
+            Lookup::Stop => return Lookup::Stop,
+            Lookup::Zero => {}
+            hit => {
+                let same = matches!(hit, Lookup::One(_) | Lookup::Ns(_)) && hits.contains(&hit);
+                if !same {
+                    hits.push(hit);
+                }
+            }
+        }
+    }
+    // An unresolved star may export the name, so no hit is safe.
+    if unknown || hits.len() > 1 {
+        return Lookup::Stop;
+    }
+    hits.pop().unwrap_or(Lookup::Zero)
+}
+
+/// The exported function `export` (the string `default` means the default
+/// export) that a relative `specifier` names, through any barrel. Only a
+/// single match is exact; the caller keeps the name-matched path for `Other`.
 fn exact_import_target(
     raw: &RawEdge,
-    name: &str,
+    export: &str,
     specifier: &str,
     idx: &Indexes,
-) -> Option<String> {
+) -> ImportTarget {
     if !specifier.starts_with('.') {
-        return None;
+        return ImportTarget::Other;
     }
     let file_id = resolve_import(&idx.node_ids, &raw.file, specifier);
     if !idx.node_ids.contains(file_id.as_str()) {
+        return ImportTarget::Other;
+    }
+    match lookup(idx, &file_id, export, 0, &mut Walk::default()) {
+        Lookup::One(id) => ImportTarget::One(id),
+        Lookup::Many => ImportTarget::Other,
+        Lookup::Ns(_) | Lookup::Zero | Lookup::Stop => ImportTarget::Zero,
+    }
+}
+
+/// The function id that an `r.name()` call reaches when `r` is a named
+/// import of a `export * as r` namespace. The first lookup must give the
+/// namespace. The second lookup starts with a fresh depth and a fresh
+/// `seen`.
+fn ns_export_target(raw: &RawEdge, name: &str, specifier: &str, idx: &Indexes) -> Option<String> {
+    if !specifier.starts_with('.') {
         return None;
     }
-    let mut candidates = idx
-        .per_file_name
-        .get(file_id.as_str())?
-        .get(name)?
-        .iter()
-        .filter(|n| n.kind == Kind::Function && idx.direct_exports.contains(n.id.as_str()));
-    let first = candidates.next()?;
-    candidates.next().is_none().then(|| first.id.clone())
+    let barrel = resolve_import(&idx.node_ids, &raw.file, specifier);
+    if !idx.node_ids.contains(barrel.as_str()) {
+        return None;
+    }
+    let export = raw.import_name.as_deref()?;
+    let Lookup::Ns(file) = lookup(idx, &barrel, export, 0, &mut Walk::default()) else {
+        return None;
+    };
+    match lookup(idx, &file, name, 0, &mut Walk::default()) {
+        Lookup::One(id) => Some(id),
+        _ => None,
+    }
 }
 
 /// Node's built-in modules, bare names. A `node:` specifier also counts.
@@ -1090,6 +1320,10 @@ mod tests {
             kinds: None,
             implicit_self: false,
             direct_export: false,
+            import_name: None,
+            default_export: false,
+            reexport: None,
+            ns_export: false,
         }
     }
 
@@ -1148,6 +1382,10 @@ mod tests {
             kinds: None,
             implicit_self: false,
             direct_export: false,
+            import_name: None,
+            default_export: false,
+            reexport: None,
+            ns_export: false,
         }];
         assert!(resolve_edges(&nodes, &raw).is_empty());
     }
@@ -1174,6 +1412,10 @@ mod tests {
             kinds: None,
             implicit_self: false,
             direct_export: false,
+            import_name: None,
+            default_export: false,
+            reexport: None,
+            ns_export: false,
         }];
         assert!(resolve_edges(&nodes, &raw).is_empty());
     }
@@ -1194,6 +1436,10 @@ mod tests {
             kinds: None,
             implicit_self: false,
             direct_export: false,
+            import_name: None,
+            default_export: false,
+            reexport: None,
+            ns_export: false,
         }];
         for i in (0..3).rev() {
             raw.push(RawEdge {
@@ -1209,6 +1455,10 @@ mod tests {
                 kinds: None,
                 implicit_self: false,
                 direct_export: false,
+                import_name: None,
+                default_export: false,
+                reexport: None,
+                ns_export: false,
             });
         }
         for i in 1..=3 {
@@ -1241,6 +1491,10 @@ mod tests {
             kinds: None,
             implicit_self: false,
             direct_export: false,
+            import_name: None,
+            default_export: false,
+            reexport: None,
+            ns_export: false,
         });
         nodes.push(node("a.ts#T4", "T4", Kind::Class, "a.ts", None));
         raw[0].recv_type = Some("T4".to_string());
@@ -1267,6 +1521,10 @@ mod tests {
             kinds: None,
             implicit_self: false,
             direct_export: false,
+            import_name: None,
+            default_export: false,
+            reexport: None,
+            ns_export: false,
         }];
         assert!(resolve_edges(&nodes, &raw).is_empty());
     }
@@ -1341,6 +1599,10 @@ mod tests {
             kinds: None,
             implicit_self: false,
             direct_export: false,
+            import_name: None,
+            default_export: false,
+            reexport: None,
+            ns_export: false,
         }];
         let edges = resolve_edges(&nodes, &raw);
         assert_eq!(edges.len(), 1);
@@ -1402,6 +1664,10 @@ mod tests {
             kinds: None,
             implicit_self: false,
             direct_export: false,
+            import_name: None,
+            default_export: false,
+            reexport: None,
+            ns_export: false,
         }];
         let idx = build_indexes(&nodes, &raw);
         let hit = resolve_trait_member("a.php", "App", "label", &idx);
@@ -1424,6 +1690,10 @@ mod tests {
             kinds: None,
             implicit_self: false,
             direct_export: false,
+            import_name: None,
+            default_export: false,
+            reexport: None,
+            ns_export: false,
         }
     }
 
@@ -1632,20 +1902,23 @@ mod xfile_tests {
     }
 
     #[test]
-    fn test_xfile_aliased_import_is_unchanged() {
+    fn test_xfile_aliased_import_is_extracted() {
         let src = "import { helper as h } from \"./lib\";\nexport function run() { return h(); }\n";
         let files = [LIB, ("main.ts", src)];
-        assert_eq!(main_call(&files), None);
+        assert_eq!(
+            main_call(&files),
+            hit("lib.ts#helper", Confidence::Extracted)
+        );
     }
 
     #[test]
-    fn test_xfile_barrel_with_zero_candidates_keeps_the_name_matched_result() {
+    fn test_xfile_named_reexport_barrel_is_extracted() {
         let barrel = ("barrel.ts", "export { helper } from \"./lib\";\n");
         let src = main_src("./barrel");
         let files = [LIB, barrel, ("main.ts", src.as_str())];
         assert_eq!(
             main_call(&files),
-            hit("lib.ts#helper", Confidence::Inferred)
+            hit("lib.ts#helper", Confidence::Extracted)
         );
     }
 
@@ -1803,5 +2076,397 @@ mod xfile_tests {
                 "{src}"
             );
         }
+    }
+
+    /// A `main.ts` of `src` with the extra `files`, and the one call it makes.
+    fn call_with(src: &str, extra: &[(&str, &str)]) -> Hit {
+        let mut files = extra.to_vec();
+        files.push(("main.ts", src));
+        main_call(&files)
+    }
+
+    #[test]
+    fn test_xfile_namespace_call_is_extracted() {
+        let src = "import * as ns from \"./lib\";\nexport function run() { return ns.helper(); }\n";
+        assert_eq!(
+            call_with(src, &[LIB]),
+            hit("lib.ts#helper", Confidence::Extracted)
+        );
+    }
+
+    #[test]
+    fn test_xfile_default_function_is_extracted() {
+        let def = ("def.ts", "export default function build() { return 1; }\n");
+        let decoy = ("decoy.ts", "export function x() { return 2; }\n");
+        let src = "import x from \"./def\";\nexport function run() { return x(); }\n";
+        assert_eq!(
+            call_with(src, &[def, decoy]),
+            hit("def.ts#build", Confidence::Extracted)
+        );
+    }
+
+    #[test]
+    fn test_xfile_default_identifier_is_extracted() {
+        let def = (
+            "def.js",
+            "function make() { return 1; }\nexport default make;\n",
+        );
+        let src = "import mk from \"./def.js\";\nexport function run() { return mk(); }\n";
+        assert_eq!(
+            call_with(src, &[def]),
+            hit("def.js#make", Confidence::Extracted)
+        );
+    }
+
+    #[test]
+    fn test_xfile_default_clause_is_extracted() {
+        let def = (
+            "def.ts",
+            "const create = () => 1;\nexport { create as default };\n",
+        );
+        let src = "import cr from \"./def\";\nexport function run() { return cr(); }\n";
+        assert_eq!(
+            call_with(src, &[def]),
+            hit("def.ts#create", Confidence::Extracted)
+        );
+    }
+
+    #[test]
+    fn test_xfile_default_as_named_is_extracted() {
+        let def = ("def.ts", "export default function build() { return 1; }\n");
+        let src =
+            "import { default as b2 } from \"./def\";\nexport function run() { return b2(); }\n";
+        assert_eq!(
+            call_with(src, &[def]),
+            hit("def.ts#build", Confidence::Extracted)
+        );
+    }
+
+    #[test]
+    fn test_xfile_namespace_through_star_barrel_is_extracted() {
+        let barrel = ("barrel.ts", "export * from \"./lib\";\n");
+        let src =
+            "import * as ns from \"./barrel\";\nexport function run() { return ns.helper(); }\n";
+        assert_eq!(
+            call_with(src, &[LIB, barrel]),
+            hit("lib.ts#helper", Confidence::Extracted)
+        );
+    }
+
+    #[test]
+    fn test_xfile_alias_from_builtin_drops() {
+        let join = (
+            "join.ts",
+            "export function join(): string { return \"\"; }\n",
+        );
+        let src = "import { join as j } from \"path\";\nexport function run() { return j(); }\n";
+        assert_eq!(call_with(src, &[join]), None);
+    }
+
+    #[test]
+    fn test_xfile_alias_with_zero_candidates_drops() {
+        let decoy = ("decoy.ts", "export function h() { return 2; }\n");
+        let src =
+            "import { nothing as h } from \"./lib\";\nexport function run() { return h(); }\n";
+        assert_eq!(call_with(src, &[LIB, decoy]), None);
+    }
+
+    #[test]
+    fn test_xfile_default_reexport_reaches_impl() {
+        let barrel = (
+            "barrel.ts",
+            "export { make as default } from \"./impl\";\nexport function make() { return 2; }\n",
+        );
+        let imp = ("impl.ts", "export function make() { return 1; }\n");
+        let src = "import m from \"./barrel\";\nexport function run() { return m(); }\n";
+        assert_eq!(
+            call_with(src, &[barrel, imp]),
+            hit("impl.ts#make", Confidence::Extracted)
+        );
+    }
+
+    #[test]
+    fn test_xfile_alias_through_star_barrel_is_extracted() {
+        let barrel = ("barrel.ts", "export * from \"./lib\";\n");
+        let decoy = ("decoy.ts", "export function h() { return 2; }\n");
+        let src =
+            "import { helper as h } from \"./barrel\";\nexport function run() { return h(); }\n";
+        assert_eq!(
+            call_with(src, &[LIB, barrel, decoy]),
+            hit("lib.ts#helper", Confidence::Extracted)
+        );
+    }
+
+    /// A `main.ts` that imports `{ helper as h }` from `./barrel` and calls `h()`.
+    const ALIAS_MAIN: &str =
+        "import { helper as h } from \"./barrel\";\nexport function run() { return h(); }\n";
+
+    /// A `main.ts` that imports `{ helper }` from `./barrel` and calls `helper()`.
+    fn plain_main() -> String {
+        main_src("./barrel")
+    }
+
+    #[test]
+    fn test_xfile_alias_of_name_absent_from_barrel_drops() {
+        let barrel = ("barrel.ts", "export * from \"./lib\";\n");
+        let decoy = ("decoy.ts", "export function h() { return 2; }\n");
+        let src =
+            "import { nothing as h } from \"./barrel\";\nexport function run() { return h(); }\n";
+        assert_eq!(call_with(src, &[LIB, barrel, decoy]), None);
+    }
+
+    #[test]
+    fn test_xfile_aliased_named_reexport_is_extracted() {
+        let lib = (
+            "lib.ts",
+            "export function helper() { return 1; }\nexport function other() { return 2; }\n",
+        );
+        let barrel = ("barrel.ts", "export { other as renamed } from \"./lib\";\n");
+        let src =
+            "import { renamed as r } from \"./barrel\";\nexport function run() { return r(); }\n";
+        assert_eq!(
+            call_with(src, &[lib, barrel]),
+            hit("lib.ts#other", Confidence::Extracted)
+        );
+    }
+
+    #[test]
+    fn test_xfile_default_reexport_forms_are_extracted() {
+        let def = ("def.ts", "export default function build() { return 1; }\n");
+        let cases = [
+            (
+                "export { default } from \"./def\";\n",
+                "import x from \"./barrel\";\nexport function run() { return x(); }\n",
+                "def.ts#build",
+            ),
+            (
+                "export { default as lb } from \"./def\";\n",
+                "import { lb } from \"./barrel\";\nexport function run() { return lb(); }\n",
+                "def.ts#build",
+            ),
+            (
+                "export { helper as default } from \"./lib\";\n",
+                "import x from \"./barrel\";\nexport function run() { return x(); }\n",
+                "lib.ts#helper",
+            ),
+        ];
+        for (barrel, src, want) in cases {
+            assert_eq!(
+                call_with(src, &[def, LIB, ("barrel.ts", barrel)]),
+                hit(want, Confidence::Extracted),
+                "{barrel}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_xfile_star_chain_of_two_is_extracted() {
+        let b1 = ("b1.ts", "export * from \"./barrel\";\n");
+        let barrel = ("barrel.ts", "export * from \"./lib\";\n");
+        let src = main_src("./b1");
+        assert_eq!(
+            call_with(&src, &[LIB, b1, barrel]),
+            hit("lib.ts#helper", Confidence::Extracted)
+        );
+    }
+
+    /// The two files of a star cycle: `a.ts` defines `ca`, `b.ts` defines `cb`.
+    const CYCLE: [(&str, &str); 2] = [
+        ("a.ts", "export * from \"./b\";\nexport function ca() {}\n"),
+        ("b.ts", "export * from \"./a\";\nexport function cb() {}\n"),
+    ];
+
+    #[test]
+    fn test_xfile_star_cycle_finds_the_name() {
+        let src = "import { cb } from \"./a\";\nexport function run() { return cb(); }\n";
+        assert_eq!(
+            call_with(src, &CYCLE),
+            hit("b.ts#cb", Confidence::Extracted)
+        );
+    }
+
+    #[test]
+    fn test_xfile_star_cycle_without_the_name_gives_zero() {
+        let src = "import { zzz as z } from \"./a\";\nexport function run() { return z(); }\n";
+        assert_eq!(call_with(src, &CYCLE), None);
+    }
+
+    #[test]
+    fn test_xfile_star_diamond_same_target_is_extracted() {
+        let top = (
+            "barrel.ts",
+            "export * from \"./left\";\nexport * from \"./right\";\n",
+        );
+        let left = ("left.ts", "export * from \"./lib\";\n");
+        let right = ("right.ts", "export * from \"./lib\";\n");
+        assert_eq!(
+            call_with(&plain_main(), &[LIB, top, left, right]),
+            hit("lib.ts#helper", Confidence::Extracted)
+        );
+    }
+
+    #[test]
+    fn test_xfile_depth_limit_gives_zero() {
+        // `b0` re-exports `b1`, and so on; the last barrel re-exports `lib`.
+        let chain = |len: usize| -> Vec<(String, String)> {
+            (0..len)
+                .map(|i| {
+                    let next = if i + 1 == len {
+                        "lib".to_string()
+                    } else {
+                        format!("b{}", i + 1)
+                    };
+                    (format!("b{i}.ts"), format!("export * from \"./{next}\";\n"))
+                })
+                .collect()
+        };
+        let run = |len: usize| {
+            let owned = chain(len);
+            let mut files: Vec<(&str, &str)> = vec![LIB];
+            files.extend(owned.iter().map(|(p, s)| (p.as_str(), s.as_str())));
+            let src =
+                "import { helper as h } from \"./b0\";\nexport function run() { return h(); }\n";
+            call_with(src, &files)
+        };
+        assert_eq!(run(8), hit("lib.ts#helper", Confidence::Extracted));
+        assert_eq!(run(10), None);
+    }
+
+    #[test]
+    fn test_xfile_star_conflict_gives_no_extracted_edge() {
+        let barrel = (
+            "barrel.ts",
+            "export * from \"./lib\";\nexport * from \"./other\";\n",
+        );
+        assert_eq!(call_with(ALIAS_MAIN, &[LIB, OTHER, barrel]), None);
+        let hit = call_with(&plain_main(), &[LIB, OTHER, barrel]);
+        assert_ne!(hit.map(|(_, c)| c), Some(Confidence::Extracted));
+    }
+
+    #[test]
+    fn test_xfile_unresolved_star_blocks_a_single_hit() {
+        let barrel = (
+            "barrel.ts",
+            "export * from \"pkg\";\nexport * from \"./lib\";\n",
+        );
+        assert_eq!(call_with(ALIAS_MAIN, &[LIB, barrel]), None);
+    }
+
+    #[test]
+    fn test_xfile_nested_unknown_star_aborts_the_walk() {
+        // Attack finding F2: `mid` has an unresolved star, so `top` must not
+        // fall through to its second star `lib`.
+        let mid = (
+            "mid.ts",
+            "export * from \"pkg\";\nexport * from \"./other\";\n",
+        );
+        let top = (
+            "barrel.ts",
+            "export * from \"./mid\";\nexport * from \"./lib\";\n",
+        );
+        assert_eq!(call_with(ALIAS_MAIN, &[LIB, OTHER, mid, top]), None);
+    }
+
+    #[test]
+    fn test_xfile_local_function_beats_star() {
+        let barrel = (
+            "barrel.ts",
+            "export * from \"./lib\";\nexport function helper() { return 9; }\n",
+        );
+        assert_eq!(
+            call_with(&plain_main(), &[LIB, barrel]),
+            hit("barrel.ts#helper", Confidence::Extracted)
+        );
+    }
+
+    #[test]
+    fn test_xfile_local_non_function_export_blocks_star() {
+        let barrel = (
+            "barrel.ts",
+            "export * from \"./lib\";\nexport const helper = 1;\n",
+        );
+        assert_eq!(call_with(ALIAS_MAIN, &[LIB, barrel]), None);
+        // A non-function export in a star's target blocks the other star too.
+        let nonfn = ("nonfn.ts", "export const helper = (() => () => 1)();\n");
+        let mix = (
+            "barrel.ts",
+            "export * from \"./nonfn\";\nexport * from \"./other\";\n",
+        );
+        assert_eq!(call_with(ALIAS_MAIN, &[nonfn, OTHER, mix]), None);
+        // A class is an exported node of another kind.
+        let class = ("klass.ts", "export class helper {}\n");
+        let mix = (
+            "barrel.ts",
+            "export * from \"./klass\";\nexport * from \"./other\";\n",
+        );
+        assert_eq!(call_with(ALIAS_MAIN, &[class, OTHER, mix]), None);
+    }
+
+    #[test]
+    fn test_xfile_star_never_carries_default() {
+        let def = ("def.ts", "export default function build() { return 1; }\n");
+        let barrel = ("barrel.ts", "export * from \"./def\";\n");
+        let src = "import x from \"./barrel\";\nexport function run() { return x(); }\n";
+        assert_eq!(call_with(src, &[def, barrel]), None);
+    }
+
+    #[test]
+    fn test_xfile_star_as_namespace_member_call_is_extracted() {
+        let barrel = ("barrel.ts", "export * as tools from \"./lib\";\n");
+        let src = "import { tools } from \"./barrel\";\nexport function run() { return tools.helper(); }\n";
+        assert_eq!(
+            call_with(src, &[LIB, barrel]),
+            hit("lib.ts#helper", Confidence::Extracted)
+        );
+    }
+
+    #[test]
+    fn test_xfile_named_import_static_member_call_keeps_old_path() {
+        let foo = (
+            "foo.ts",
+            "export class Foo { static create() { return 1; } }\n",
+        );
+        let src =
+            "import { Foo } from \"./foo\";\nexport function run() { return Foo.create(); }\n";
+        // The first lookup gives Many or Zero for a class, not a namespace.
+        // The old path has no receiver type for an import, so the edge drops.
+        assert_eq!(call_with(src, &[foo]), None);
+    }
+
+    #[test]
+    fn test_xfile_named_import_of_function_with_property_keeps_old_path() {
+        let prop = (
+            "prop.ts",
+            "export function tools() { return 1; }\ntools.fn = () => 2;\n",
+        );
+        let decoy = ("decoy.ts", "export function fn() { return 3; }\n");
+        let src =
+            "import { tools } from \"./prop\";\nexport function run() { return tools.fn(); }\n";
+        // The first lookup gives One(tools), not a namespace, so the old path
+        // runs. It has no receiver type, so the edge drops.
+        assert_eq!(call_with(src, &[prop, decoy]), None);
+    }
+
+    #[test]
+    fn test_xfile_reexport_record_gives_no_graph_edge() {
+        let mut extractor = Extractor::new().expect("build extractor");
+        let sources = [
+            ("lib.ts", "export function helper() {}\n"),
+            (
+                "barrel.ts",
+                "export * from \"./lib\";\nexport { helper as h } from \"./lib\";\nexport * as ns from \"./lib\";\nexport const v = 1;\n",
+            ),
+        ];
+        let mut nodes = Vec::new();
+        let mut raw = Vec::new();
+        for (path, source) in sources {
+            nodes.push(file_node(path));
+            let (n, r) = extractor.extract_file(path, source, "typescript");
+            nodes.extend(n);
+            raw.extend(r);
+        }
+        assert!(raw.iter().any(|e| e.reexport.is_some()));
+        let edges = resolve_edges(&nodes, &raw);
+        assert!(edges.iter().all(|e| e.relation != Relation::Imports));
     }
 }

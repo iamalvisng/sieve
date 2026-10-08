@@ -466,6 +466,10 @@ fn tags_extract(
             kinds: Some(vec![Kind::Function, Kind::Method]),
             implicit_self: false,
             direct_export: false,
+            import_name: None,
+            default_export: false,
+            reexport: None,
+            ns_export: false,
         });
     }
     for (name, at) in refs {
@@ -498,6 +502,10 @@ fn tags_extract(
             ]),
             implicit_self: false,
             direct_export: false,
+            import_name: None,
+            default_export: false,
+            reexport: None,
+            ns_export: false,
         });
     }
 }
@@ -685,6 +693,10 @@ fn visit_includes(node: TsNode, path: &str, source: &str, raw_edges: &mut Vec<Ra
                             kinds: None,
                             implicit_self: false,
                             direct_export: false,
+                            import_name: None,
+                            default_export: false,
+                            reexport: None,
+                            ns_export: false,
                         });
                     }
                 }
@@ -727,6 +739,10 @@ fn visit_uses(node: TsNode, path: &str, source: &str, raw_edges: &mut Vec<RawEdg
                     kinds: None,
                     implicit_self: false,
                     direct_export: false,
+                    import_name: None,
+                    default_export: false,
+                    reexport: None,
+                    ns_export: false,
                 });
             }
         }

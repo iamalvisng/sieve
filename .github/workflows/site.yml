@@ -1,0 +1,27 @@
+name: site
+
+# dist publishes the release with GITHUB_TOKEN, and a GITHUB_TOKEN event starts
+# no other workflow. So this workflow starts when the Release workflow ends.
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  deploy-hook:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ask Vercel to rebuild the website
+        env:
+          HOOK: ${{ secrets.SIEVE_SITE_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "site: no deploy hook set; skipped"
+            exit 0
+          fi
+          curl -fsS -X POST "$HOOK" > /dev/null

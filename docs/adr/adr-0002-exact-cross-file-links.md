@@ -1,6 +1,6 @@
 # ADR 0002: Exact cross-file links only for named relative imports
 
-- **Status:** Accepted
+- **Status:** Superseded by ADR 0005 on 2026-10-06. Named relative imports keep the rule below. ADR 0005 adds aliased, namespace and default imports.
 - **Date:** 2026-10-05
 
 ## Context

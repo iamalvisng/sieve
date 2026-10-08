@@ -57,12 +57,64 @@ pub struct RawEdge {
     /// resolver reads it for exact import resolution.
     #[serde(default, skip_serializing_if = "is_false")]
     pub direct_export: bool,
+    /// The export name a TS or JS call reaches in its specifier's module:
+    /// set for an aliased, a default or a namespace binding, `None` for a
+    /// plain named import.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub import_name: Option<String>,
+    /// A `contains` edge only: the definition is the file's default
+    /// export.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub default_export: bool,
+    /// An `imports` record of a TS or JS export (`export ... from`, or a
+    /// local export name). Resolution reads it to follow a barrel and
+    /// never turns it into a graph edge.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reexport: Option<ReExport>,
+    /// A `calls` edge only: a member call `r.fn()` whose receiver `r` is a
+    /// relative named import, so `r` may be an `export * as r` namespace.
+    /// `import_name` holds the receiver's export name.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub ns_export: bool,
+}
+
+/// One export record of a TS or JS file, for barrel resolution.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ReExport {
+    /// `export { imported as export } from`: the module's `imported` name
+    /// is exported as `export`.
+    Named { export: String, imported: String },
+    /// `export * from`: every name except `default`.
+    Star,
+    /// `export * as export from`: the whole module as a namespace.
+    StarAs { export: String },
+    /// A local export name that mints no function node (a `const`, a
+    /// source-less `export { }` name, an `export default` expression).
+    Local { export: String },
 }
 
 /// Reports whether `value` is `false`, for `RawEdge::implicit_self`'s
 /// `skip_serializing_if`, so a `false` value never grows the cache file.
 fn is_false(value: &bool) -> bool {
     !*value
+}
+
+/// What an import binding names in its module.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ImportedName {
+    /// A named import: the exported name (`default` for `{ default as x }`).
+    Named(String),
+    /// A default import clause.
+    Default,
+    /// A `* as ns` namespace import.
+    Namespace,
+}
+
+/// One import binding: what it imports, and from which specifier.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ImportBinding {
+    imported: ImportedName,
+    specifier: String,
 }
 
 /// The walk context: the enclosing scope names, kind, class name, the
@@ -78,7 +130,10 @@ struct Ctx<'a> {
     enclosing_class: Option<String>,
     parent_id: String,
     bindings: &'a FileBindings,
-    imported_symbols: &'a HashMap<String, (String, String)>,
+    imported_symbols: &'a HashMap<String, ImportBinding>,
+    /// TS and JS: the local name the file exports as its default, from
+    /// `export default <name>;` or `export { <name> as default }`.
+    default_local: Option<&'a str>,
     /// Import names a parameter or local declaration shadows in the
     /// current function or method. A shadowed name emits no reference.
     shadowed: HashSet<String>,
@@ -182,6 +237,8 @@ impl Extractor {
 
         let bindings = collect_bindings(tree.root_node(), source, grammar);
         let imported_symbols = collect_imported_symbols(tree.root_node(), source, is_python);
+        let default_local = (!is_python).then(|| collect_default_local(tree.root_node(), source));
+        let default_local = default_local.flatten();
         let r_generics = (lang == "r").then(|| collect_r_generics(tree.root_node(), source));
 
         let root_ctx = Ctx {
@@ -192,6 +249,7 @@ impl Extractor {
             parent_id: path.to_string(),
             bindings: &bindings,
             imported_symbols: &imported_symbols,
+            default_local: default_local.as_deref(),
             shadowed: HashSet::new(),
             callback_shadowed: HashSet::new(),
             go_receiver_var: None,
@@ -214,7 +272,19 @@ impl Extractor {
         };
         let mut cursor = tree.root_node().walk();
         for child in tree.root_node().named_children(&mut cursor) {
-            walk(child, &root_ctx, &file, &mut sink);
+            if matches!(lang, "typescript" | "tsx") {
+                let callback_shadowed = root_statement_shadowed_names(child, source);
+                let stmt_ctx = Ctx {
+                    callback_shadowed,
+                    ..root_ctx.clone()
+                };
+                walk(child, &stmt_ctx, &file, &mut sink);
+            } else {
+                walk(child, &root_ctx, &file, &mut sink);
+            }
+        }
+        if matches!(lang, "typescript" | "tsx") {
+            edges.extend(collect_reexports(tree.root_node(), source, path));
         }
         (out, edges)
     }
@@ -294,6 +364,10 @@ fn walk(node: TsNode, ctx: &Ctx, file: &FileCtx, sink: &mut Sink) {
                 kinds: None,
                 implicit_self: false,
                 direct_export: false,
+                import_name: None,
+                default_export: false,
+                reexport: None,
+                ns_export: false,
             });
         }
         return;
@@ -328,8 +402,17 @@ fn walk(node: TsNode, ctx: &Ctx, file: &FileCtx, sink: &mut Sink) {
                     kinds: None,
                     implicit_self: true,
                     direct_export: false,
+                    import_name: None,
+                    default_export: false,
+                    reexport: None,
+                    ns_export: false,
                 });
             } else {
+                let (specifier, import_name, ns_export) =
+                    match call_import_specifier(&name, via_member, receiver.as_deref(), ctx) {
+                        Some((specifier, import_name, ns)) => (Some(specifier), import_name, ns),
+                        None => (None, None, false),
+                    };
                 let recv_type = if via_member && lang == "go" && receiver == ctx.go_receiver_var {
                     ctx.enclosing_class.clone()
                 } else if lang == "r" && receiver.as_deref() == Some("super") {
@@ -355,7 +438,7 @@ fn walk(node: TsNode, ctx: &Ctx, file: &FileCtx, sink: &mut Sink) {
                     relation: Relation::Calls,
                     file: path.to_string(),
                     target_id: None,
-                    specifier: call_import_specifier(&name, via_member, ctx),
+                    specifier,
                     name: Some(name),
                     via_member,
                     recv_type,
@@ -363,6 +446,10 @@ fn walk(node: TsNode, ctx: &Ctx, file: &FileCtx, sink: &mut Sink) {
                     kinds,
                     implicit_self: false,
                     direct_export: false,
+                    import_name,
+                    default_export: false,
+                    reexport: None,
+                    ns_export,
                 });
             }
         }
@@ -391,46 +478,291 @@ fn walk(node: TsNode, ctx: &Ctx, file: &FileCtx, sink: &mut Sink) {
     }
 }
 
-/// The import specifier a bare TS or JS call carries: set when the callee
-/// is a named import with the same local and imported name, and no
-/// parameter or local declaration shadows the name.
-fn call_import_specifier(name: &str, via_member: bool, ctx: &Ctx) -> Option<String> {
-    if via_member || !matches!(ctx.lang, "typescript" | "tsx") {
+/// The `(specifier, import_name, ns_export)` a TS or JS call carries. A bare
+/// call of a binding gives the imported name (`None` when local and imported
+/// names match). A `ns.fn()` call on a namespace binding gives `fn`. An
+/// `r.fn()` call on a relative named binding gives the receiver's export
+/// name and sets `ns_export`. A name in a shadow set gives nothing.
+fn call_import_specifier(
+    name: &str,
+    via_member: bool,
+    receiver: Option<&str>,
+    ctx: &Ctx,
+) -> Option<(String, Option<String>, bool)> {
+    if !matches!(ctx.lang, "typescript" | "tsx") {
         return None;
     }
-    if ctx.shadowed.contains(name) || ctx.callback_shadowed.contains(name) {
+    let local = if via_member { receiver? } else { name };
+    if ctx.shadowed.contains(local) || ctx.callback_shadowed.contains(local) {
         return None;
     }
-    let (imported, specifier) = ctx.imported_symbols.get(name)?;
-    (imported == name).then(|| specifier.clone())
+    let binding = ctx.imported_symbols.get(local)?;
+    let specifier = binding.specifier.clone();
+    match (&binding.imported, via_member) {
+        (ImportedName::Namespace, true) => Some((specifier, Some(name.to_string()), false)),
+        (ImportedName::Named(imported), true) if specifier.starts_with('.') => {
+            Some((specifier, Some(imported.clone()), true))
+        }
+        (ImportedName::Named(imported), false) if imported == name => {
+            Some((specifier, None, false))
+        }
+        (ImportedName::Named(imported), false) => Some((specifier, Some(imported.clone()), false)),
+        (ImportedName::Default, false) => Some((specifier, Some("default".to_string()), false)),
+        _ => None,
+    }
+}
+
+/// Inserts every identifier a binding pattern binds under `pattern` (a name,
+/// or a destructuring pattern). The walk over-counts a default value, which
+/// is safe: a larger shadow set only removes specifiers.
+fn insert_bound_names(pattern: TsNode, source: &str, names: &mut HashSet<String>) {
+    let mut stack = vec![pattern];
+    while let Some(n) = stack.pop() {
+        if matches!(
+            n.kind(),
+            "identifier" | "shorthand_property_identifier_pattern"
+        ) {
+            if let Ok(text) = n.utf8_text(source.as_bytes()) {
+                names.insert(text.to_string());
+            }
+        }
+        let mut cursor = n.walk();
+        stack.extend(n.named_children(&mut cursor));
+    }
+}
+
+/// The names one root statement binds outside any function: its loop and
+/// catch bindings, and its locals. A function statement binds nothing here,
+/// because its own context scans its body. The set stays inside this
+/// statement, so a root loop variable never shadows a name in a function.
+fn root_statement_shadowed_names(stmt: TsNode, source: &str) -> HashSet<String> {
+    let mut names = HashSet::new();
+    if !is_function_boundary(stmt.kind()) {
+        names = scan_loop_catch_names(stmt, source, true);
+        collect_local_declarations(stmt, stmt, None, source, &mut names);
+    }
+    names
+}
+
+/// The local name a file exports as its default, read from the direct
+/// children of the root: `export default <name>;` or `export { <name> as
+/// default }`. A re-export (`export { x as default } from './m'`) binds no
+/// local name, so it is skipped.
+fn collect_default_local(root: TsNode, source: &str) -> Option<String> {
+    let text = |n: TsNode| n.utf8_text(source.as_bytes()).ok().map(str::to_string);
+    let mut found = None;
+    let mut cursor = root.walk();
+    for stmt in root.named_children(&mut cursor) {
+        if stmt.kind() != "export_statement" || stmt.child_by_field_name("source").is_some() {
+            continue;
+        }
+        if let Some(value) = stmt.child_by_field_name("value") {
+            if value.kind() == "identifier" {
+                found = text(value).or(found);
+            }
+        }
+        let mut sc = stmt.walk();
+        for clause in stmt.named_children(&mut sc) {
+            if clause.kind() != "export_clause" {
+                continue;
+            }
+            let mut ec = clause.walk();
+            for spec in clause.named_children(&mut ec) {
+                let alias = spec.child_by_field_name("alias").and_then(text);
+                if alias.as_deref() == Some("default") {
+                    found = spec.child_by_field_name("name").and_then(text).or(found);
+                }
+            }
+        }
+    }
+    found
+}
+
+/// Builds one `imports` record that carries an export, with no call data.
+fn export_record(path: &str, specifier: Option<String>, reexport: ReExport) -> RawEdge {
+    RawEdge {
+        source: path.to_string(),
+        relation: Relation::Imports,
+        file: path.to_string(),
+        target_id: None,
+        specifier,
+        name: None,
+        via_member: false,
+        recv_type: None,
+        arg_count: None,
+        kinds: None,
+        implicit_self: false,
+        direct_export: false,
+        import_name: None,
+        default_export: false,
+        reexport: Some(reexport),
+        ns_export: false,
+    }
+}
+
+/// The text of an export name node, or `None` for a string name
+/// (`export { x as "a-b" }`), which no identifier can import.
+fn export_name_text(node: TsNode, source: &str) -> Option<String> {
+    if node.kind() == "string" {
+        return None;
+    }
+    node.utf8_text(source.as_bytes()).ok().map(str::to_string)
+}
+
+/// Reports whether `node` has an unnamed child token of kind `kind`.
+fn has_token(node: TsNode, kind: &str) -> bool {
+    let mut cursor = node.walk();
+    let found = node.children(&mut cursor).any(|c| c.kind() == kind);
+    found
+}
+
+/// Reads the export records of a TS or JS file from the direct children of
+/// the root: each `export ... from` form, and each local export name that
+/// mints no function node (see [`ReExport::Local`]). A type-only form
+/// (`export type { }`, `export type * from`, an inline `type` specifier)
+/// and a string name give no record. JS files give no re-export records in
+/// this slice, because only the TS and TSX grammars run this scan.
+fn collect_reexports(root: TsNode, source: &str, path: &str) -> Vec<RawEdge> {
+    let mut records = Vec::new();
+    let local = |export: String| export_record(path, None, ReExport::Local { export });
+    let mut cursor = root.walk();
+    for stmt in root.named_children(&mut cursor) {
+        if stmt.kind() != "export_statement" || has_token(stmt, "type") || stmt.has_error() {
+            continue;
+        }
+        let from = import_specifier(stmt, source, "typescript");
+        let mut plain_star = from.is_some() && has_token(stmt, "*");
+        let mut sc = stmt.walk();
+        for child in stmt.named_children(&mut sc) {
+            match child.kind() {
+                "namespace_export" => {
+                    plain_star = false;
+                    let mut nc = child.walk();
+                    let export = child
+                        .named_children(&mut nc)
+                        .find_map(|n| export_name_text(n, source));
+                    if let (Some(export), Some(from)) = (export, from.clone()) {
+                        records.push(export_record(path, Some(from), ReExport::StarAs { export }));
+                    }
+                }
+                "export_clause" => {
+                    plain_star = false;
+                    let mut ec = child.walk();
+                    for spec in child.named_children(&mut ec) {
+                        if spec.kind() != "export_specifier" || has_token(spec, "type") {
+                            continue;
+                        }
+                        let name = spec
+                            .child_by_field_name("name")
+                            .and_then(|n| export_name_text(n, source));
+                        let export = match spec.child_by_field_name("alias") {
+                            Some(a) => export_name_text(a, source),
+                            None => name.clone(),
+                        };
+                        let (Some(imported), Some(export)) = (name, export) else {
+                            continue;
+                        };
+                        records.push(match from.clone() {
+                            Some(from) => export_record(
+                                path,
+                                Some(from),
+                                ReExport::Named { export, imported },
+                            ),
+                            None => local(export),
+                        });
+                    }
+                }
+                _ => {}
+            }
+        }
+        if let (Some(from), true) = (from, plain_star) {
+            records.push(export_record(path, Some(from), ReExport::Star));
+        }
+        records.extend(local_export_names(stmt, source).into_iter().map(local));
+    }
+    records
+}
+
+/// The export names a declaring `export` statement binds without a function
+/// node: a `const`, `let` or `var` whose value is no function, and an `export
+/// default` of anything but a named function declaration.
+fn local_export_names(stmt: TsNode, source: &str) -> Vec<String> {
+    if has_token(stmt, "default") {
+        let named_fn = stmt.child_by_field_name("declaration").is_some_and(|d| {
+            matches!(
+                d.kind(),
+                "function_declaration" | "generator_function_declaration"
+            ) && d.child_by_field_name("name").is_some()
+        });
+        return if named_fn {
+            Vec::new()
+        } else {
+            vec!["default".to_string()]
+        };
+    }
+    let Some(decl) = stmt.child_by_field_name("declaration") else {
+        return Vec::new();
+    };
+    if !matches!(decl.kind(), "lexical_declaration" | "variable_declaration") {
+        return Vec::new();
+    }
+    let mut names = HashSet::new();
+    let mut cursor = decl.walk();
+    for declarator in decl.named_children(&mut cursor) {
+        let is_function = declarator
+            .child_by_field_name("value")
+            .is_some_and(|v| FUNCTION_VALUE_TYPES.contains(&v.kind()));
+        if declarator.kind() == "variable_declarator" && !is_function {
+            if let Some(name) = declarator.child_by_field_name("name") {
+                insert_bound_names(name, source, &mut names);
+            }
+        }
+    }
+    let mut names: Vec<String> = names.into_iter().collect();
+    names.sort();
+    names
+}
+
+/// Reports whether `node` is the declaration of an `export default`
+/// statement.
+fn is_default_declaration(node: TsNode) -> bool {
+    let Some(parent) = node.parent() else {
+        return false;
+    };
+    if parent.kind() != "export_statement"
+        || parent.child_by_field_name("declaration") != Some(node)
+    {
+        return false;
+    }
+    let mut cursor = parent.walk();
+    let has_default = parent.children(&mut cursor).any(|c| c.kind() == "default");
+    has_default
 }
 
 /// Every identifier a `for...in`/`for...of` head or a `catch` parameter
 /// binds anywhere under `node`, nested functions included. The scan
 /// over-counts, which is safe: a larger set only removes specifiers.
 fn loop_catch_bound_names(node: TsNode, source: &str) -> HashSet<String> {
+    scan_loop_catch_names(node, source, false)
+}
+
+/// Runs the `loop_catch_bound_names` scan. With `stop_at_functions`, it skips
+/// the body of each nested function, because that function's own context
+/// scans it.
+fn scan_loop_catch_names(node: TsNode, source: &str, stop_at_functions: bool) -> HashSet<String> {
     let mut names = HashSet::new();
     let mut stack = vec![node];
     while let Some(n) = stack.pop() {
+        if stop_at_functions && n != node && is_function_boundary(n.kind()) {
+            continue;
+        }
         let field = match n.kind() {
             "for_in_statement" => Some("left"),
             "catch_clause" => Some("parameter"),
             _ => None,
         };
         if let Some(head) = field.and_then(|f| n.child_by_field_name(f)) {
-            let mut inner = vec![head];
-            while let Some(m) = inner.pop() {
-                if matches!(
-                    m.kind(),
-                    "identifier" | "shorthand_property_identifier_pattern"
-                ) {
-                    if let Ok(text) = m.utf8_text(source.as_bytes()) {
-                        names.insert(text.to_string());
-                    }
-                }
-                let mut cursor = m.walk();
-                inner.extend(m.named_children(&mut cursor));
-            }
+            insert_bound_names(head, source, &mut names);
         }
         let mut cursor = n.walk();
         stack.extend(n.named_children(&mut cursor));
@@ -445,21 +777,7 @@ fn callback_bound_names(node: TsNode, source: &str) -> HashSet<String> {
     let mut names = HashSet::new();
     for field in ["parameters", "parameter"] {
         if let Some(params) = node.child_by_field_name(field) {
-            let mut stack = vec![params];
-            while let Some(n) = stack.pop() {
-                if matches!(
-                    n.kind(),
-                    "identifier" | "shorthand_property_identifier_pattern"
-                ) {
-                    if let Ok(text) = n.utf8_text(source.as_bytes()) {
-                        names.insert(text.to_string());
-                    }
-                }
-                let mut cursor = n.walk();
-                for child in n.named_children(&mut cursor) {
-                    stack.push(child);
-                }
-            }
+            insert_bound_names(params, source, &mut names);
         }
     }
     collect_local_declarations(node, node, None, source, &mut names);
@@ -503,6 +821,7 @@ fn emit_definition(node: TsNode, desc: Desc, ctx: &Ctx, file: &FileCtx, sink: &m
     let base = format!("{path}#{}", id_parts.join("."));
     let id = mint_id(base, sink.minted);
 
+    let is_ts = matches!(ctx.lang, "typescript" | "tsx");
     sink.edges.push(RawEdge {
         source: ctx.parent_id.clone(),
         relation: Relation::Contains,
@@ -515,7 +834,13 @@ fn emit_definition(node: TsNode, desc: Desc, ctx: &Ctx, file: &FileCtx, sink: &m
         arg_count: None,
         kinds: None,
         implicit_self: false,
-        direct_export: matches!(ctx.lang, "typescript" | "tsx") && is_direct_named_export(node),
+        direct_export: is_ts && is_direct_named_export(node),
+        import_name: None,
+        default_export: is_ts
+            && (is_default_declaration(node)
+                || (ctx.scope.is_empty() && ctx.default_local == Some(name.as_str()))),
+        reexport: None,
+        ns_export: false,
     });
     if heritage_gate(ctx.lang, kind) {
         emit_heritage_edges(node, &id, path, source, ctx.lang, sink.edges);
@@ -576,6 +901,7 @@ fn emit_definition(node: TsNode, desc: Desc, ctx: &Ctx, file: &FileCtx, sink: &m
         parent_id: id,
         bindings: ctx.bindings,
         imported_symbols: ctx.imported_symbols,
+        default_local: ctx.default_local,
         shadowed: child_shadowed,
         callback_shadowed: if matches!(kind, Kind::Function | Kind::Method) && !is_python {
             let mut set = ctx.callback_shadowed.clone();
@@ -665,7 +991,12 @@ fn collect_local_declarations(
 ) {
     let is_definition = node == definition || Some(node) == definition_value;
     if !is_definition && is_function_boundary(node.kind()) {
-        if let Some(name) = node.child_by_field_name("name") {
+        // A function expression's name binds only inside its own body.
+        let is_expression = matches!(
+            node.kind(),
+            "function_expression" | "function" | "generator_function"
+        );
+        if let Some(name) = node.child_by_field_name("name").filter(|_| !is_expression) {
             if name.kind() == "identifier" {
                 if let Ok(text) = name.utf8_text(source.as_bytes()) {
                     out.insert(text.to_string());
@@ -677,20 +1008,18 @@ fn collect_local_declarations(
     match node.kind() {
         "variable_declarator" => {
             if let Some(name) = node.child_by_field_name("name") {
-                if name.kind() == "identifier" {
-                    if let Ok(text) = name.utf8_text(source.as_bytes()) {
-                        out.insert(text.to_string());
-                    }
-                }
+                insert_bound_names(name, source, out);
             }
         }
         "required_parameter" | "optional_parameter" => {
             if let Some(pattern) = node.child_by_field_name("pattern") {
-                if pattern.kind() == "identifier" {
-                    if let Ok(text) = pattern.utf8_text(source.as_bytes()) {
-                        out.insert(text.to_string());
-                    }
-                }
+                insert_bound_names(pattern, source, out);
+            }
+        }
+        // A named function expression binds its own name inside its body.
+        "function_expression" | "function" | "generator_function" => {
+            if let Some(name) = node.child_by_field_name("name") {
+                insert_bound_names(name, source, out);
             }
         }
         "identifier" if node.parent().map(|p| p.kind()) == Some("formal_parameters") => {
@@ -733,9 +1062,7 @@ fn collect_param_names(node: TsNode, source: &str, is_python: bool) -> HashSet<S
             _ => None,
         };
         if let Some(id_node) = ident {
-            if let Ok(text) = id_node.utf8_text(source.as_bytes()) {
-                names.insert(text.to_string());
-            }
+            insert_bound_names(id_node, source, &mut names);
         }
     }
     names
@@ -901,6 +1228,10 @@ fn emit_heritage_edges(
             kinds: None,
             implicit_self: false,
             direct_export: false,
+            import_name: None,
+            default_export: false,
+            reexport: None,
+            ns_export: false,
         });
     };
     let mut push = |relation: Relation, base: TsNode| {
@@ -1549,23 +1880,65 @@ fn py_receiver(object: TsNode, source: &str) -> Option<String> {
     }
 }
 
-/// Collects every TS `import_specifier`'s local name to `(imported name,
-/// specifier)`. Empty for Python (edge note, section 5).
+/// Collects every TS import binding by its local name: each
+/// `import_specifier` (named or aliased), each default clause identifier and
+/// each `* as ns` namespace import. Empty for Python (edge note, section 5).
 fn collect_imported_symbols(
     root: TsNode,
     source: &str,
     is_python: bool,
-) -> HashMap<String, (String, String)> {
+) -> HashMap<String, ImportBinding> {
     let mut map = HashMap::new();
     if is_python {
         return map;
     }
+    let text = |n: TsNode| n.utf8_text(source.as_bytes()).ok().map(str::to_string);
     let mut stack = vec![root];
     while let Some(node) = stack.pop() {
-        if node.kind() == "import_specifier" {
-            if let Some(entry) = imported_symbol_entry(node, source) {
-                map.insert(entry.0, (entry.1, entry.2));
+        match node.kind() {
+            "import_specifier" => {
+                if let Some((local, imported, specifier)) = imported_symbol_entry(node, source) {
+                    let imported = ImportedName::Named(imported);
+                    map.insert(
+                        local,
+                        ImportBinding {
+                            imported,
+                            specifier,
+                        },
+                    );
+                }
             }
+            "import_clause" => {
+                let specifier = find_import_statement(node)
+                    .and_then(|stmt| import_specifier(stmt, source, "typescript"));
+                if let Some(specifier) = specifier {
+                    let mut cursor = node.walk();
+                    for child in node.named_children(&mut cursor) {
+                        let (local, imported) = match child.kind() {
+                            "identifier" => (text(child), ImportedName::Default),
+                            "namespace_import" => {
+                                let mut ic = child.walk();
+                                let id = child
+                                    .named_children(&mut ic)
+                                    .find(|c| c.kind() == "identifier");
+                                (id.and_then(text), ImportedName::Namespace)
+                            }
+                            _ => continue,
+                        };
+                        if let Some(local) = local {
+                            let specifier = specifier.clone();
+                            map.insert(
+                                local,
+                                ImportBinding {
+                                    imported,
+                                    specifier,
+                                },
+                            );
+                        }
+                    }
+                }
+            }
+            _ => {}
         }
         let mut cursor = node.walk();
         for child in node.named_children(&mut cursor) {
@@ -1633,7 +2006,11 @@ fn maybe_emit_reference(
     if ctx.shadowed.contains(text) {
         return;
     }
-    let Some((imported_name, specifier)) = ctx.imported_symbols.get(text) else {
+    let Some(ImportBinding {
+        imported: ImportedName::Named(imported_name),
+        specifier,
+    }) = ctx.imported_symbols.get(text)
+    else {
         return;
     };
     if is_direct_callee(node) || is_declaration_name(node) {
@@ -1652,6 +2029,10 @@ fn maybe_emit_reference(
         kinds: None,
         implicit_self: false,
         direct_export: false,
+        import_name: None,
+        default_export: false,
+        reexport: None,
+        ns_export: false,
     });
 }
 
@@ -3639,5 +4020,278 @@ mod tests {
             .find(|n| n.name == ".hidden")
             .expect(".hidden node");
         assert!(!hidden.exported);
+    }
+
+    /// The raw edges of one TS source.
+    fn ts_edges(source: &str) -> Vec<RawEdge> {
+        let mut extractor = Extractor::new().expect("build extractor");
+        extractor.extract_file("app.ts", source, "typescript").1
+    }
+
+    /// The `(specifier, import_name)` of the one `calls` edge named `name`.
+    fn call_of(edges: &[RawEdge], name: &str) -> (Option<String>, Option<String>) {
+        let edge = edges
+            .iter()
+            .find(|e| e.relation == Relation::Calls && e.name.as_deref() == Some(name))
+            .expect("call edge");
+        (edge.specifier.clone(), edge.import_name.clone())
+    }
+
+    fn some(a: &str, b: &str) -> (Option<String>, Option<String>) {
+        (Some(a.to_string()), Some(b.to_string()))
+    }
+
+    #[test]
+    fn test_xfile2_alias_call_carries_import_name() {
+        let edges =
+            ts_edges("import { area as a } from \"./m\";\nexport function run() { a(); }\n");
+        assert_eq!(call_of(&edges, "a"), some("./m", "area"));
+    }
+
+    #[test]
+    fn test_xfile2_default_import_carries_default() {
+        let src = "import b from \"./m\";\nimport c, { x as y } from \"./n\";\nimport { default as d } from \"./o\";\nexport function run() { b(); c(); y(); d(); }\n";
+        let edges = ts_edges(src);
+        assert_eq!(call_of(&edges, "b"), some("./m", "default"));
+        assert_eq!(call_of(&edges, "c"), some("./n", "default"));
+        assert_eq!(call_of(&edges, "y"), some("./n", "x"));
+        assert_eq!(call_of(&edges, "d"), some("./o", "default"));
+    }
+
+    #[test]
+    fn test_xfile2_namespace_member_call_carries_specifier() {
+        let src = "import * as ns from \"./m\";\nimport d, * as ns2 from \"./n\";\nexport function run() { ns.fn(); ns2.g(); ns.a.deep(); ns[\"k\"](); ns(); }\n";
+        let edges = ts_edges(src);
+        assert_eq!(call_of(&edges, "fn"), some("./m", "fn"));
+        assert_eq!(call_of(&edges, "g"), some("./n", "g"));
+        assert_eq!(call_of(&edges, "deep"), (None, None));
+        assert_eq!(call_of(&edges, "ns"), (None, None));
+    }
+
+    #[test]
+    fn test_xfile2_shadowed_namespace_receiver_gets_no_specifier() {
+        let src = "import * as shapes from \"./m\";\nexport function local(shapes: any) { shapes.perimeter(); }\n";
+        assert_eq!(call_of(&ts_edges(src), "perimeter"), (None, None));
+    }
+
+    #[test]
+    fn test_xfile2_default_export_flag_three_forms() {
+        let forms = [
+            (
+                "export default function build() {}\nexport function plain() {}\n",
+                "build",
+            ),
+            (
+                "function make() {}\nexport default make;\nfunction other() {}\n",
+                "make",
+            ),
+            (
+                "const create = () => 1;\nexport { create as default };\nconst z = () => 2;\n",
+                "create",
+            ),
+        ];
+        for (src, want) in forms {
+            let edges = ts_edges(src);
+            let flagged: Vec<&str> = edges
+                .iter()
+                .filter(|e| e.relation == Relation::Contains && e.default_export)
+                .filter_map(|e| e.target_id.as_deref())
+                .collect();
+            assert_eq!(flagged, [format!("app.ts#{want}")], "{src}");
+        }
+    }
+
+    #[test]
+    fn test_xfile2_named_import_raw_edge_unchanged() {
+        let edges =
+            ts_edges("import { helper } from \"./m\";\nexport function run() { helper(); }\n");
+        let call = edges
+            .iter()
+            .find(|e| e.relation == Relation::Calls)
+            .expect("call edge");
+        assert_eq!(call.specifier.as_deref(), Some("./m"));
+        assert_eq!(call.import_name, None);
+        let json = String::from_utf8(serde_json::to_vec(call).expect("serialize")).expect("utf8");
+        assert!(!json.contains("import_name"), "{json}");
+        assert!(!json.contains("default_export"), "{json}");
+    }
+
+    #[test]
+    fn test_xfile2_reexport_default_does_not_flag_local() {
+        let src =
+            "export { make as default } from \"./impl\";\nexport function make() { return 2; }\n";
+        assert!(ts_edges(src).iter().all(|e| !e.default_export));
+    }
+
+    #[test]
+    fn test_xfile2_destructured_param_shadows_namespace() {
+        let src = "import * as shapes from \"./m\";\nexport function local({ shapes }: Props) { shapes.perimeter(); }\n";
+        assert_eq!(call_of(&ts_edges(src), "perimeter"), (None, None));
+    }
+
+    #[test]
+    fn test_xfile2_destructured_local_shadows_alias() {
+        let src = "import { area as a } from \"./m\";\nexport function run(o: any) { const { a } = o; a(); }\n";
+        assert_eq!(call_of(&ts_edges(src), "a"), (None, None));
+    }
+
+    #[test]
+    fn test_xfile2_top_level_for_of_shadows_alias() {
+        let src = "import { area as a } from \"./m\";\nconst xs: Array<() => void> = [];\nfor (const a of xs) { a(); }\n";
+        assert_eq!(call_of(&ts_edges(src), "a"), (None, None));
+    }
+
+    #[test]
+    fn test_xfile2_named_function_expression_shadows_alias() {
+        let src = "import { area as a } from \"./m\";\nexport const f = function a() { return a(); };\nexport function g(xs: number[]) { return xs.map(function a() { return a(); }); }\n";
+        let edges = ts_edges(src);
+        assert!(edges
+            .iter()
+            .filter(|e| e.relation == Relation::Calls && e.name.as_deref() == Some("a"))
+            .all(|e| e.specifier.is_none() && e.import_name.is_none()));
+    }
+
+    /// The `(specifier, record)` of every export record in one TS source.
+    fn records(source: &str) -> Vec<(Option<String>, ReExport)> {
+        ts_edges(source)
+            .into_iter()
+            .filter_map(|e| e.reexport.map(|r| (e.specifier, r)))
+            .collect()
+    }
+
+    fn from(spec: &str, record: ReExport) -> (Option<String>, ReExport) {
+        (Some(spec.to_string()), record)
+    }
+
+    fn named(export: &str, imported: &str) -> ReExport {
+        ReExport::Named {
+            export: export.to_string(),
+            imported: imported.to_string(),
+        }
+    }
+
+    fn local(export: &str) -> (Option<String>, ReExport) {
+        (
+            None,
+            ReExport::Local {
+                export: export.to_string(),
+            },
+        )
+    }
+
+    #[test]
+    fn test_xfile3_named_reexport_records() {
+        let src = "export { a } from './x';\nexport { b as c, d } from './y';\n";
+        assert_eq!(
+            records(src),
+            [
+                from("./x", named("a", "a")),
+                from("./y", named("c", "b")),
+                from("./y", named("d", "d")),
+            ]
+        );
+        let edge = &ts_edges(src)[0];
+        assert_eq!(edge.relation, Relation::Imports);
+        assert_eq!(
+            (edge.source.as_str(), edge.file.as_str()),
+            ("app.ts", "app.ts")
+        );
+    }
+
+    #[test]
+    fn test_xfile3_star_reexport_record() {
+        assert_eq!(
+            records("export * from './x';\n"),
+            [from("./x", ReExport::Star)]
+        );
+    }
+
+    #[test]
+    fn test_xfile3_default_reexport_three_forms() {
+        let src = "export { default } from './a';\nexport { default as x } from './b';\nexport { y as default } from './c';\n";
+        assert_eq!(
+            records(src),
+            [
+                from("./a", named("default", "default")),
+                from("./b", named("x", "default")),
+                from("./c", named("default", "y")),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_xfile3_star_as_namespace_record() {
+        assert_eq!(
+            records("export * as ns from './x';\n"),
+            [from(
+                "./x",
+                ReExport::StarAs {
+                    export: "ns".to_string()
+                }
+            )]
+        );
+    }
+
+    #[test]
+    fn test_xfile3_local_records_in_every_file() {
+        // The attack edit E1 widened this rule: a Local record now exists in
+        // every file, for each export name that mints no function node.
+        let src = "export * from './x';\nexport function f() {}\nexport const g = () => 1;\nexport const v = 1, { w } = o;\nconst h = 2;\nexport { h, h as k };\nexport default 5;\n";
+        assert_eq!(
+            records(src),
+            [
+                from("./x", ReExport::Star),
+                local("v"),
+                local("w"),
+                local("h"),
+                local("k"),
+                local("default"),
+            ]
+        );
+        assert_eq!(records("export default function build() {}\n"), []);
+    }
+
+    #[test]
+    fn test_xfile3_reexport_next_to_error_still_records() {
+        let src = "export type * from './t';\nexport * from './x';\nexport { a } from './y';\n";
+        assert_eq!(
+            records(src),
+            [from("./x", ReExport::Star), from("./y", named("a", "a"))]
+        );
+    }
+
+    #[test]
+    fn test_xfile3_type_only_reexport_gives_no_record() {
+        let src = "export type { A } from './x';\nexport { type B } from './x';\nexport type * from './x';\nexport { a as \"s-t\" } from './x';\nexport type T = number;\nexport interface I {}\n";
+        assert_eq!(records(src), []);
+    }
+
+    #[test]
+    fn test_xfile3_named_import_member_call_sets_ns_export() {
+        let src = "import { tools, a as t } from \"./b\";\nimport * as ns from \"./c\";\nimport { pk } from \"pkg\";\nexport function run() { tools.fn(); t.g(); ns.h(); pk.i(); }\nexport function local(tools: any) { tools.j(); }\n";
+        let edges = ts_edges(src);
+        let call = |name: &str| {
+            edges
+                .iter()
+                .find(|e| e.relation == Relation::Calls && e.name.as_deref() == Some(name))
+                .map(|e| (e.specifier.clone(), e.import_name.clone(), e.ns_export))
+                .expect("call edge")
+        };
+        let some = |s: &str, i: &str, ns: bool| (Some(s.to_string()), Some(i.to_string()), ns);
+        assert_eq!(call("fn"), some("./b", "tools", true));
+        assert_eq!(call("g"), some("./b", "a", true));
+        assert_eq!(call("h"), some("./c", "h", false));
+        assert_eq!(call("i"), (None, None, false));
+        assert_eq!(call("j"), (None, None, false));
+    }
+
+    #[test]
+    fn test_xfile3_plain_file_raw_edges_unchanged() {
+        let src = "import { helper } from \"./m\";\nexport function run() { return helper(); }\nexport class C { go() { return 1; } }\n";
+        let edges = ts_edges(src);
+        assert!(edges.iter().all(|e| e.reexport.is_none() && !e.ns_export));
+        let json = String::from_utf8(serde_json::to_vec(&edges).expect("serialize")).expect("utf8");
+        assert!(!json.contains("reexport"), "{json}");
+        assert!(!json.contains("ns_export"), "{json}");
     }
 }

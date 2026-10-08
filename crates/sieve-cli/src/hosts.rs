@@ -873,8 +873,10 @@ fn bad_permissions_shape(permissions: Option<&OJson>) -> bool {
 }
 
 /// The hook sub-commands `init` writes into a Claude or Cursor config.
-const HOOK_SUBS: [&str; 10] = [
+const HOOK_SUBS: [&str; 12] = [
     "post-edit",
+    "post-search",
+    "pre-search",
     "tool-savings",
     "post-read",
     "pre-read",
@@ -988,6 +990,8 @@ fn merged_hooks_ojson(existing_hooks: Option<&OJson>) -> OJson {
     ];
     post_tool_use.push(claude_hook_block(Some("Read"), "post-read", 5000));
     post_tool_use.push(claude_hook_block(Some("Bash"), "post-read", 5000));
+    post_tool_use.push(claude_hook_block(Some("Bash"), "post-search", 3000));
+    post_tool_use.push(claude_hook_block(Some("Grep"), "post-search", 3000));
     hooks.set(
         "PostToolUse",
         merged_hook_event(existing_hooks, "PostToolUse", post_tool_use),
@@ -1024,6 +1028,7 @@ fn merged_hooks_ojson(existing_hooks: Option<&OJson>) -> OJson {
             vec![
                 claude_hook_block(Some("Read"), "pre-read", 5000),
                 claude_hook_block(Some("Bash"), "pre-read", 5000),
+                claude_hook_block(Some("Bash"), "pre-search", 3000),
             ],
         ),
     );
@@ -1642,6 +1647,14 @@ pub fn strip_ignore(path: &Path, apply: bool) -> io::Result<Retract> {
 /// Reads `<context_dir>/.graph/wiring.json` and returns its node and edge
 /// counts, or `None` when no graph is present yet.
 pub fn graph_counts(context_dir: &Path) -> Option<(usize, usize)> {
+    // The build's own counts, when current: no wiring parse.
+    if let Some(c) = crate::hook::read_build_counts(context_dir).filter(|c| !c.stale) {
+        return Some((c.total_count as usize, c.edge_count as usize));
+    }
+    // Over the size cap, parse nothing.
+    if crate::hook::wiring_over_cap(context_dir) {
+        return None;
+    }
     let path = context_dir.join(".graph").join("wiring.json");
     let text = fs::read_to_string(path).ok()?;
     let value: serde_json::Value = serde_json::from_str(&text).ok()?;
@@ -1874,8 +1887,8 @@ mod tests {
         let value: serde_json::Value = serde_json::from_str(&written).unwrap();
         let post_tool_use = value["hooks"]["PostToolUse"].as_array().unwrap();
         // The foreign entry survives, in its original position, ahead of
-        // Sieve's own four blocks.
-        assert_eq!(post_tool_use.len(), 5);
+        // Sieve's own six blocks.
+        assert_eq!(post_tool_use.len(), 7);
         assert_eq!(post_tool_use[0]["matcher"], "Write");
         assert_eq!(post_tool_use[0]["hooks"][0]["command"], "my-own-tool");
         assert!(post_tool_use[1]["hooks"][0]["command"]
@@ -1887,6 +1900,47 @@ mod tests {
         // so it survives again with no duplication.
         let (action, _) = merge_claude_settings(&path, false).unwrap();
         assert_eq!(action, WriteAction::Unchanged);
+    }
+
+    #[test]
+    fn test_init_twice_on_old_config_adds_each_block_once() {
+        let dir = TempDir::new("claude-settings-old-blocks");
+        let path = dir.path.join("settings.json");
+        let block = |matcher: &str, sub: &str, timeout: i64| {
+            serde_json::json!({
+                "matcher": matcher,
+                "hooks": [{
+                    "type": "command",
+                    "command": names::hook_command(sub),
+                    "timeout": timeout,
+                }],
+            })
+        };
+        // The foreign entry, then the five Sieve blocks of the old config.
+        let old = serde_json::json!([
+            {"matcher": "Write", "hooks": [
+                {"type": "command", "command": "my-own-tool", "timeout": 5000}
+            ]},
+            block("Write|Edit|MultiEdit", "post-edit", 10000),
+            block("Bash|mcp__x__|Read|Grep|Glob", "tool-savings", 8000),
+            block("Read", "post-read", 5000),
+            block("Bash", "post-read", 5000),
+            block("Grep", "post-search", 3000),
+        ]);
+        let text = serde_json::json!({"hooks": {"PostToolUse": old}}).to_string();
+        fs::write(&path, text).unwrap();
+        merge_claude_settings(&path, false).unwrap();
+        let (action, _) = merge_claude_settings(&path, false).unwrap();
+        assert_eq!(action, WriteAction::Unchanged);
+        let value: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+        let blocks = value["hooks"]["PostToolUse"].as_array().unwrap();
+        // One foreign block plus six Sieve blocks, none twice.
+        assert_eq!(blocks.len(), 7);
+        let mut seen: Vec<String> = blocks.iter().map(|b| b.to_string()).collect();
+        seen.sort();
+        seen.dedup();
+        assert_eq!(seen.len(), 7);
     }
 
     #[test]

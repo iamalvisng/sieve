@@ -1,0 +1,7 @@
+{"src":"app.ts","line":14,"shape":"alias","spec":"./named","barrel":false,"dst":"named.ts","name":"area","dst_line":1}
+{"src":"app.ts","line":15,"shape":"namespace","spec":"./named","barrel":false,"dst":"named.ts","name":"perimeter","dst_line":5}
+{"src":"app.ts","line":16,"shape":"default","spec":"./def_fn","barrel":false,"dst":"def_fn.ts","name":"build","dst_line":1}
+{"src":"app.ts","line":17,"shape":"default","spec":"./def_ident.js","barrel":false,"dst":"def_ident.js","name":"make","dst_line":1}
+{"src":"app.ts","line":18,"shape":"default","spec":"./def_clause","barrel":false,"dst":"def_clause.ts","name":"create","dst_line":1}
+{"src":"app.ts","line":19,"shape":"default","spec":"./def_fn","barrel":false,"dst":"def_fn.ts","name":"build","dst_line":1}
+{"src":"app.ts","line":20,"shape":"default","spec":"./barrel","barrel":true,"dst":"impl.ts","name":"make","dst_line":1}

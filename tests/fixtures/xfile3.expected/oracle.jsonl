@@ -1,0 +1,13 @@
+{"src":"app.ts","line":14,"shape":"alias","spec":"./named_bar","barrel":true,"dst":"lib.ts","name":"helper","dst_line":1}
+{"src":"app.ts","line":15,"shape":"named","spec":"./named_bar","barrel":true,"dst":"lib.ts","name":"other","dst_line":2}
+{"src":"app.ts","line":16,"shape":"named","spec":"./star_bar","barrel":true,"dst":"lib.ts","name":"helper","dst_line":1}
+{"src":"app.ts","line":17,"shape":"namespace","spec":"./star_chain","barrel":true,"dst":"lib.ts","name":"other","dst_line":2}
+{"src":"app.ts","line":18,"shape":"default","spec":"./def_bar","barrel":true,"dst":"lib.ts","name":"libDefault","dst_line":3}
+{"src":"app.ts","line":19,"shape":"named","spec":"./def_bar","barrel":true,"dst":"lib.ts","name":"libDefault","dst_line":3}
+{"src":"app.ts","line":20,"shape":"default","spec":"./def_bar2","barrel":true,"dst":"lib.ts","name":"other","dst_line":2}
+{"src":"app.ts","line":21,"shape":"nsexport","spec":"./ns_bar","barrel":true,"dst":"lib.ts","name":"helper","dst_line":1}
+{"src":"app.ts","line":22,"shape":"named","spec":"./cyc_a","barrel":true,"dst":"cyc_b.ts","name":"cb","dst_line":2}
+{"src":"app.ts","line":23,"shape":"alias","spec":"./local_bar","barrel":false,"dst":"local_bar.ts","name":"other","dst_line":2}
+{"src":"app.ts","line":28,"shape":"alias","spec":"./conflict","barrel":true,"dst":"lib.ts","name":"helper","dst_line":1}
+{"src":"app.ts","line":32,"shape":"alias","spec":"./local_bar","barrel":false,"dst":"local_bar.ts","name":"helper","dst_line":3}
+{"src":"app.ts","line":36,"shape":"alias","spec":"./mix_bar","barrel":true,"dst":"nonfn.ts","name":"helper","dst_line":1}

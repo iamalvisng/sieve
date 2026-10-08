@@ -17,6 +17,7 @@ use sieve_core::fingerprint::{fingerprint_path, write_fingerprint, Fingerprint, 
 use sieve_core::ignore::{ensure_gitignored, ensure_searchable};
 use sieve_core::lock::{self, LockGuard};
 use sieve_core::product::product;
+use sieve_core::wiring::SummaryState;
 use sieve_core::workspace;
 use sieve_core::write_graph;
 use sieve_parse::refresh::env_truthy;
@@ -482,6 +483,20 @@ fn build_repo(
     let graph = &report.graph;
     let wiring_path = context_dir.join(".graph").join("wiring.json");
     write_graph(graph, &wiring_path).map_err(|e| e.to_string())?;
+    // The statusline reads these counts from `counts.json`, never from
+    // `wiring.json`. A failed write only costs a fallback parse.
+    let ready = graph
+        .nodes
+        .iter()
+        .filter(|n| n.summary_state == SummaryState::Ready)
+        .count();
+    crate::hook::write_build_counts(
+        context_dir,
+        graph.nodes.len(),
+        graph.edges.len(),
+        &graph.meta.languages,
+        ready,
+    );
 
     // Section 3 order: `writeGraph`, then the ask sidecar, then
     // `writeFingerprint`, then the gitignore edits and the cards. A sidecar
@@ -1070,5 +1085,35 @@ mod tests {
         for seed in [r#"{"u":"\ud800","keep":1}"#, "[1,2]", "{bad"] {
             assert_eq!(patch_seed("bad", seed), seed);
         }
+    }
+
+    #[test]
+    fn test_s0_build_writes_node_count() {
+        let dir = std::env::temp_dir().join(format!("sieve-s0-build-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("repo dir");
+        std::fs::write(dir.join("a.ts"), "export function a() { return 1; }\n").expect("write");
+        let args = BuildArgs {
+            root_dir: dir.clone(),
+            no_gitignore: true,
+            no_ignore: true,
+            lsp: false,
+            extensions: Vec::new(),
+            include_dir: Vec::new(),
+            follow_submodules: false,
+            no_follow_submodules: false,
+            follow_nested_repos: false,
+            no_follow_nested_repos: false,
+            only_dir: Vec::new(),
+            no_reuse: false,
+        };
+        let context_dir = dir.join(product().context_dir_name());
+        let built =
+            build_repo(&dir, &context_dir, &args, Vec::new(), true, true, false).expect("build");
+        let counts = crate::hook::read_build_counts(&context_dir).expect("counts.json");
+        assert!(built.nodes > 0);
+        assert_eq!(counts.node_count, built.nodes as u64);
+        assert_eq!(counts.edge_count, built.edges as u64);
+        assert!(crate::hook::read_stats(&dir).is_none(), "no hook state");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

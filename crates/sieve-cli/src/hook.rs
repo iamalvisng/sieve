@@ -93,6 +93,17 @@ pub fn run(args: &HookArgs, _dir_override: Option<&Path>) -> Result<(), String> 
                 print!("{text}");
             }
         }
+        // R2: add `-n` to a simple search, then regroup its output.
+        "pre-search" => {
+            if let Some(text) = crate::route::pre_search(&input) {
+                print!("{text}");
+            }
+        }
+        "post-search" => {
+            if let Some(text) = crate::route::post_search(&input, &project_dir) {
+                print!("{text}");
+            }
+        }
         "stop" => handle_stop(&input, &project_dir),
         _ => {}
     }
@@ -156,13 +167,146 @@ fn cache_dir(project_dir: &Path) -> PathBuf {
     resolve_context_dir(project_dir).join(".cache")
 }
 
-fn wiring_path(context_dir: &Path) -> PathBuf {
+pub(crate) fn wiring_path(context_dir: &Path) -> PathBuf {
     context_dir.join(".graph").join("wiring.json")
 }
 
+/// The default size cap, in bytes, on `wiring.json` for a hook load.
+pub const DEFAULT_WIRING_CAP_BYTES: u64 = 64 * 1024 * 1024;
+
+/// Parses the `SIEVE_WIRING_CAP_BYTES` text. A missing or bad value gives
+/// the default cap.
+fn parse_wiring_cap(raw: Option<&str>) -> u64 {
+    raw.and_then(|v| v.trim().parse::<u64>().ok())
+        .unwrap_or(DEFAULT_WIRING_CAP_BYTES)
+}
+
+#[cfg(test)]
+thread_local! {
+    /// A per-thread cap for tests, so a test never sets the shared env.
+    static TEST_WIRING_CAP: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
+}
+
+/// Sets the per-thread test cap. `None` restores the env value.
+#[cfg(test)]
+pub(crate) fn set_test_wiring_cap(cap: Option<u64>) {
+    TEST_WIRING_CAP.with(|c| c.set(cap));
+}
+
+/// The size cap, in bytes, on `wiring.json` for a hook load.
+pub fn wiring_cap_bytes() -> u64 {
+    #[cfg(test)]
+    if let Some(cap) = TEST_WIRING_CAP.with(std::cell::Cell::get) {
+        return cap;
+    }
+    parse_wiring_cap(
+        std::env::var(product().env_var("WIRING_CAP_BYTES"))
+            .ok()
+            .as_deref(),
+    )
+}
+
+/// True when `wiring.json` is larger than the cap. A missing file is not
+/// over the cap.
+pub fn wiring_over_cap(context_dir: &Path) -> bool {
+    std::fs::metadata(wiring_path(context_dir)).is_ok_and(|m| m.len() > wiring_cap_bytes())
+}
+
+/// Sets `capped` in `stats.json` once, so the statusline can say why the
+/// hooks pass through.
+pub(crate) fn record_capped(context_dir: &Path) {
+    let cache = context_dir.join(".cache");
+    if read_stats_at(&cache).is_some_and(|s| s.capped) {
+        return;
+    }
+    patch_stats_at(&cache, |s| s.capped = true);
+}
+
 pub(crate) fn read_wiring(context_dir: &Path) -> Option<Graph> {
+    if wiring_over_cap(context_dir) {
+        record_capped(context_dir);
+        return None;
+    }
     let bytes = std::fs::read(wiring_path(context_dir)).ok()?;
     serde_json::from_slice(&bytes).ok()
+}
+
+/// The counts one build writes to `.cache/counts.json`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct BuildCounts {
+    #[serde(rename = "nodeCount")]
+    pub node_count: u64,
+    #[serde(rename = "edgeCount")]
+    pub edge_count: u64,
+    #[serde(rename = "totalCount")]
+    pub total_count: u64,
+    #[serde(rename = "readyCount")]
+    pub ready_count: u64,
+    pub languages: Vec<String>,
+    /// The size of `wiring.json` when the counts were written.
+    #[serde(rename = "wiringBytes")]
+    pub wiring_bytes: u64,
+    /// The modification time of `wiring.json`, in ms, when written.
+    #[serde(rename = "wiringMtimeMs", default)]
+    pub wiring_mtime_ms: u64,
+    /// Set by `read_build_counts`, never stored: `wiring.json` changed since
+    /// the build wrote these counts.
+    #[serde(skip)]
+    pub stale: bool,
+}
+
+/// The size and the modification time (ms) of `wiring.json`.
+fn wiring_stamp(context_dir: &Path) -> Option<(u64, u64)> {
+    let meta = std::fs::metadata(wiring_path(context_dir)).ok()?;
+    let ms = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map_or(0, |d| d.as_millis() as u64);
+    Some((meta.len(), ms))
+}
+
+fn counts_path(context_dir: &Path) -> PathBuf {
+    context_dir.join(".cache").join("counts.json")
+}
+
+/// Writes `.cache/counts.json` after a build, so the statusline and `init`
+/// never parse `wiring.json` for a count. Only the CLI build writes it. A
+/// refresh leaves it stale; `read_build_counts` then returns `None`.
+pub(crate) fn write_build_counts(
+    context_dir: &Path,
+    nodes: usize,
+    edges: usize,
+    languages: &[String],
+    ready: usize,
+) {
+    let (wiring_bytes, wiring_mtime_ms) = wiring_stamp(context_dir).unwrap_or((0, 0));
+    let counts = BuildCounts {
+        node_count: nodes as u64,
+        edge_count: edges as u64,
+        total_count: nodes as u64,
+        ready_count: ready as u64,
+        languages: languages.to_vec(),
+        wiring_bytes,
+        wiring_mtime_ms,
+        stale: false,
+    };
+    // A failed write only costs a fallback parse.
+    let _ = write_json_atomic(&counts_path(context_dir), &counts);
+    // A build under the cap clears `capped`. Never create `stats.json` here.
+    let cache = context_dir.join(".cache");
+    if wiring_bytes <= wiring_cap_bytes() && read_stats_at(&cache).is_some_and(|s| s.capped) {
+        patch_stats_at(&cache, |s| s.capped = false);
+    }
+}
+
+/// Reads `.cache/counts.json`. Gives `None` when the file is missing or
+/// bad. `stale` is set when `wiring.json` differs from the build's stamp.
+pub fn read_build_counts(context_dir: &Path) -> Option<BuildCounts> {
+    let mut counts: BuildCounts =
+        serde_json::from_slice(&std::fs::read(counts_path(context_dir)).ok()?).ok()?;
+    counts.stale = wiring_stamp(context_dir) != Some((counts.wiring_bytes, counts.wiring_mtime_ms));
+    Some(counts)
 }
 
 /// Emits one hook response line: compact JSON, no trailing newline
@@ -228,6 +372,17 @@ pub struct Stats {
     /// `stats.json` golden does not change.
     #[serde(rename = "notesLost", default, skip_serializing_if = "is_zero")]
     pub notes_lost: u64,
+    /// True when a hook passed because `wiring.json` is over the size cap.
+    /// Absent when false, so the Phase 1 `stats.json` golden does not change.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub capped: bool,
+    /// Display only, never stored: the counts are from an older wiring file.
+    #[serde(skip)]
+    pub stale_counts: bool,
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
 }
 
 fn is_zero(n: &u64) -> bool {
@@ -321,6 +476,90 @@ pub struct SessionState {
     /// session, so the golden `state.json` does not change.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub narrowed: BTreeMap<String, String>,
+    /// The code lookups the agent sent to Sieve itself. Absent at zero.
+    #[serde(rename = "lookupsPicked", default, skip_serializing_if = "is_zero")]
+    pub lookups_picked: u64,
+    /// The code lookups a hook changed. Absent at zero.
+    #[serde(rename = "lookupsRouted", default, skip_serializing_if = "is_zero")]
+    pub lookups_routed: u64,
+    /// The code lookups a hook saw and left alone. Absent at zero.
+    #[serde(rename = "lookupsPassed", default, skip_serializing_if = "is_zero")]
+    pub lookups_passed: u64,
+    /// The three lookup counts per local day, `YYYY-MM-DD` to counts.
+    #[serde(
+        rename = "lookupsByDay",
+        default,
+        skip_serializing_if = "BTreeMap::is_empty"
+    )]
+    pub lookups_by_day: BTreeMap<String, LookupDay>,
+    /// The passed lookups by reason, such as `stale` or `no-gain`.
+    #[serde(
+        rename = "lookupPassReasons",
+        default,
+        skip_serializing_if = "BTreeMap::is_empty"
+    )]
+    pub lookup_pass_reasons: BTreeMap<String, u64>,
+}
+
+/// The three lookup counts of one day.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct LookupDay {
+    /// Lookups the agent sent to Sieve itself.
+    pub picked: u64,
+    /// Lookups a hook changed.
+    pub routed: u64,
+    /// Lookups a hook left alone.
+    pub passed: u64,
+}
+
+/// What happened to one code lookup (design `lookup-routing.md`, section 1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Lookup {
+    /// The agent called Sieve itself.
+    Picked,
+    /// A hook changed the input or the output.
+    Routed,
+    /// A hook left the call alone, for this reason.
+    Passed(&'static str),
+}
+
+/// The session key for a lookup count: `<session_id>.<agent_id>` when the
+/// hook input names a subagent, else the session id.
+pub(crate) fn lookup_key(input: &Value) -> String {
+    let sid = session_id_of(input);
+    match input
+        .get("agent_id")
+        .and_then(Value::as_str)
+        .filter(|a| !a.is_empty())
+    {
+        Some(agent) => format!("{sid}.{agent}"),
+        None => sid,
+    }
+}
+
+/// Adds one lookup to the record of its (session, agent) key.
+pub(crate) fn record_lookup(project_dir: &Path, input: &Value, outcome: Lookup) {
+    update_session(project_dir, &lookup_key(input), |s| {
+        let day = s
+            .lookups_by_day
+            .entry(crate::telemetry::today_local())
+            .or_default();
+        match outcome {
+            Lookup::Picked => {
+                s.lookups_picked += 1;
+                day.picked += 1;
+            }
+            Lookup::Routed => {
+                s.lookups_routed += 1;
+                day.routed += 1;
+            }
+            Lookup::Passed(reason) => {
+                s.lookups_passed += 1;
+                day.passed += 1;
+                *s.lookup_pass_reasons.entry(reason.to_string()).or_insert(0) += 1;
+            }
+        }
+    });
 }
 
 impl SessionState {
@@ -381,10 +620,6 @@ fn session_path(project_dir: &Path, id: &str) -> PathBuf {
     }
 }
 
-fn stats_path(project_dir: &Path) -> PathBuf {
-    cache_dir(project_dir).join("stats.json")
-}
-
 pub(crate) fn read_session(project_dir: &Path, id: &str) -> SessionState {
     std::fs::read(session_path(project_dir, id))
         .ok()
@@ -435,7 +670,7 @@ fn acquire_hook_lock(lock_dir: &Path) -> Option<sieve_core::lock::LockGuard> {
 /// never exceeds one retry. If a killed holder leaves a stale lock, every
 /// hook pays up to 200 ms until `LOCK_STALE_MS` clears it, which is 300
 /// seconds.
-fn update_session<R>(
+pub(crate) fn update_session<R>(
     project_dir: &Path,
     id: &str,
     change: impl FnOnce(&mut SessionState) -> R,
@@ -464,7 +699,11 @@ fn update_session_checked<R>(
 }
 
 pub(crate) fn read_stats(project_dir: &Path) -> Option<Stats> {
-    std::fs::read(stats_path(project_dir))
+    read_stats_at(&cache_dir(project_dir))
+}
+
+fn read_stats_at(cache: &Path) -> Option<Stats> {
+    std::fs::read(cache.join("stats.json"))
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
 }
@@ -472,14 +711,19 @@ pub(crate) fn read_stats(project_dir: &Path) -> Option<Stats> {
 /// Read-modify-write over `stats.json` under a lock, so two parallel hook
 /// calls do not lose each other's update (F3).
 fn patch_stats(project_dir: &Path, patch: impl FnOnce(&mut Stats)) {
+    patch_stats_at(&cache_dir(project_dir), patch);
+}
+
+/// `patch_stats` for a cache dir given directly.
+fn patch_stats_at(cache: &Path, patch: impl FnOnce(&mut Stats)) {
     // The lock directory is the cache directory itself. So the lock file is
     // `<ctx>/.cache/.cache/.sync.lock`. This differs from the session lock
     // (`<ctx>/.cache/session/.cache/.sync.lock`) and from the graph build
     // lock (`<ctx>/.cache/.sync.lock`), so a hook never waits for a rebuild.
-    let _guard = acquire_hook_lock(&cache_dir(project_dir));
-    let mut next = read_stats(project_dir).unwrap_or_default();
+    let _guard = acquire_hook_lock(cache);
+    let mut next = read_stats_at(cache).unwrap_or_default();
     patch(&mut next);
-    let _ = write_json_atomic(&stats_path(project_dir), &next);
+    let _ = write_json_atomic(&cache.join("stats.json"), &next);
 }
 
 /// Writes `value` as 2-space JSON via a scratch file and a rename
@@ -509,8 +753,8 @@ fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> std::io::Result<()
 
 /// How many of a manifest's recorded source files are missing from disk
 /// ('s `indexFreshness`, `missing` and `total`).
-struct IndexFreshness {
-    missing: usize,
+pub(crate) struct IndexFreshness {
+    pub(crate) missing: usize,
     total: usize,
 }
 
@@ -518,7 +762,7 @@ struct IndexFreshness {
 /// (`indexFreshness`). Returns `None` when
 /// `context_dir` carries no `manifest.json` — the "no deep layer" case,
 /// same as `Manifest::read`.
-fn index_freshness(project_dir: &Path, context_dir: &Path) -> Option<IndexFreshness> {
+pub(crate) fn index_freshness(project_dir: &Path, context_dir: &Path) -> Option<IndexFreshness> {
     let manifest = sieve_core::concept::Manifest::read(context_dir)?;
     let missing = manifest
         .files
@@ -580,6 +824,20 @@ fn utf16_prefix(s: &str, units: usize) -> &str {
     s
 }
 
+/// True when the wiring file, or the wiring file of any workspace child,
+/// is over the size cap.
+fn index_over_cap(project_dir: &Path, context_dir: &Path) -> bool {
+    if wiring_over_cap(context_dir) {
+        return true;
+    }
+    let Some(ws) = sieve_core::workspace::read(context_dir) else {
+        return false;
+    };
+    ws.children
+        .iter()
+        .any(|c| wiring_over_cap(&project_dir.join(c).join(product().context_dir_name())))
+}
+
 fn handle_session_start(project_dir: &Path) {
     let context_dir = resolve_context_dir(project_dir);
     // Sieve ships no telemetry and no update nudge (LEDGER.md, 2026-09-13,
@@ -610,6 +868,25 @@ fn handle_prompt(input: &Value, project_dir: &Path) {
     }
 
     let context_dir = resolve_context_dir(project_dir);
+    // Over the size cap: skip the refresh and every full load.
+    if index_over_cap(project_dir, &context_dir) {
+        record_capped(&context_dir);
+        // No graph load: record the prompt so the pane and the statusline see it.
+        update_session(project_dir, &session_id_of(input), |session| {
+            session.last_query = Some(prompt.clone());
+            if let Some(agent) = input
+                .get("agent")
+                .and_then(|a| a.get("name"))
+                .and_then(Value::as_str)
+                .filter(|a| !a.is_empty())
+            {
+                session
+                    .per_agent_query
+                    .insert(agent.to_string(), prompt.clone());
+            }
+        });
+        return;
+    }
     let last_file = read_stats(project_dir).and_then(|s| s.last_file);
     let scope_hint = last_file_scope_hint(&context_dir, last_file.as_deref());
 
@@ -638,7 +915,7 @@ fn handle_prompt(input: &Value, project_dir: &Path) {
     }
 }
 
-fn session_id_of(input: &Value) -> String {
+pub(crate) fn session_id_of(input: &Value) -> String {
     input
         .get("session_id")
         .and_then(Value::as_str)
@@ -840,7 +1117,10 @@ fn handle_post_edit(input: &Value, project_dir: &Path) {
     let base = basename(&file);
     patch_stats(project_dir, |s| {
         s.dirty = true;
-        s.stale_count = stale;
+        // `None` keeps the old count: an unknown count is not zero.
+        if let Some(n) = stale {
+            s.stale_count = n;
+        }
         s.last_file = Some(base.clone());
     });
     if let Some(graph) = read_wiring(&context_dir) {
@@ -894,10 +1174,18 @@ fn under_sieve(dir: &Path, file: &str) -> bool {
         .starts_with(&format!("{}/", product().context_dir_name()))
 }
 
-fn check_stale_count(root: &Path, context_dir: &Path) -> u64 {
+/// The count of drifted files, or `None` when the count is unknown: the
+/// wiring is over the cap, or `check_graph` failed (a build memory refusal
+/// too).
+fn check_stale_count(root: &Path, context_dir: &Path) -> Option<u64> {
+    if wiring_over_cap(context_dir) {
+        record_capped(context_dir);
+        return None;
+    }
     match check_graph(root, context_dir) {
-        Ok(g) if !g.missing => (g.changed.len() + g.added.len() + g.removed.len()) as u64,
-        _ => 0,
+        Ok(g) if g.missing => Some(0),
+        Ok(g) => Some((g.changed.len() + g.added.len() + g.removed.len()) as u64),
+        Err(_) => None,
     }
 }
 
@@ -1309,6 +1597,9 @@ fn handle_tool_use(input: &Value, project_dir: &Path) {
     });
     let session_id = session_id_of(input);
     record_tool_use(project_dir, &session_id, kind, saved, "claude-code");
+    if kind == Some("sieve") {
+        record_lookup(project_dir, input, Lookup::Picked);
+    }
 }
 
 /// Classifies a tool use and, only when it could carry a footer, parses
@@ -2175,6 +2466,142 @@ mod tests {
         assert!(!has_tally_for("sieve saved ~12k tokens this turn", "other"));
     }
 
+    /// The `PostToolUse` stdin of a Grep tool call in `content` mode.
+    fn grep_input(root: &Path, out: &str, agent: Option<&str>) -> Value {
+        let mut input = serde_json::json!({
+            "session_id": "s1",
+            "cwd": root.to_string_lossy(),
+            "tool_name": "Grep",
+            "tool_input": {"pattern": "total", "output_mode": "content"},
+            "tool_response": {"mode": "content", "content": out, "numLines": out.lines().count()},
+        });
+        if let Some(a) = agent {
+            input["agent_id"] = Value::from(a);
+        }
+        input
+    }
+
+    fn grep_new_text(json: &str) -> String {
+        let v: Value = serde_json::from_str(json).expect("json");
+        let r = &v["hookSpecificOutput"]["updatedToolOutput"];
+        assert_eq!(r["mode"], "content", "the hook keeps the other fields");
+        r["content"].as_str().expect("content").to_string()
+    }
+
+    /// Five long match rows of one indexed file.
+    fn grep_rows() -> String {
+        let file = "crates/engine/src/handlers/group_00_handlers.rs";
+        (0..5).fold(String::new(), |mut out, i| {
+            out.push_str(&format!(
+                "{file}:{}:    let total = input + 1; // long padding\n",
+                3 + 6 * i
+            ));
+            out
+        })
+    }
+
+    #[test]
+    fn test_route_grep_keeps_every_match() {
+        use crate::route::tests::{fixture, original_pairs, routed_pairs, run_rg};
+        if std::process::Command::new("rg")
+            .arg("--version")
+            .output()
+            .is_err()
+        {
+            println!("skip: rg is not installed");
+            return;
+        }
+        let dir = fixture("grep-keeps");
+        let mut patterns: Vec<String> = [
+            "total", "TODO", "input", "handle", "pub", "fn", "u64", "group",
+        ]
+        .map(String::from)
+        .to_vec();
+        for i in 0..12 {
+            patterns.push(format!("handle_{i}_"));
+        }
+        for f in 0..4 {
+            patterns.push(format!("input \\+ {f}"));
+            patterns.push(format!("handle_[0-9]+_{f}"));
+            patterns.push(format!("let total = total \\* {f}"));
+        }
+        for i in [2, 5, 9] {
+            patterns.push(format!("group {i}"));
+            patterns.push(format!("total \\* {i}"));
+            patterns.push(format!("Handlers of group {i}"));
+        }
+        patterns.extend(
+            ["nomatchanywhere", "handlers", "tidy", "let total", "README"].map(String::from),
+        );
+        assert!(patterns.len() >= 40, "{}", patterns.len());
+        let mut routed = 0;
+        for pattern in &patterns {
+            let out = run_rg(&dir.0, pattern);
+            let input = grep_input(&dir.0, &out, None);
+            if let Some(json) = crate::route::post_search(&input, &dir.0) {
+                routed += 1;
+                let text = grep_new_text(&json);
+                assert!(text.starts_with("[sieve] routed:replaced"), "{text}");
+                assert_eq!(routed_pairs(&text), original_pairs(&out), "{pattern}");
+                assert!(text.len() * 10 <= out.len() * 9, "{pattern}");
+            }
+        }
+        assert!(routed >= 10, "routed {routed} of {}", patterns.len());
+        let s = read_session(&dir.0, "s1");
+        assert_eq!(s.lookups_routed, routed);
+        assert_eq!(s.lookups_routed + s.lookups_passed, patterns.len() as u64);
+    }
+
+    #[test]
+    fn test_route_grep_passes_on_parse_loss() {
+        let dir = crate::route::tests::fixture("grep-loss");
+        let mut out = grep_rows();
+        assert!(crate::route::post_search(&grep_input(&dir.0, &out, None), &dir.0).is_some());
+        out.push_str("Binary file crates/engine/src/x.bin matches\n");
+        assert!(crate::route::post_search(&grep_input(&dir.0, &out, None), &dir.0).is_none());
+        // A mode other than `content` also passes.
+        let mut files = grep_input(&dir.0, "a.rs\nb.rs\n", None);
+        files["tool_input"]["output_mode"] = Value::from("files_with_matches");
+        assert!(crate::route::post_search(&files, &dir.0).is_none());
+        let s = read_session(&dir.0, "s1");
+        assert_eq!((s.lookups_routed, s.lookups_passed), (1, 2));
+        assert_eq!(s.lookup_pass_reasons.get("regex"), Some(&2));
+    }
+
+    #[test]
+    fn test_route_grep_passes_on_stale() {
+        let dir = crate::route::tests::fixture("grep-stale");
+        let file = "crates/engine/src/handlers/group_00_handlers.rs";
+        let later = std::time::SystemTime::now() + std::time::Duration::from_secs(3600);
+        let handle = std::fs::File::options()
+            .write(true)
+            .open(dir.0.join(file))
+            .expect("open");
+        handle.set_modified(later).expect("set mtime");
+        let input = grep_input(&dir.0, &grep_rows(), None);
+        assert!(crate::route::post_search(&input, &dir.0).is_none());
+        let s = read_session(&dir.0, "s1");
+        assert_eq!(s.lookup_pass_reasons.get("stale"), Some(&1));
+    }
+
+    #[test]
+    fn test_route_counts_per_agent() {
+        let dir = crate::route::tests::fixture("grep-agents");
+        let rows = grep_rows();
+        for agent in [Some("a1"), Some("a1"), Some("a2")] {
+            let input = grep_input(&dir.0, &rows, agent);
+            assert!(crate::route::post_search(&input, &dir.0).is_some());
+        }
+        let miss = grep_input(&dir.0, "nowhere.rs:1:total x\n", None);
+        assert!(crate::route::post_search(&miss, &dir.0).is_none());
+        let a1 = read_session(&dir.0, "s1.a1");
+        let a2 = read_session(&dir.0, "s1.a2");
+        let main = read_session(&dir.0, "s1");
+        assert_eq!((a1.lookups_routed, a1.lookups_passed), (2, 0));
+        assert_eq!((a2.lookups_routed, a2.lookups_passed), (1, 0));
+        assert_eq!((main.lookups_routed, main.lookups_passed), (0, 1));
+    }
+
     /// The `PreToolUse` stdin shape `handle_pre_read` reads: a session id
     /// and `tool_input.file_path`.
     fn pre_read_input(session_id: &str, file_path: &Path) -> Value {
@@ -2670,6 +3097,19 @@ mod tests {
     }
 
     #[test]
+    fn test_pre_read_bash_ignores_grep() {
+        let dir = TempDir::new("pre-read-bash-grep");
+        let seam = product().env_var("TEST_STDIN");
+        for command in ["grep -rn x src", "rg x ."] {
+            std::env::set_var(&seam, bash_tool_input("s1", command).to_string());
+            let input = read_stdin_json();
+            std::env::remove_var(&seam);
+            // `pre-search` owns grep and rg, so `pre-read` must not rewrite.
+            assert!(handle_pre_bash(&input, &dir.path).is_none(), "{command}");
+        }
+    }
+
+    #[test]
     fn test_f1_pre_bash_cat_above_the_harness_cap_passes_through() {
         let (dir, file) = large_file_project_with("f1-bash-big-cat", 400);
         let size = std::fs::metadata(&file).expect("metadata").len();
@@ -2905,5 +3345,102 @@ mod tests {
 
         assert!(read_session(&dir.path, "s1").narrowed.is_empty());
         assert_eq!(read_stats(&dir.path).expect("stats").notes_lost, 2);
+    }
+
+    /// A project with a tiny `wiring.json` (over a 1-byte cap) and a
+    /// `stats.json` that holds `staleCount` 7.
+    fn capped_project(label: &str) -> TempDir {
+        let dir = TempDir::new(label);
+        let ctx = resolve_context_dir(&dir.path);
+        std::fs::create_dir_all(ctx.join(".graph")).expect("graph dir");
+        std::fs::write(wiring_path(&ctx), "{}").expect("write wiring");
+        patch_stats(&dir.path, |s| s.stale_count = 7);
+        dir
+    }
+
+    #[test]
+    fn test_s0_hook_passes_through_when_wiring_over_cap() {
+        set_test_wiring_cap(Some(1));
+        let dir = capped_project("s0-cap");
+        let file = dir.path.join("src").join("a.rs");
+        std::fs::create_dir_all(file.parent().expect("parent")).expect("src dir");
+        std::fs::write(&file, "pub fn a() {}\n").expect("write file");
+
+        // Pre-read and post-read never load the wiring: both pass.
+        let read = read_tool_input("s1", &file);
+        assert_eq!(handle_pre_read(&read, &dir.path), None);
+        assert_eq!(handle_post_read(&read, &dir.path), None);
+
+        // The prompt hook stops before the refresh, but records the prompt.
+        let prompt = serde_json::json!({
+            "session_id": "s1",
+            "prompt": "where does the parser read the config file"
+        });
+        handle_prompt(&prompt, &dir.path);
+        assert_eq!(
+            read_session(&dir.path, "s1").last_query.as_deref(),
+            Some("where does the parser read the config file")
+        );
+
+        // The post-edit hook keeps the old `staleCount`.
+        let edit = serde_json::json!({
+            "tool_input": { "file_path": file.to_string_lossy() }
+        });
+        handle_post_edit(&edit, &dir.path);
+        let stats = read_stats(&dir.path).expect("stats");
+        assert_eq!(stats.stale_count, 7);
+        assert!(stats.capped);
+        assert_eq!(stats.last_file.as_deref(), Some("a.rs"));
+        set_test_wiring_cap(None);
+    }
+
+    #[test]
+    fn test_s0_stale_count_none_keeps_old_value() {
+        // No graph under the project: `check_graph` reports `missing`.
+        let dir = TempDir::new("s0-stale-none");
+        let ctx = resolve_context_dir(&dir.path);
+        assert_eq!(check_stale_count(&dir.path, &ctx), Some(0));
+        // Over the cap the count is unknown.
+        set_test_wiring_cap(Some(1));
+        let dir = capped_project("s0-stale-none-cap");
+        let ctx = resolve_context_dir(&dir.path);
+        assert_eq!(check_stale_count(&dir.path, &ctx), None);
+        let edit = serde_json::json!({
+            "tool_input": { "file_path": dir.path.join("b.rs").to_string_lossy() }
+        });
+        handle_post_edit(&edit, &dir.path);
+        assert_eq!(read_stats(&dir.path).expect("stats").stale_count, 7);
+        set_test_wiring_cap(None);
+    }
+
+    #[test]
+    fn test_s0_cap_env_bad_value_falls_back() {
+        assert_eq!(parse_wiring_cap(None), DEFAULT_WIRING_CAP_BYTES);
+        assert_eq!(parse_wiring_cap(Some("abc")), DEFAULT_WIRING_CAP_BYTES);
+        assert_eq!(parse_wiring_cap(Some("-5")), DEFAULT_WIRING_CAP_BYTES);
+        assert_eq!(parse_wiring_cap(Some("")), DEFAULT_WIRING_CAP_BYTES);
+        assert_eq!(parse_wiring_cap(Some("1")), 1);
+        assert_eq!(parse_wiring_cap(Some(" 2048 ")), 2048);
+    }
+
+    #[test]
+    fn test_s0_build_clears_capped_under_cap() {
+        let dir = TempDir::new("s0-clear-capped");
+        let ctx = resolve_context_dir(&dir.path);
+        std::fs::create_dir_all(ctx.join(".graph")).expect("graph dir");
+        std::fs::write(wiring_path(&ctx), "{}").expect("write wiring");
+        // No `stats.json`: the write must not create one.
+        write_build_counts(&ctx, 1, 0, &[], 0);
+        assert!(read_stats(&dir.path).is_none());
+        // A capped `stats.json` is cleared under the cap.
+        patch_stats(&dir.path, |s| s.capped = true);
+        write_build_counts(&ctx, 1, 0, &[], 0);
+        assert!(!read_stats(&dir.path).expect("stats").capped);
+        // Over the cap it stays set.
+        set_test_wiring_cap(Some(1));
+        patch_stats(&dir.path, |s| s.capped = true);
+        write_build_counts(&ctx, 1, 0, &[], 0);
+        assert!(read_stats(&dir.path).expect("stats").capped);
+        set_test_wiring_cap(None);
     }
 }

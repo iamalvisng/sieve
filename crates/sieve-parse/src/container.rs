@@ -105,15 +105,35 @@ fn astro_frontmatter(source: &str) -> (Option<Block>, usize) {
 /// Finds the end of a `{...}` expression that opens at `open`. Gives the
 /// byte after the closing brace, or `None` if no brace closes it. The
 /// caller then goes on after the stray `{`, so it hides no later script.
+/// A brace inside a quoted or backtick string does not count.
 ///
-/// ponytail: a brace inside a string in the expression is counted. Use a
-/// real expression parse if a fixture shows an unbalanced string.
+/// ponytail: the earliest of the two counts wins. It is never later than the
+/// old naive count, and a wrong early end only shows extra markup text, while
+/// a late end would swallow a script. A `${...}` in a backtick string is
+/// skipped as text. Use a real expression parse if a fixture needs more.
 fn skip_expr(source: &str, open: usize) -> Option<usize> {
+    let bytes = source.as_bytes();
+    match (brace_end(bytes, open, false), brace_end(bytes, open, true)) {
+        (Some(a), Some(b)) => Some(a.min(b)),
+        (a, b) => a.or(b),
+    }
+}
+
+/// Finds the byte after the `}` that closes the `{` at `open`. With
+/// `track_strings`, a brace inside a string does not count.
+fn brace_end(bytes: &[u8], open: usize, track_strings: bool) -> Option<usize> {
     let mut depth = 0usize;
-    for (i, b) in source.bytes().enumerate().skip(open) {
-        match b {
-            b'{' => depth += 1,
-            b'}' => {
+    let mut quote: Option<u8> = None;
+    let mut escaped = false;
+    for (i, &b) in bytes.iter().enumerate().skip(open) {
+        match (quote, b) {
+            (Some(_), _) if escaped => escaped = false,
+            (Some(_), b'\\') => escaped = true,
+            (Some(q), _) if b == q => quote = None,
+            (Some(_), _) => {}
+            (None, b'"' | b'\'' | b'`') if track_strings => quote = Some(b),
+            (None, b'{') => depth += 1,
+            (None, b'}') => {
                 depth -= 1;
                 if depth == 0 {
                     return Some(i + 1);
@@ -472,6 +492,45 @@ mod tests {
             svelte_names(src),
             vec![("real".to_string(), "L3-L3".to_string())]
         );
+    }
+
+    /// Checks that a brace in a string hides no script. A later stray `}`
+    /// would close a wrong count and swallow the script.
+    fn assert_script_found_after(expr: &str) {
+        let src = format!("<p>{expr}</p>\n<script>\nfunction real() {{}}\n</script>\n<p>}}</p>\n");
+        assert_eq!(
+            svelte_names(&src),
+            vec![("real".to_string(), "L3-L3".to_string())]
+        );
+    }
+
+    #[test]
+    fn test_svelte_expr_brace_in_double_quoted_string() {
+        assert_script_found_after("{\"text with { brace\"}");
+    }
+
+    #[test]
+    fn test_svelte_expr_brace_in_single_quoted_string() {
+        assert_script_found_after("{a ? '{' : b}");
+    }
+
+    #[test]
+    fn test_svelte_expr_brace_in_template_string() {
+        assert_script_found_after("{`a { ${b}`}");
+    }
+
+    #[test]
+    fn test_svelte_expr_escaped_quote_in_string() {
+        assert_script_found_after("{\"a \\\" { b\"}");
+    }
+
+    #[test]
+    fn test_astro_apostrophe_in_markup_does_not_open_a_string() {
+        let src =
+            "{a(<b>don't</b>)}\n<script>\nfunction real() {}\n</script>\n<p>it's</p>\n<p>}</p>\n";
+        let mut ex = Extractor::new().expect("build extractor");
+        let got = names(&extract_container("P.astro", src, &mut ex).1);
+        assert_eq!(got, vec![("real".to_string(), "L3-L3".to_string())]);
     }
 
     #[test]

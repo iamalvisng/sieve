@@ -26,6 +26,7 @@ mod names;
 mod ojson;
 mod pane_mod;
 mod query;
+mod route;
 mod skeleton;
 mod stats;
 mod statusline;

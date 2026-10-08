@@ -87,6 +87,25 @@ fn resolve_stats(project_dir: &Path) -> Option<Stats> {
         }
     }
     let context_dir = hook::resolve_context_dir(project_dir);
+    // The build's own counts: no wiring parse.
+    if let Some(c) = hook::read_build_counts(&context_dir) {
+        return Some(Stats {
+            node_count: c.node_count,
+            edge_count: c.edge_count,
+            languages: c.languages,
+            total_count: c.total_count,
+            ready_count: c.ready_count,
+            capped: hook::wiring_over_cap(&context_dir),
+            stale_counts: c.stale,
+            ..Stats::default()
+        });
+    }
+    // Over the size cap: show the stats there are, with no node count.
+    if hook::wiring_over_cap(&context_dir) {
+        let mut stats = hook::read_stats(project_dir).unwrap_or_default();
+        stats.capped = true;
+        return Some(stats);
+    }
     let graph = hook::read_wiring(&context_dir)?;
     Some(Stats {
         node_count: graph.meta.node_count as u64,
@@ -448,11 +467,24 @@ fn render_sieve(v: &SieveView) -> String {
             } else {
                 paint(TEAL, "\u{2713} up to date")
             };
-            let counts = format!(
-                "{} symbols \u{b7} {} links \u{b7} ",
-                format_thousands(stats.node_count),
-                format_thousands(stats.edge_count)
-            );
+            let counts = if stats.capped && stats.node_count == 0 {
+                String::new()
+            } else {
+                format!(
+                    "{}{} symbols \u{b7} {} links \u{b7} ",
+                    if stats.stale_counts { "~" } else { "" },
+                    format_thousands(stats.node_count),
+                    format_thousands(stats.edge_count)
+                )
+            };
+            let cap_note = if stats.capped {
+                paint(
+                    ORANGE,
+                    " \u{b7} index over the size cap; hooks pass through",
+                )
+            } else {
+                String::new()
+            };
             (
                 format!(
                     "{head}{}{}{}",
@@ -460,7 +492,7 @@ fn render_sieve(v: &SieveView) -> String {
                     paint(FG_DARK, " \u{b7} "),
                     paint(BLUE, &format!("{} this week", format_short(v.week))),
                 ),
-                format!("{cells2}{}{fresh}", paint(FG_DARK, &counts)),
+                format!("{cells2}{}{fresh}{cap_note}", paint(FG_DARK, &counts)),
             )
         }
     };
@@ -861,5 +893,44 @@ mod tests {
     fn format_thousands_groups_every_three_digits() {
         assert_eq!(format_thousands(420), "420");
         assert_eq!(format_thousands(1_200), "1,200");
+    }
+
+    #[test]
+    fn test_s0_statusline_skips_wiring_over_cap() {
+        hook::set_test_wiring_cap(Some(1));
+        let dir = std::env::temp_dir().join(format!("sieve-s0-status-{}", std::process::id()));
+        let ctx = hook::resolve_context_dir(&dir);
+        std::fs::create_dir_all(ctx.join(".graph")).expect("graph dir");
+        std::fs::write(hook::wiring_path(&ctx), "{}").expect("write wiring");
+        let stats = resolve_stats(&dir).expect("stats");
+        assert!(stats.capped);
+        assert_eq!(stats.node_count, 0);
+        let text = strip_ansi(&view(&stats, None, false));
+        assert!(text.contains("index over the size cap; hooks pass through"));
+        assert!(!text.contains("symbols"), "{text}");
+        hook::set_test_wiring_cap(None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_s0_statusline_uses_stale_counts_without_parse() {
+        let dir = std::env::temp_dir().join(format!("sieve-s0-stale-{}", std::process::id()));
+        let ctx = hook::resolve_context_dir(&dir);
+        std::fs::create_dir_all(ctx.join(".graph")).expect("graph dir");
+        std::fs::create_dir_all(ctx.join(".cache")).expect("cache dir");
+        // The wiring is garbage: any parse would fail.
+        std::fs::write(hook::wiring_path(&ctx), "not json at all").expect("write wiring");
+        let counts = serde_json::json!({
+            "nodeCount": 752, "edgeCount": 2017, "totalCount": 752, "readyCount": 0,
+            "languages": ["rust"], "wiringBytes": 3, "wiringMtimeMs": 0
+        });
+        std::fs::write(ctx.join(".cache").join("counts.json"), counts.to_string())
+            .expect("write counts");
+        let stats = resolve_stats(&dir).expect("stats from counts");
+        assert!(stats.stale_counts);
+        assert_eq!(stats.node_count, 752);
+        let text = strip_ansi(&view(&stats, None, false));
+        assert!(text.contains("~752 symbols"), "{text}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

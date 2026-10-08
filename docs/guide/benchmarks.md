@@ -18,7 +18,7 @@ number in the README. You can repeat each run.
 2. Warm build: run the same command again with no change. The number is the median of 5 runs.
 3. `ask` latency: 10 questions per repo, each run 3 times. That gives 30 timings. The number is the wall time of one `sieve ask` process. Report the median and the maximum.
 4. Answer size: count the bytes of `sieve ask "<question>" --source`. Count the bytes of every distinct file the output names. Compare the two totals. This is not tokens. It is not an agent session.
-5. Exact cross-file calls: an oracle script lists the call rows that the TypeScript compiler resolves in vite. A compare script checks each Extracted cross-file call edge. An edge matches if the compiler has a call in the same source file. The call must resolve to the same target file and the same name. Sieve found 1,232 such edges. All 1,232 match. The 621 calls that stay Inferred are not counted.
+5. Exact cross-file calls: `scripts/oracle/ts-calls.mjs` lists the call rows that the TypeScript compiler resolves in vite. `scripts/oracle/compare.mjs` checks each Extracted cross-file call edge and reports two counts. Count 1 keys on (source file, target file, name). Count 2 is the gate: the oracle row line must fall inside the span of the Sieve edge's source node. Sieve found 1,272 such edges in vite, and all 1,272 match. Barrel re-exports resolve. The build and ask times in items 1 and 2 are from the 0.1.1 release build, not re-measured after this change. Calls that stay Inferred are not counted.
 6. The questions were written before the first run. No question was dropped. Medians move by a few ms because the times are 25 to 250 ms.
 
 ## Results
@@ -29,6 +29,8 @@ number in the README. You can repeat each run.
 | Warm build | 0.31 s | 0.80 s |
 | `ask` median, max | 62 ms, 101 ms | 158 ms, 185 ms |
 | Answer size against file size | 60,093 B against 3,068,726 B | 67,162 B against 806,930 B |
+
+The 0.1.2 build, re-measured on 2026-10-08, gives a cold build median of 1.75 s (5 runs, spread 10.3%) and an `ask` median of 150 ms (5 questions, 15 timings). The table keeps the 0.1.1 figures, which used the documented method.
 
 ## The 20 questions
 

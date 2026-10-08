@@ -165,7 +165,7 @@ fn classify_read(ti: &Value, cwd: Option<&str>) -> Option<Intent> {
 }
 
 /// True if the command is compound or holds text this code cannot parse.
-fn is_unsafe_command(cmd: &str) -> bool {
+pub(crate) fn is_unsafe_command(cmd: &str) -> bool {
     cmd.contains([
         '|', '>', '<', ';', '`', '&', '\n', '\r', '"', '\\', '$', '~', '*', '?', '[', '{',
     ])

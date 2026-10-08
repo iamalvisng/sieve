@@ -5,6 +5,33 @@ All notable changes to this project are in this file.
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+## [0.1.2] - 2026-10-08
+
+### Added
+
+- The public export holds the oracle scripts in `scripts/oracle/`.
+- The `xfile2` and `xfile3` fixtures with frozen oracles, and the `nsexport` shape in the TypeScript oracle.
+- ADR 0005 and ADR 0006.
+- A PostToolUse hook `sieve hook post-search` regroups Grep tool matches by file and enclosing symbol, only when every match stays and the output shrinks by 10% or more. It counts `picked`, `routed` and `passed` per session and agent.
+- Two Bash hooks, `pre-search` and `post-search`, route a single simple `grep` or `rg` command. `pre-search` adds `-n`. `post-search` regroups the matches under the same rule as the Grep tool. A Bash output of 30,000 bytes or more passes.
+- `sieve init` adds the two Bash hook blocks and the Grep hook block to an existing config without duplicates.
+- A `capped` flag reports an index over the size cap.
+
+### Changed
+
+- A TS or JS call through an aliased, namespace or default import is now an Extracted edge when the target file has one matching Function.
+- A TS call through a barrel re-export (`export { x } from`, `export *`, `export * as ns`) is now an Extracted edge when the chain gives one Function. On vite, 1,272 of 1,272 Extracted edges match the compiler. CACHE_VERSION is now 5, so the first build after the upgrade runs cold.
+- A build that projects over the memory ceiling now refuses with one line and writes nothing under `sieve/`. The ceiling is the smaller of 1.5 GB and 20% of physical memory. The env var `SIEVE_BUILD_CEILING_BYTES` sets it.
+- A wiring file over 64 MB makes every hook pass through. The env var `SIEVE_WIRING_CAP_BYTES` sets the cap. The statusline shows "index over the size cap; hooks pass through".
+- The statusline and `sieve init` read counts from `sieve/.cache/counts.json` before any wiring parse.
+
+### Fixed
+
+- A brace inside a string no longer loses the `<script>` block of a Svelte or Astro file.
+- The build memory guard counted every walked file. It now counts the parsed files, so it no longer refuses a cold build that fits.
+
 ## [0.1.1] - 2026-10-06
 
 ### Changed
@@ -56,5 +83,6 @@ First public release.
   Use `--json` for machine output.
 - A local-only design. Sieve sends no telemetry.
 
+[0.1.2]: https://github.com/iamalvisng/sieve/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/iamalvisng/sieve/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/iamalvisng/sieve/releases/tag/v0.1.0

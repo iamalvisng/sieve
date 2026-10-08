@@ -94,6 +94,20 @@ pub struct ContextCheck {
 /// diffs the fresh nodes against the committed ones by `id` and
 /// `body_hash`, the same three-way split `checkGraph` runs.
 pub fn check_graph(root: &Path, context_dir: &Path) -> io::Result<GraphCheck> {
+    // The last build's `--only-dir` whitelist rides in the fingerprint
+    // (P1-70). The warm guard runs on its file count, before the wiring is
+    // parsed (S0, B3).
+    let stamp = crate::extractor_stamp();
+    let fp = read_fingerprint(&fingerprint_path(context_dir, &stamp), &stamp);
+    // With no usable fingerprint, the walk gives the file count.
+    let file_count = match &fp {
+        Some(fp) => fp.files.len(),
+        // A walk error is not the guard's to report: the later read or build
+        // names it.
+        None => crate::build::collect_files(root, context_dir)
+            .map_or(0, |f| crate::build::claimed_count(&f)),
+    };
+    crate::guard::check(file_count, true)?;
     let wiring_path = context_dir.join(".graph").join("wiring.json");
     let Ok(bytes) = std::fs::read(&wiring_path) else {
         return Ok(GraphCheck {
@@ -111,13 +125,8 @@ pub fn check_graph(root: &Path, context_dir: &Path) -> io::Result<GraphCheck> {
     };
     let committed: Graph = serde_json::from_slice(&bytes).map_err(io::Error::other)?;
 
-    // The last build's `--only-dir` whitelist rides in the fingerprint
-    // (P1-70).
-    let stamp = crate::extractor_stamp();
     let opts = BuildOptions {
-        only_dirs: read_fingerprint(&fingerprint_path(context_dir, &stamp), &stamp)
-            .and_then(|fp| fp.only_dirs)
-            .unwrap_or_default(),
+        only_dirs: fp.and_then(|fp| fp.only_dirs).unwrap_or_default(),
         no_reuse: false,
         // Nothing writes a file at all (P1-35).
         read_only: true,

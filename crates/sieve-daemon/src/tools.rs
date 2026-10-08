@@ -91,7 +91,18 @@ fn base_tool(canonical: &str) -> &str {
 /// error.
 pub fn call(name: &str, args: &Value, root: &Path, context_dir: &Path) -> (String, bool) {
     let canonical = canonical_tool_name(name);
+    if let Some(text) = capped_text(context_dir) {
+        return (text, true);
+    }
     let ws = workspace::read(context_dir);
+    // A capped child stops the whole call, before any refresh or load.
+    for child in ws.iter().flat_map(|w| &w.children) {
+        let child_root = root.join(child);
+        let child_ctx = child_root.join(product().context_dir_name());
+        if let Some(text) = capped_text(&child_ctx) {
+            return (format!("{child}: {text}"), true);
+        }
+    }
     let note = if base_tool(&canonical) == "check_freshness" {
         None
     } else {
@@ -280,6 +291,58 @@ fn dispatch(
         "why" => why_tool(args, root, context_dir),
         _ => (format!("unknown tool: {raw_name}"), true),
     }
+}
+
+/// The default `wiring.json` size cap in bytes: 64 MB.
+const DEFAULT_WIRING_CAP: u64 = 64 * 1024 * 1024;
+
+#[cfg(test)]
+thread_local! {
+    /// A test seam for the cap; the process env stays untouched.
+    static TEST_WIRING_CAP: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
+}
+
+/// Sets the cap for the current test thread only.
+#[cfg(test)]
+fn set_test_wiring_cap(cap: Option<u64>) {
+    TEST_WIRING_CAP.with(|c| c.set(cap));
+}
+
+/// Parses a cap value; a bad or missing value gives the default.
+fn parse_wiring_cap(raw: Option<&str>) -> u64 {
+    raw.and_then(|v| v.trim().parse::<u64>().ok())
+        .unwrap_or(DEFAULT_WIRING_CAP)
+}
+
+// ponytail: copy of the sieve-cli helper in hook.rs; move both to
+// sieve-core when a third caller appears.
+/// The `wiring.json` size cap: env `<PRODUCT>_WIRING_CAP_BYTES`, else 64 MB.
+fn wiring_cap() -> u64 {
+    #[cfg(test)]
+    if let Some(cap) = TEST_WIRING_CAP.with(|c| c.get()) {
+        return cap;
+    }
+    parse_wiring_cap(
+        std::env::var(product().env_var("WIRING_CAP_BYTES"))
+            .ok()
+            .as_deref(),
+    )
+}
+
+/// The capped-index tool error text when `wiring.json` is over the cap.
+/// Reads only the file size, never the file.
+fn capped_text(context_dir: &Path) -> Option<String> {
+    let size = std::fs::metadata(context_dir.join(".graph").join("wiring.json"))
+        .ok()?
+        .len();
+    let cap = wiring_cap();
+    (size > cap).then(|| {
+        format!(
+            "the index is over the size cap: wiring.json is {size} bytes \
+             and the cap is {cap} bytes; set {} to raise the cap",
+            product().env_var("WIRING_CAP_BYTES")
+        )
+    })
 }
 
 /// Loads `wiring.json`, or `None` when it is missing or unreadable.
@@ -494,6 +557,9 @@ fn file_api(args: &Value, context_dir: &Path) -> (String, bool) {
 }
 
 fn check_freshness(root: &Path, context_dir: &Path) -> (String, bool) {
+    if let Some(text) = capped_text(context_dir) {
+        return (text, true);
+    }
     let c = check_context(root, context_dir);
     let g = match check_graph(root, context_dir) {
         Ok(g) => g,
@@ -763,5 +829,101 @@ mod tests {
             format!("{} requires a query", product().tool("find_code"))
         );
         assert!(is_error);
+    }
+
+    fn capped_dir(tag: &str) -> (std::path::PathBuf, std::path::PathBuf) {
+        let root = std::env::temp_dir().join(format!("sieve-s0c-{tag}-{}", std::process::id()));
+        let ctx = root.join("ctx");
+        std::fs::create_dir_all(ctx.join(".graph")).expect("make dir");
+        std::fs::write(ctx.join(".graph").join("wiring.json"), "{}").expect("write wiring");
+        (root, ctx)
+    }
+
+    #[test]
+    fn test_s0_daemon_tool_returns_capped_error_over_cap() {
+        let (root, ctx) = capped_dir("tool");
+        set_test_wiring_cap(Some(1));
+        let args = serde_json::json!({"query": "x", "symbol": "x", "pattern": "x", "file": "a"});
+        for tool in [
+            "find_code",
+            "file_api",
+            "trace_calls",
+            "find_all",
+            "repo_map",
+        ] {
+            let (text, is_error) = call(&product().tool(tool), &args, &root, &ctx);
+            assert!(is_error, "{tool}");
+            assert!(text.contains("over the size cap"), "{tool}: {text}");
+            assert!(text.contains("2 bytes"), "{tool}: {text}");
+            assert!(text.contains("cap is 1 bytes"), "{tool}: {text}");
+            assert!(text.contains("SIEVE_WIRING_CAP_BYTES"), "{tool}: {text}");
+        }
+        set_test_wiring_cap(None);
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn test_s0_check_freshness_skips_build_over_cap() {
+        let (root, ctx) = capped_dir("fresh");
+        set_test_wiring_cap(Some(1));
+        // The root holds no source; a build would give a stale or ok report.
+        let (text, is_error) = check_freshness(&root, &ctx);
+        assert!(is_error);
+        assert!(text.contains("over the size cap"), "{text}");
+        set_test_wiring_cap(None);
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn test_s0_cap_env_bad_value_falls_back() {
+        assert_eq!(parse_wiring_cap(None), DEFAULT_WIRING_CAP);
+        assert_eq!(parse_wiring_cap(Some("abc")), DEFAULT_WIRING_CAP);
+        assert_eq!(parse_wiring_cap(Some("-5")), DEFAULT_WIRING_CAP);
+        assert_eq!(parse_wiring_cap(Some("")), DEFAULT_WIRING_CAP);
+        assert_eq!(parse_wiring_cap(Some("1024")), 1024);
+    }
+
+    #[test]
+    fn test_s0_daemon_why_returns_capped_error_over_cap() {
+        let (root, ctx) = capped_dir("why");
+        set_test_wiring_cap(Some(1));
+        let args = serde_json::json!({"symbol": "x"});
+        let (text, is_error) = call(&product().tool("why"), &args, &root, &ctx);
+        assert!(is_error);
+        assert!(text.contains("over the size cap"), "{text}");
+        set_test_wiring_cap(None);
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn test_s0_daemon_workspace_child_over_cap_is_not_parsed() {
+        let (root, ctx) = capped_dir("ws");
+        // The parent has no wiring; the child wiring is garbage over the cap.
+        std::fs::remove_file(ctx.join(".graph").join("wiring.json")).expect("rm parent wiring");
+        let ws = sieve_core::workspace::Workspace {
+            version: 1,
+            children: vec!["kid".to_string()],
+        };
+        std::fs::write(
+            sieve_core::workspace::workspace_path(&ctx),
+            serde_json::to_string(&ws).expect("ws json"),
+        )
+        .expect("write ws");
+        let kid = root
+            .join("kid")
+            .join(product().context_dir_name())
+            .join(".graph");
+        std::fs::create_dir_all(&kid).expect("kid dir");
+        std::fs::write(kid.join("wiring.json"), "not json at all").expect("kid wiring");
+        set_test_wiring_cap(Some(1));
+        for tool in ["find_all", "trace_calls", "repo_map", "check_freshness"] {
+            let args = serde_json::json!({"pattern": "x", "symbol": "x"});
+            let (text, is_error) = call(&product().tool(tool), &args, &root, &ctx);
+            assert!(is_error, "{tool}");
+            assert!(text.starts_with("kid: "), "{tool}: {text}");
+            assert!(text.contains("over the size cap"), "{tool}: {text}");
+        }
+        set_test_wiring_cap(None);
+        std::fs::remove_dir_all(&root).ok();
     }
 }

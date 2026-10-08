@@ -1548,10 +1548,12 @@ fn test_p4_07_hooks_merge_keeps_foreign_and_drops_stale_own_entries() {
         claude_hook_json("Bash|mcp__sieve__|Read|Grep|Glob", "tool-savings", 8000),
         claude_hook_json("Read", "post-read", 5000),
         claude_hook_json("Bash", "post-read", 5000),
+        claude_hook_json("Bash", "post-search", 3000),
+        claude_hook_json("Grep", "post-search", 3000),
     ]);
     assert_eq!(
         settings["hooks"]["PostToolUse"], expected_post_tool_use,
-        "PostToolUse must be [foreign, post-edit, tool-savings, post-read x2], got: {settings}"
+        "PostToolUse must be [foreign, post-edit, tool-savings, post-read x2, post-search x2], got: {settings}"
     );
     assert_eq!(
         settings["hooks"]["Notification"], unmanaged,

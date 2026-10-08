@@ -13,5 +13,13 @@
   "lastTallyUuid": "u1",
   "savedByDay": {
     "2026-10-05": 420
+  },
+  "lookupsPicked": 1,
+  "lookupsByDay": {
+    "2026-10-05": {
+      "picked": 1,
+      "routed": 0,
+      "passed": 0
+    }
   }
 }
