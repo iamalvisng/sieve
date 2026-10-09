@@ -9,7 +9,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [0.1.3] - 2026-10-09
 
-0.1.3 routes searches on the output shape and records every search segment.
+0.1.3 counts every search the agent runs and lowers the memory use on large repos.
 
 ### Added
 
@@ -17,7 +17,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- Search routing now routes on the output shape. If every stdout row of a Bash `grep` or `rg` command is `path:line:text` from indexed files, the hook regroups the rows by file and enclosing symbol. This holds for compound and piped commands too.
+- Sieve regroups a Bash `grep` or `rg` result by file and function only when every output row is `path:line:text` from an indexed file and the regrouped text is smaller. Most real agent searches do not meet this rule and pass through unchanged.
 - Every search segment of a Bash command gets a `routed` or `passed` record. `sieve stats` shows the count of each record.
 - The `pre-search` hook block and the `-n` injection are removed. `sieve init` drops the old block from an existing config.
 - The build keeps one copy of each node. This lowers the peak memory of the warm rebuild and the cold build. `wiring.json` and `ask-index.json` are byte-identical to before.
