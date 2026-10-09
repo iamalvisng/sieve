@@ -20,16 +20,17 @@ pub use build::{
 };
 pub use cache::{CacheEntry, ExtractCache};
 pub use check::{
-    behind_files, check_context, check_graph, federated_check_text, format_check_report,
-    format_graph_check_report, ContentDrift, ContextCheck, GraphCheck, PENDING_SAMPLE,
+    behind_files, check_context, check_graph, check_graph_lookup, federated_check_text,
+    format_check_report, format_graph_check_report, ContentDrift, ContextCheck, GraphCheck,
+    LookupCheck, LOOKUP_DRIFT_CAP, PENDING_SAMPLE,
 };
 pub use container::{container_lang_of, extract_container, ContainerLang, CONTAINER_LANGS};
 pub use extract::{Extractor, RawEdge, ReExport};
 pub use generic::{generic_lang_of, GenericExtractor, GenericLang, GENERIC_LANGS};
 pub use lsp::{enrich_with_lsp, enrich_with_lsp_report, LspReport};
 pub use refresh::{
-    ensure_fresh_graph, env_truthy, rebuild_graph_only, refresh_note, RebuildReport,
-    RefreshOptions, RefreshOutcome,
+    ensure_fresh_graph, env_truthy, lookup_path, rebuild_graph_only, refresh_note,
+    write_wiring_and_lookup, RebuildReport, RefreshOptions, RefreshOutcome,
 };
 pub use resolve::resolve_edges;
 pub use stamp::extractor_stamp;

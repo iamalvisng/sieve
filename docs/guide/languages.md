@@ -46,8 +46,15 @@ Sieve reads code inside `.vue`, `.svelte` and `.astro` files.
 
 ## Exact links
 
-Sieve links imports across files with exact results only for named relative
-imports in TypeScript and JavaScript. Do not treat other cross-file links as exact.
+Sieve links imports across files with exact results for relative imports in
+TypeScript and JavaScript. These cover named imports, aliased imports
+(`{ a as b }`), namespace imports (`* as ns` with `ns.fn()`) and default imports.
+They also cover barrel re-exports: `export { x } from`, `export *`, default
+re-exports and `export * as ns`. ADR 0005 and ADR 0006 hold the rules.
+
+Sieve does not link these cases as exact: non-relative package specifiers,
+`paths` aliases, CommonJS, `export =`, and JavaScript barrel files for re-export
+records. Do not treat these links as exact.
 
 ## Unsupported files
 

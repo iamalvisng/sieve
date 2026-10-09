@@ -11,11 +11,17 @@ use std::path::Path;
 use serde::Serialize;
 
 use sieve_core::concept::{read_nodes, Manifest};
-use sieve_core::fingerprint::{decode_source, fingerprint_path, hash_source, read_fingerprint};
+use sieve_core::fingerprint::{
+    decode_source, fingerprint_path, hash_source, probe_drift, read_fingerprint,
+};
+use sieve_core::lookup::{wiring_stamp, Lookup};
 use sieve_core::walk::walk_repo;
 use sieve_core::wiring::{Graph, SummaryState};
 
-use crate::build::{build_graph_cached_with, BuildOptions};
+use crate::build::{build_graph_cached_with, extract_one, BuildOptions};
+use crate::extract::Extractor;
+use crate::generic::GenericExtractor;
+use crate::refresh::lookup_path;
 
 /// The extensions the concept pass reads and `checkContext` re-hashes
 /// (`CODE_EXTENSIONS`). This is a separate list from
@@ -197,6 +203,118 @@ pub fn check_graph(root: &Path, context_dir: &Path) -> io::Result<GraphCheck> {
             .filter(|n| n.kind == sieve_core::wiring::Kind::File)
             .count(),
     })
+}
+
+/// The most drifted files [`check_graph_lookup`] diffs. Over it, the
+/// function returns [`LookupCheck::OverCap`] and extracts nothing.
+pub const LOOKUP_DRIFT_CAP: usize = 256;
+
+/// What [`check_graph_lookup`] found.
+#[derive(Debug, Clone)]
+pub enum LookupCheck {
+    /// The counts, from the lookup and the drifted files.
+    Count(GraphCheck),
+    /// No valid lookup or fingerprint. The caller runs the old path.
+    NoLookup,
+    /// More than [`LOOKUP_DRIFT_CAP`] files drifted. Holds the drift file
+    /// count, a lower bound of the stale id count.
+    OverCap(usize),
+}
+
+/// The `(id, body_hash)` pairs of the nodes that one file extracts to. A
+/// missing, unreadable or undecodable file gives the empty set.
+fn extracted_ids(
+    root: &Path,
+    rel: &str,
+    extractors: &mut (Extractor, GenericExtractor),
+) -> HashMap<String, String> {
+    match extract_one(root, Path::new(rel), &mut extractors.0, &mut extractors.1) {
+        Ok(Some((file_node, symbols, _, _))) => std::iter::once(file_node)
+            .chain(symbols)
+            .map(|n| (n.id, n.body_hash))
+            .collect(),
+        _ => HashMap::new(),
+    }
+}
+
+/// Counts the drift of the committed graph from the lookup index and the
+/// files that drifted, with no whole-repo build (S3).
+///
+/// A removed path gives the empty set with no read (E1). An added or
+/// changed path is diffed by id and body hash against a fresh extraction.
+pub fn check_graph_lookup(root: &Path, context_dir: &Path) -> io::Result<LookupCheck> {
+    let wiring_path = context_dir.join(".graph").join("wiring.json");
+    let Some(stamp) = wiring_stamp(&wiring_path) else {
+        return Ok(LookupCheck::NoLookup);
+    };
+    let Some(mut lookup) = Lookup::open(&lookup_path(context_dir), stamp) else {
+        return Ok(LookupCheck::NoLookup);
+    };
+    let ext_stamp = crate::extractor_stamp();
+    let fp_path = fingerprint_path(context_dir, &ext_stamp);
+    let Some(fp) = read_fingerprint(&fp_path, &ext_stamp) else {
+        return Ok(LookupCheck::NoLookup);
+    };
+    let drift = probe_drift(root, &fp, false, crate::build::is_claimed)?;
+    let drift_files = drift.added.len() + drift.changed.len() + drift.removed.len();
+    if drift_files > LOOKUP_DRIFT_CAP {
+        return Ok(LookupCheck::OverCap(drift_files));
+    }
+    let Some(mut stale) = lookup.stale_ids() else {
+        return Ok(LookupCheck::NoLookup);
+    };
+
+    let mut added = Vec::new();
+    let mut removed = Vec::new();
+    let mut changed = Vec::new();
+    for rel in &drift.removed {
+        if let Some(record) = lookup.record(rel) {
+            removed.extend(record.nodes.into_iter().map(|n| n.id));
+        }
+    }
+    let mut extractors: Option<(Extractor, GenericExtractor)> = None;
+    for rel in drift.added.iter().chain(&drift.changed) {
+        if extractors.is_none() {
+            extractors = Some((
+                Extractor::new().map_err(io::Error::other)?,
+                GenericExtractor::new().map_err(io::Error::other)?,
+            ));
+        }
+        let Some(pair) = extractors.as_mut() else {
+            continue;
+        };
+        let current = extracted_ids(root, rel, pair);
+        let old: HashMap<String, String> = lookup
+            .record(rel)
+            .map(|r| r.nodes.into_iter().map(|n| (n.id, n.body_hash)).collect())
+            .unwrap_or_default();
+        for (id, hash) in &old {
+            match current.get(id) {
+                None => removed.push(id.clone()),
+                Some(now) if now != hash => changed.push(id.clone()),
+                Some(_) => {}
+            }
+        }
+        added.extend(current.into_keys().filter(|id| !old.contains_key(id)));
+    }
+
+    for arr in [&mut added, &mut removed, &mut changed, &mut stale] {
+        arr.sort();
+    }
+    let header = lookup.header();
+    let ok = added.is_empty() && removed.is_empty() && changed.is_empty() && stale.is_empty();
+    Ok(LookupCheck::Count(GraphCheck {
+        ok,
+        missing: false,
+        added,
+        removed,
+        changed,
+        stale,
+        pending: 0,
+        pending_ids: Vec::new(),
+        nodes: header.nodes,
+        files: header.files,
+    }))
 }
 
 /// Checks whether the committed deep-layer manifest still matches the
@@ -806,5 +924,128 @@ mod tests {
             format_check_report(&c),
             "sieve check: NO GRAPH\n\nNo sieve/manifest.json found. Run `sieve build` first."
         );
+    }
+
+    fn put(root: &Path, rel: &str, body: &[u8]) {
+        let path = root.join(rel);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).expect("create parent dir");
+        }
+        fs::write(path, body).expect("write repo file");
+    }
+
+    /// Builds a graph with the refresh path, so the lookup exists.
+    fn build_fixture(root: &Path) -> std::path::PathBuf {
+        let context_dir = root.join("sieve");
+        crate::refresh::rebuild_graph_only(root, &context_dir).expect("build graph");
+        context_dir
+    }
+
+    fn lookup_count(root: &Path, context_dir: &Path) -> GraphCheck {
+        match check_graph_lookup(root, context_dir).expect("lookup check") {
+            LookupCheck::Count(count) => count,
+            other => panic!("expected a count, got {other:?}"),
+        }
+    }
+
+    fn assert_same_counts(a: &GraphCheck, b: &GraphCheck) {
+        assert_eq!(a.ok, b.ok);
+        assert_eq!(a.added, b.added);
+        assert_eq!(a.removed, b.removed);
+        assert_eq!(a.changed, b.changed);
+        assert_eq!(a.stale, b.stale);
+        assert_eq!(a.nodes, b.nodes);
+        assert_eq!(a.files, b.files);
+    }
+
+    #[test]
+    fn test_s3_lookup_check_equals_check_graph() {
+        let dir = TempDir::new("s3-equal");
+        put(&dir.path, "a.ts", b"export function a() {}\n");
+        put(&dir.path, "b.ts", b"export function b() {}\n");
+        put(&dir.path, "c.ts", b"export function c() {}\n");
+        let context_dir = build_fixture(&dir.path);
+        assert!(lookup_count(&dir.path, &context_dir).ok);
+
+        // An edit, an add, a delete, and an undecodable file.
+        put(
+            &dir.path,
+            "a.ts",
+            b"export function a() {}\nexport function a2() {}\n",
+        );
+        put(&dir.path, "d.ts", b"export function d() {}\n");
+        fs::remove_file(dir.path.join("c.ts")).expect("delete c.ts");
+        put(&dir.path, "b.ts", &[0xfe, 0xff, 0x00, b'x']);
+        put(&dir.path, "e.ts", &[0xfe, 0xff, 0x00, b'y']);
+
+        let full = check_graph(&dir.path, &context_dir).expect("check_graph");
+        let fast = lookup_count(&dir.path, &context_dir);
+        assert!(!full.ok);
+        assert_same_counts(&full, &fast);
+    }
+
+    #[test]
+    fn test_s3_removed_path_counts_its_ids() {
+        let dir = TempDir::new("s3-removed");
+        let git = std::process::Command::new("git")
+            .args(["init", "-q"])
+            .current_dir(&dir.path)
+            .status()
+            .expect("run git init");
+        assert!(git.success());
+        put(&dir.path, "h.ts", b"export function h() {}\n");
+        put(&dir.path, "k.ts", b"export function k() {}\n");
+        let context_dir = build_fixture(&dir.path);
+
+        // The file stays on disk but leaves the walk.
+        put(&dir.path, ".gitignore", b"h.ts\n");
+
+        let full = check_graph(&dir.path, &context_dir).expect("check_graph");
+        let fast = lookup_count(&dir.path, &context_dir);
+        assert!(fast.removed.contains(&"h.ts".to_string()));
+        assert!(fast.removed.contains(&"h.ts#h".to_string()));
+        assert_same_counts(&full, &fast);
+    }
+
+    #[test]
+    fn test_s3_over_cap_returns_drift_count() {
+        let dir = TempDir::new("s3-cap");
+        let touched = LOOKUP_DRIFT_CAP + 1;
+        for i in 0..touched {
+            put(&dir.path, &format!("f{i}.ts"), b"export const v = 1;\n");
+        }
+        let context_dir = build_fixture(&dir.path);
+        for i in 0..touched {
+            put(&dir.path, &format!("f{i}.ts"), b"export const v = 22;\n");
+        }
+
+        match check_graph_lookup(&dir.path, &context_dir).expect("lookup check") {
+            LookupCheck::OverCap(n) => assert_eq!(n, touched),
+            other => panic!("expected OverCap, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_missing_lookup_gives_no_lookup() {
+        let dir = TempDir::new("s3-nolookup");
+        put(&dir.path, "a.ts", b"export function a() {}\n");
+        let context_dir = build_fixture(&dir.path);
+        fs::remove_file(lookup_path(&context_dir)).expect("delete lookup");
+
+        let result = check_graph_lookup(&dir.path, &context_dir).expect("lookup check");
+        assert!(matches!(result, LookupCheck::NoLookup));
+    }
+
+    #[test]
+    fn test_s3_truncated_lookup_is_no_lookup() {
+        let dir = TempDir::new("s3-trunc");
+        put(&dir.path, "a.ts", b"export function a() {}\n");
+        let context_dir = build_fixture(&dir.path);
+        let path = lookup_path(&context_dir);
+        let bytes = fs::read(&path).expect("read lookup");
+        fs::write(&path, &bytes[..bytes.len() / 2]).expect("truncate lookup");
+
+        let result = check_graph_lookup(&dir.path, &context_dir).expect("lookup check");
+        assert!(matches!(result, LookupCheck::NoLookup));
     }
 }

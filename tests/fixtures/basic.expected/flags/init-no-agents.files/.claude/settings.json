@@ -123,16 +123,6 @@
             "timeout": 5000
           }
         ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "sieve hook pre-search",
-            "timeout": 3000
-          }
-        ]
       }
     ]
   },

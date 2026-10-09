@@ -179,7 +179,7 @@ Sieve 0.1.0 on an Apple M1 Pro with 16 GB of memory, macOS 26.5.2.
 
 ## Languages
 
-Sieve parses TypeScript, JavaScript, Python, Go, Java, Kotlin, Swift, PHP and R natively. It parses 14 more with a generic parser. It reads script blocks in Vue, Svelte and Astro files. Exact cross-file links cover named relative TypeScript and JavaScript imports only. See [docs/guide/languages.md](docs/guide/languages.md).
+Sieve parses TypeScript, JavaScript, Python, Go, Java, Kotlin, Swift, PHP and R natively. It parses 14 more with a generic parser. It reads script blocks in Vue, Svelte and Astro files. Exact cross-file links cover relative TypeScript and JavaScript imports: named, aliased, namespace and default imports, and barrel re-exports. They do not cover package specifiers, `paths` aliases, CommonJS or `export =`. See [docs/guide/languages.md](docs/guide/languages.md).
 
 ## Local only
 
@@ -187,7 +187,7 @@ Sieve runs on your machine. Sieve sends no telemetry and makes no network call f
 
 ## When not to use Sieve
 
-- Sieve links calls across files as exact only for named relative TypeScript and JavaScript imports. Other cross-file calls are Inferred. Treat them as hints. See [ADR 0002](docs/adr/adr-0002-exact-cross-file-links.md).
+- Sieve links calls across files as exact only in TypeScript and JavaScript, through relative imports and barrel re-exports. Package specifiers, `paths` aliases, CommonJS and other languages stay Inferred. Treat Inferred links as hints. See [ADR 0006](docs/adr/adr-0006-barrel-reexports.md).
 - Sieve has not measured token savings in a real agent session.
 - There is no Windows build in v0.1.0.
 

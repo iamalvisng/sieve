@@ -3,17 +3,9 @@
 
 use std::collections::HashMap;
 
-use sieve_core::{Graph, Relation};
+use sieve_core::Graph;
 
-/// The relations `grep` walks for the in-degree count. `contains` is not
-/// one of them.
-pub const WALK_RELATIONS: [Relation; 5] = [
-    Relation::Calls,
-    Relation::References,
-    Relation::Imports,
-    Relation::Implements,
-    Relation::Extends,
-];
+pub use sieve_core::WALK_RELATIONS;
 
 /// Counts, for every edge target, how many edges of a walk relation point
 /// at it. A self-loop counts. `contains` edges are not counted.
@@ -30,7 +22,7 @@ pub fn compute_in_degree(graph: &Graph) -> HashMap<String, usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sieve_core::{Confidence, Edge, Meta};
+    use sieve_core::{Confidence, Edge, Meta, Relation};
 
     fn graph_with_edges(edges: Vec<Edge>) -> Graph {
         Graph {

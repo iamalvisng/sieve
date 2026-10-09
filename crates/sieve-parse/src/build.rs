@@ -4,6 +4,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs;
+use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
@@ -14,7 +15,7 @@ use sieve_core::lang::lang_for_path;
 use sieve_core::node_error::node_io_error;
 use sieve_core::walk::walk_repo;
 use sieve_core::{
-    span, Confidence, Edge, Graph, Kind, Meta, Node, Origin, Relation, Scope, SummaryState,
+    span, Confidence, Crux, Edge, Graph, Kind, Meta, Node, Origin, Relation, Scope, SummaryState,
 };
 
 use crate::cache::{cache_path, read_cache, write_cache, CacheEntry, ExtractCache, CACHE_VERSION};
@@ -45,18 +46,39 @@ fn wiring_path(context_dir: &Path) -> PathBuf {
     context_dir.join(".graph").join("wiring.json")
 }
 
-/// Reads the prior build's nodes, keyed by `id`, for the meaning-tier
-/// carry (P1-34, P3-14). Returns an empty map on a missing file or a
-/// parse error: a first build, or a corrupt prior file, never blocks a
-/// fresh build — it only means every node starts `pending`.
-fn read_prior_nodes(context_dir: &Path) -> HashMap<String, Node> {
-    let Ok(body) = fs::read(wiring_path(context_dir)) else {
+/// The slice of a prior wiring node that the meaning carry reads (P1-34).
+#[derive(Debug, Clone, serde::Deserialize)]
+struct PriorNode {
+    id: String,
+    body_hash: String,
+    summary_state: SummaryState,
+    summary: Option<String>,
+    crux: Option<Crux>,
+}
+
+/// The `nodes` array of a prior wiring file. Every other key is skipped.
+#[derive(serde::Deserialize)]
+struct PriorWiring {
+    nodes: Vec<PriorNode>,
+}
+
+/// Reads the prior build's nodes that have a summary, keyed by `id`, for
+/// the meaning-tier carry (P1-34, P3-14). Returns an empty map on a missing
+/// file or a parse error: a first build, or a corrupt prior file, never
+/// blocks a fresh build; it only means every node starts `pending`.
+fn read_prior_nodes(context_dir: &Path) -> HashMap<String, PriorNode> {
+    let Ok(file) = fs::File::open(wiring_path(context_dir)) else {
         return HashMap::new();
     };
-    let Ok(prior) = serde_json::from_slice::<Graph>(&body) else {
+    let Ok(prior) = serde_json::from_reader::<_, PriorWiring>(BufReader::new(file)) else {
         return HashMap::new();
     };
-    prior.nodes.into_iter().map(|n| (n.id.clone(), n)).collect()
+    prior
+        .nodes
+        .into_iter()
+        .filter(|n| n.summary.is_some())
+        .map(|n| (n.id.clone(), n))
+        .collect()
 }
 
 /// Carries the Tier-2 meaning layer (`summary`, `crux`, `summary_state`)
@@ -78,7 +100,7 @@ fn read_prior_nodes(context_dir: &Path) -> HashMap<String, Node> {
 ///   hint. A prior `stale` state never gets promoted back to `ready`
 ///   just because the hash happens to match again; the cache hit
 ///   only fires when the prior state was `ready`.
-fn carry_meaning_layer(nodes: &mut [Node], prior: &HashMap<String, Node>) {
+fn carry_meaning_layer(nodes: &mut [Node], prior: &HashMap<String, PriorNode>) {
     for node in nodes.iter_mut() {
         let Some(was) = prior.get(&node.id) else {
             continue;
@@ -200,7 +222,7 @@ type ExtractedWithLabel = (Node, Vec<Node>, Vec<RawEdge>, String);
 /// Extracts one file by tier priority: native (depth) first, container second,
 /// breadth third (see `languages-lsp.md` line 131). Returns `Ok(None)` for a
 /// file no tier claims, or that is not valid UTF-8.
-fn extract_one(
+pub(crate) fn extract_one(
     root: &Path,
     rel: &Path,
     extractor: &mut Extractor,
@@ -373,7 +395,7 @@ pub fn build_graph_cached_with(
     files.retain(|rel| under_only_dirs(&to_slash(rel), &opts.only_dirs));
     // The memory guard runs before the cache read (S0, B3).
     crate::guard::check(claimed_count(&files), !opts.no_reuse && cache_file.exists())?;
-    let old_cache = if opts.no_reuse {
+    let mut old_cache = if opts.no_reuse {
         ExtractCache {
             version: CACHE_VERSION,
             extractor: stamp.clone(),
@@ -392,8 +414,6 @@ pub fn build_graph_cached_with(
     };
     let mut extractor = Extractor::new().map_err(std::io::Error::other)?;
     let mut generic_extractor = GenericExtractor::new().map_err(std::io::Error::other)?;
-    let mut nodes = Vec::new();
-    let mut raw_edges = Vec::new();
     let mut languages: BTreeSet<String> = BTreeSet::new();
     let mut new_files: BTreeMap<String, CacheEntry> = BTreeMap::new();
     let mut claimed_ids: Vec<String> = Vec::new();
@@ -447,17 +467,14 @@ pub fn build_graph_cached_with(
         };
         let hash = hex_sha256(text.as_bytes());
 
-        if let Some(entry) = old_cache.files.get(&id).filter(|e| e.hash == hash) {
+        if let Some(mut entry) = old_cache.files.remove(&id).filter(|e| e.hash == hash) {
             reused += 1;
-            let mut entry = entry.clone();
             entry.size = size;
             entry.mtime_ms = mtime_ms;
             match &entry.error {
                 // This file failed last time too.
                 Some(error) => errors.push(error.clone()),
                 None => {
-                    nodes.extend(entry.nodes.clone());
-                    raw_edges.extend(entry.raw_edges.clone());
                     languages.insert(label);
                 }
             }
@@ -471,8 +488,8 @@ pub fn build_graph_cached_with(
             continue;
         };
         parsed += 1;
-        let mut entry_nodes = vec![file_node.clone()];
-        entry_nodes.extend(symbols.clone());
+        let mut entry_nodes = vec![file_node];
+        entry_nodes.extend(symbols);
         new_files.insert(
             id,
             CacheEntry {
@@ -480,17 +497,15 @@ pub fn build_graph_cached_with(
                 mtime_ms,
                 hash,
                 nodes: entry_nodes,
-                raw_edges: edges.clone(),
+                raw_edges: edges,
                 error: None,
             },
         );
-        nodes.push(file_node);
-        nodes.extend(symbols);
-        raw_edges.extend(edges);
         languages.insert(label);
     }
 
-    let new_cache = ExtractCache {
+    drop(old_cache);
+    let mut new_cache = ExtractCache {
         version: CACHE_VERSION,
         extractor: stamp,
         files: new_files,
@@ -499,12 +514,8 @@ pub fn build_graph_cached_with(
         write_cache(&cache_file, &new_cache)?;
     }
 
-    let go_modules = discover_go_modules(root, &files)?;
-    let mut graph = assemble(root, &files, nodes, &raw_edges, languages);
-    graph.edges = resolve_edges_with_go_modules(&graph.nodes, &raw_edges, &go_modules);
-    graph.meta.edge_count = graph.edges.len();
-    carry_meaning_layer(&mut graph.nodes, &read_prior_nodes(context_dir));
-
+    // One copy of each node: the prints first, then the nodes move out of
+    // the cache in claimed order (the walk order), never map order.
     let prints: BTreeMap<String, Print> = new_cache
         .files
         .iter()
@@ -519,6 +530,21 @@ pub fn build_graph_cached_with(
             )
         })
         .collect();
+    let mut nodes = Vec::new();
+    let mut raw_edges = Vec::new();
+    for id in &claimed_ids {
+        if let Some(entry) = new_cache.files.get_mut(id) {
+            nodes.append(&mut entry.nodes);
+            raw_edges.append(&mut entry.raw_edges);
+        }
+    }
+    drop(new_cache);
+
+    let go_modules = discover_go_modules(root, &files)?;
+    let mut graph = assemble(root, &files, nodes, &raw_edges, languages);
+    graph.edges = resolve_edges_with_go_modules(&graph.nodes, &raw_edges, &go_modules);
+    graph.meta.edge_count = graph.edges.len();
+    carry_meaning_layer(&mut graph.nodes, &read_prior_nodes(context_dir));
 
     Ok(BuildReport {
         graph,
@@ -1041,7 +1067,6 @@ fn segment_depth(dir: &str) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sieve_core::Crux;
     use std::sync::atomic::{AtomicU64, Ordering};
 
     /// A minimal file node for the meaning-carry tests, all other fields
@@ -1068,6 +1093,17 @@ mod tests {
         }
     }
 
+    fn prior_map_of(node: Node) -> HashMap<String, PriorNode> {
+        let prior = PriorNode {
+            id: node.id.clone(),
+            body_hash: node.body_hash,
+            summary_state: node.summary_state,
+            summary: node.summary,
+            crux: node.crux,
+        };
+        [(prior.id.clone(), prior)].into_iter().collect()
+    }
+
     fn crux(code: &str) -> Crux {
         Crux {
             code: code.to_string(),
@@ -1081,7 +1117,7 @@ mod tests {
         prior.summary_state = SummaryState::Ready;
         prior.summary = Some("summarized".to_string());
         prior.crux = Some(crux("const a = 1;"));
-        let prior_map: HashMap<String, Node> = [(prior.id.clone(), prior)].into_iter().collect();
+        let prior_map = prior_map_of(prior);
 
         let mut nodes = vec![plain_node("a.ts", "hash-1")];
         carry_meaning_layer(&mut nodes, &prior_map);
@@ -1100,7 +1136,7 @@ mod tests {
         prior.summary_state = SummaryState::Ready;
         prior.summary = Some("summarized".to_string());
         prior.crux = Some(crux("const a = 1;"));
-        let prior_map: HashMap<String, Node> = [(prior.id.clone(), prior)].into_iter().collect();
+        let prior_map = prior_map_of(prior);
 
         let mut nodes = vec![plain_node("a.ts", "hash-2")];
         carry_meaning_layer(&mut nodes, &prior_map);
@@ -1119,7 +1155,7 @@ mod tests {
         prior.summary_state = SummaryState::Stale;
         prior.summary = Some("old hint".to_string());
         prior.crux = Some(crux("const a = 1;"));
-        let prior_map: HashMap<String, Node> = [(prior.id.clone(), prior)].into_iter().collect();
+        let prior_map = prior_map_of(prior);
 
         // The hash matches the prior node, but the prior state was already
         // "stale", not "ready" — the cache hit only fires on "ready".
@@ -1132,7 +1168,7 @@ mod tests {
 
     #[test]
     fn carry_meaning_layer_p1_34_a_new_id_stays_pending() {
-        let prior_map: HashMap<String, Node> = HashMap::new();
+        let prior_map: HashMap<String, PriorNode> = HashMap::new();
 
         let mut nodes = vec![plain_node("new.ts", "hash-1")];
         carry_meaning_layer(&mut nodes, &prior_map);
@@ -1145,7 +1181,7 @@ mod tests {
     #[test]
     fn carry_meaning_layer_p1_34_a_prior_node_with_no_summary_stays_pending() {
         let prior = plain_node("a.ts", "hash-1"); // summary stays None
-        let prior_map: HashMap<String, Node> = [(prior.id.clone(), prior)].into_iter().collect();
+        let prior_map = prior_map_of(prior);
 
         let mut nodes = vec![plain_node("a.ts", "hash-2")];
         carry_meaning_layer(&mut nodes, &prior_map);

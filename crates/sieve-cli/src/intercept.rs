@@ -283,10 +283,46 @@ pub(crate) fn answer_bash(root: &Path, context_dir: &Path, intent: &Intent) -> O
 }
 
 fn answer_via(root: &Path, context_dir: &Path, intent: &Intent, bash: bool) -> Option<String> {
-    let graph = crate::hook::read_wiring(context_dir)?;
-    match intent {
-        Intent::ReadFile { path, .. } => answer_read(root, &graph, path, bash),
-        Intent::PassThrough => None,
+    let Intent::ReadFile { path, .. } = intent else {
+        // The full load still runs first, as before: it records a capped wiring.
+        crate::hook::read_wiring(context_dir)?;
+        return None;
+    };
+    // The order is deliberate: an out-of-root path returns before any wiring read.
+    let rel = rel_to_root(root, path)?;
+    let result = match crate::hook::open_lookup(context_dir) {
+        Some(mut lookup) => skeleton_from_lookup(lookup.record(&rel), &rel),
+        None => {
+            let graph = crate::hook::read_wiring(context_dir)?;
+            sieve_query::skeleton::skeleton(Some(&graph), &rel)
+        }
+    };
+    answer_read(&result, path, &rel, bash)
+}
+
+/// The skeleton of `rel` from its lookup record. A missing record gives no
+/// entries, as the full path gives for an unknown file.
+fn skeleton_from_lookup(
+    record: Option<sieve_core::lookup::Record>,
+    rel: &str,
+) -> sieve_query::skeleton::SkeletonResult {
+    let entries = record
+        .into_iter()
+        .flat_map(|r| r.nodes)
+        .filter(|n| n.kind != sieve_core::wiring::Kind::File)
+        .map(|n| sieve_query::skeleton::SkeletonEntry {
+            name: n.name,
+            kind: n.kind,
+            span: n.span,
+            signature: n.signature,
+            summary: n.summary,
+            callers: n.callers,
+        })
+        .collect();
+    sieve_query::skeleton::SkeletonResult {
+        file: rel.to_string(),
+        entries,
+        note: None,
     }
 }
 
@@ -302,13 +338,11 @@ fn rel_to_root(root: &Path, path: &str) -> Option<String> {
 }
 
 fn answer_read(
-    root: &Path,
-    graph: &sieve_core::wiring::Graph,
+    result: &sieve_query::skeleton::SkeletonResult,
     path: &str,
+    rel: &str,
     bash: bool,
 ) -> Option<String> {
-    let rel = rel_to_root(root, path)?;
-    let result = sieve_query::skeleton::skeleton(Some(graph), &rel);
     // `skeleton` also matches a path suffix. Only the exact path counts.
     if result.entries.is_empty() || result.file != rel {
         return None;
@@ -329,7 +363,7 @@ fn answer_read(
     };
     Some(format!(
         "{}{note}\n",
-        sieve_query::skeleton::format_skeleton(&result)
+        sieve_query::skeleton::format_skeleton(result)
     ))
 }
 
@@ -991,5 +1025,36 @@ mod tests {
     fn test_f1_decide_needs_no_product_env() {
         // `decide` reads no product name, so `SIEVE_PRODUCT` does not matter.
         assert_eq!(decide_read(Some(20_000), text_of(500)), text_of(500));
+    }
+
+    #[test]
+    fn test_s3_f1_lookup_equals_full() {
+        let d = graph_fixture();
+        let ctx = d.0.join("sieve");
+        let graph = crate::hook::read_wiring(&ctx).expect("graph");
+        sieve_parse::write_wiring_and_lookup(&graph, &ctx).expect("write graph");
+        let rels = ["src/lib.rs", "Cargo.lock", "src/none.rs"];
+        let answers = |bash: bool| -> Vec<Option<String>> {
+            rels.iter()
+                .map(|rel| {
+                    let intent = read_intent_for(&d, rel);
+                    if bash {
+                        answer_bash(&d.0, &ctx, &intent)
+                    } else {
+                        answer(&d.0, &ctx, &intent)
+                    }
+                })
+                .collect()
+        };
+        let (with, with_bash) = (answers(false), answers(true));
+        assert!(with[0].is_some(), "the skeleton answers");
+        assert!(with[1].is_none() && with[2].is_none());
+        crate::hook::s3_support::garble_wiring(&ctx);
+        assert_eq!(answers(false), with, "the lookup answers alone");
+        crate::hook::s3_support::drop_lookup(&ctx);
+        // The garbled wiring cannot serve the full path, so rebuild it.
+        sieve_core::write_graph(&graph, &ctx.join(".graph/wiring.json")).expect("write");
+        assert_eq!(answers(false), with);
+        assert_eq!(answers(true), with_bash);
     }
 }

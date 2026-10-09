@@ -159,9 +159,38 @@ pub fn span(start: u32, end: u32) -> String {
     format!("L{start}-L{end}")
 }
 
+/// The relations `grep` walks for the in-degree count. `contains` is not
+/// one of them.
+pub const WALK_RELATIONS: [Relation; 5] = [
+    Relation::Calls,
+    Relation::References,
+    Relation::Imports,
+    Relation::Implements,
+    Relation::Extends,
+];
+
+/// Parses a node's `L<start>-...` span into the leading line number.
+///
+/// This is the one shared rule: a span that does not match gives `0`, as
+/// the skeleton does.
+pub fn start_line(span: &str) -> u32 {
+    span.strip_prefix('L')
+        .and_then(|rest| rest.split(|c: char| !c.is_ascii_digit()).next())
+        .and_then(|digits| digits.parse().ok())
+        .unwrap_or(0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn start_line_of_a_bad_span_is_zero() {
+        assert_eq!(start_line("L12-L30"), 12);
+        assert_eq!(start_line("bad"), 0);
+        assert_eq!(start_line("L-L2"), 0);
+        assert_eq!(start_line(""), 0);
+    }
 
     #[test]
     fn span_formats_as_l_start_dash_l_end() {

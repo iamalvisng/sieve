@@ -1,4 +1,4 @@
-# ADR 0004: Each query result opens with one savings line
+# ADR 0004: Each query result ends with one savings line
 
 - **Status:** Accepted
 - **Date:** 2026-10-05
@@ -9,7 +9,7 @@ A user needs to see what a query saved. A long report or an instruction text cos
 
 ## Decision
 
-Each query result opens with one line: `[sieve] saved ≈ N tokens`. Sieve computes N as the size of the whole files the answer names, minus the size of the answer. Both sizes convert to tokens first. If the answer is not smaller, or no file size is known, Sieve prints no line.
+The savings line is the last line of the output. It reads: `[sieve] saved ≈ N tokens`. Sieve computes N as the size of the whole files the answer names, minus the size of the answer. Both sizes convert to tokens first. If the answer is not smaller, or no file size is known, Sieve prints no line.
 
 ## Consequences
 

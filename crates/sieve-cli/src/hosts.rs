@@ -876,6 +876,7 @@ fn bad_permissions_shape(permissions: Option<&OJson>) -> bool {
 const HOOK_SUBS: [&str; 12] = [
     "post-edit",
     "post-search",
+    // Legacy: the 0.1.2 block. `init` and `uninstall` still drop it.
     "pre-search",
     "tool-savings",
     "post-read",
@@ -1028,7 +1029,6 @@ fn merged_hooks_ojson(existing_hooks: Option<&OJson>) -> OJson {
             vec![
                 claude_hook_block(Some("Read"), "pre-read", 5000),
                 claude_hook_block(Some("Bash"), "pre-read", 5000),
-                claude_hook_block(Some("Bash"), "pre-search", 3000),
             ],
         ),
     );
@@ -2571,6 +2571,22 @@ mod tests {
             matchers.iter().any(|m| m == "Bash"),
             "the merge must register pre-read on the Bash matcher, got: {matchers:?}"
         );
+    }
+
+    #[test]
+    fn test_route_merge_drops_the_legacy_pre_search_block() {
+        let old = r#"{"PreToolUse": [
+            {"matcher": "Bash", "hooks": [{"type": "command",
+              "command": "sieve hook pre-search", "timeout": 3000}]},
+            {"matcher": "Bash", "hooks": [{"type": "command",
+              "command": "my-own-tool", "timeout": 1}]}
+        ]}"#;
+        let existing = OJson::parse(old).expect("parse");
+        let hooks = merged_hooks_ojson(Some(&existing));
+        let text = hooks.to_pretty();
+        assert!(!text.contains("pre-search"), "{text}");
+        assert!(text.contains("my-own-tool"), "{text}");
+        assert_eq!(pre_tool_use_matchers(&hooks).len(), 3);
     }
 
     #[test]

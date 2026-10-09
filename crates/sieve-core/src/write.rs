@@ -1,6 +1,7 @@
 //! The byte-stable sorted write of a `Graph` to `wiring.json` (P2-26 to
 //! P2-28).
 
+use std::cmp::Ordering;
 use std::ffi::OsString;
 use std::fs;
 use std::io;
@@ -8,7 +9,20 @@ use std::path::{Path, PathBuf};
 use std::process;
 
 use crate::collate::collate;
-use crate::wiring::Graph;
+use crate::wiring::{Edge, Graph, Node};
+
+/// Orders two nodes by `id`, using ICU root collation.
+pub fn node_cmp(a: &Node, b: &Node) -> Ordering {
+    collate(&a.id, &b.id)
+}
+
+/// Orders two edges by `(source, relation, target)`, using ICU root
+/// collation for each field. This is the wiring edge order.
+pub fn edge_cmp(a: &Edge, b: &Edge) -> Ordering {
+    collate(&a.source, &b.source)
+        .then_with(|| collate(a.relation.as_str(), b.relation.as_str()))
+        .then_with(|| collate(&a.target, &b.target))
+}
 
 /// Writes `graph` to `path` as sorted, pretty JSON, atomically.
 ///
@@ -18,13 +32,15 @@ use crate::wiring::Graph;
 /// through a `.<pid>.tmp` file and a rename, so a reader never sees a
 /// partial file.
 pub fn write_graph(graph: &Graph, path: &Path) -> io::Result<()> {
+    write_graph_stamped(graph, path).map(|_| ())
+}
+
+/// Writes `graph` as `write_graph` does and returns the `(size, mtime_ms)`
+/// of the temp file, read before the rename.
+pub fn write_graph_stamped(graph: &Graph, path: &Path) -> io::Result<(u64, u64)> {
     let mut out = graph.clone();
-    out.nodes.sort_by(|a, b| collate(&a.id, &b.id));
-    out.edges.sort_by(|a, b| {
-        collate(&a.source, &b.source)
-            .then_with(|| collate(a.relation.as_str(), b.relation.as_str()))
-            .then_with(|| collate(&a.target, &b.target))
-    });
+    out.nodes.sort_by(node_cmp);
+    out.edges.sort_by(edge_cmp);
     for node in &mut out.nodes {
         node.body_text = None;
     }
@@ -35,7 +51,7 @@ pub fn write_graph(graph: &Graph, path: &Path) -> io::Result<()> {
     let mut json = serde_json::to_string_pretty(&out).map_err(io::Error::other)?;
     json.push('\n');
 
-    write_atomic(path, json.as_bytes())
+    write_atomic_stamped(path, json.as_bytes())
 }
 
 /// Writes `bytes` to `path` atomically, through a `.<pid>.tmp` sibling file
@@ -43,6 +59,12 @@ pub fn write_graph(graph: &Graph, path: &Path) -> io::Result<()> {
 ///
 /// Creates the parent directory when it does not exist yet.
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    write_atomic_stamped(path, bytes).map(|_| ())
+}
+
+/// Writes like `write_atomic` and returns the `(size, mtime_ms)` of the
+/// temp file before the rename.
+fn write_atomic_stamped(path: &Path, bytes: &[u8]) -> io::Result<(u64, u64)> {
     if let Some(parent) = path.parent() {
         if !parent.as_os_str().is_empty() {
             fs::create_dir_all(parent)?;
@@ -50,7 +72,12 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
     }
 
     let tmp_path = tmp_path_for(path);
-    let result = fs::write(&tmp_path, bytes).and_then(|()| fs::rename(&tmp_path, path));
+    let result = fs::write(&tmp_path, bytes)
+        .and_then(|()| fs::metadata(&tmp_path))
+        .and_then(|meta| {
+            let stamp = crate::lookup::stamp_of(&meta);
+            fs::rename(&tmp_path, path).map(|()| stamp)
+        });
     if result.is_err() {
         let _ = fs::remove_file(&tmp_path);
     }
@@ -58,7 +85,7 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
 }
 
 /// Builds the `<path>.<pid>.tmp` sibling path used for the atomic write.
-fn tmp_path_for(path: &Path) -> PathBuf {
+pub(crate) fn tmp_path_for(path: &Path) -> PathBuf {
     let pid = process::id();
     let mut file_name: OsString = path.file_name().unwrap_or_default().to_os_string();
     file_name.push(format!(".{pid}.tmp"));
@@ -162,6 +189,17 @@ mod tests {
                 ("b.rs#foo", "calls", "a.rs#foo"),
             ]
         );
+    }
+
+    #[test]
+    fn write_graph_stamped_returns_the_size_of_the_written_file() {
+        let dir = unique_temp_dir("stamped");
+        let path = dir.join("wiring.json");
+
+        let (size, mtime) = write_graph_stamped(&sample_graph(), &path).expect("write succeeds");
+
+        assert_eq!(size, fs::metadata(&path).expect("stat").len());
+        assert_eq!(Some((size, mtime)), crate::lookup::wiring_stamp(&path));
     }
 
     #[test]

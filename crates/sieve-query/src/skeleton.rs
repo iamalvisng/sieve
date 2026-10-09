@@ -4,7 +4,7 @@
 use std::cmp::Ordering;
 
 use serde::Serialize;
-use sieve_core::{Graph, Kind, Node};
+use sieve_core::{start_line, Graph, Kind, Node};
 
 use crate::relations::WALK_RELATIONS;
 
@@ -42,15 +42,6 @@ pub struct SkeletonResult {
 /// (section 6, "Spec corrections").
 fn code_unit_cmp(a: &str, b: &str) -> Ordering {
     a.encode_utf16().cmp(b.encode_utf16())
-}
-
-/// Parses a node's `L<start>-...` span into the leading line number. A
-/// failed match gives `0` (section 1.3).
-fn start_line(span: &str) -> u32 {
-    span.strip_prefix('L')
-        .and_then(|rest| rest.split(|c: char| !c.is_ascii_digit()).next())
-        .and_then(|digits| digits.parse().ok())
-        .unwrap_or(0)
 }
 
 /// The first line of `summary`, trimmed, or `None` when it is empty

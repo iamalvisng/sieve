@@ -1,6 +1,6 @@
 {
   "name": "sieve-pane",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "A pane that shows the why and the callers of the code the agent reads and edits.",
   "types": "./types/index.d.ts"
 }

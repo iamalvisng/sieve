@@ -231,6 +231,8 @@ struct SieveView<'a> {
     /// The two mascot rows, or `None` for no mascot.
     mascot: Option<[String; 2]>,
     depth: Depth,
+    /// The note shown when the index is over the size cap.
+    cap_note: &'static str,
 }
 
 /// Formats a token count as `950`, `1.5k`, `61.7k`, `214k` or `1.2M`.
@@ -412,6 +414,20 @@ fn render_sieve_now(stats: Option<&Stats>, project_dir: &Path, ctx_pct: Option<i
     render_sieve_at(stats, project_dir, ctx_pct, now, depth)
 }
 
+/// The note for an index over the size cap, with no valid lookup.
+const CAP_NOTE_PASS: &str = " \u{b7} index over the size cap; hooks pass through";
+
+/// The note for an index over the size cap. A valid lookup keeps the hooks
+/// working, so only the prompt context and the MCP tools are off (E7).
+fn cap_note_text(project_dir: &Path) -> &'static str {
+    let context_dir = hook::resolve_context_dir(project_dir);
+    if hook::open_lookup(&context_dir).is_some() {
+        " \u{b7} index over the size cap; ask and MCP off"
+    } else {
+        CAP_NOTE_PASS
+    }
+}
+
 /// Renders the sieve status line for a given time and color depth.
 fn render_sieve_at(
     stats: Option<&Stats>,
@@ -429,6 +445,11 @@ fn render_sieve_at(
         week,
         mascot: mascot_for(&name, frame_for(now), depth),
         depth,
+        cap_note: if stats.is_some_and(|s| s.capped) {
+            cap_note_text(project_dir)
+        } else {
+            CAP_NOTE_PASS
+        },
     })
 }
 
@@ -478,10 +499,7 @@ fn render_sieve(v: &SieveView) -> String {
                 )
             };
             let cap_note = if stats.capped {
-                paint(
-                    ORANGE,
-                    " \u{b7} index over the size cap; hooks pass through",
-                )
+                paint(ORANGE, v.cap_note)
             } else {
                 String::new()
             };
@@ -528,6 +546,7 @@ mod tests {
             week: 214_000,
             mascot,
             depth: Depth::True,
+            cap_note: CAP_NOTE_PASS,
         }
     }
 
@@ -931,6 +950,32 @@ mod tests {
         assert_eq!(stats.node_count, 752);
         let text = strip_ansi(&view(&stats, None, false));
         assert!(text.contains("~752 symbols"), "{text}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_s3_statusline_capped_text() {
+        let dir = scratch_dir("s3-cap-text");
+        std::fs::write(dir.join("a.ts"), "export function a() {}\n").expect("write source");
+        let ctx = hook::resolve_context_dir(&dir);
+        sieve_parse::rebuild_graph_only(&dir, &ctx).expect("build graph");
+        let stats = Stats {
+            node_count: 3,
+            capped: true,
+            ..Stats::default()
+        };
+        let text = |_: ()| strip_ansi(&render_sieve_at(Some(&stats), &dir, None, 0, Depth::Plain));
+        let with = text(());
+        assert!(
+            with.contains("index over the size cap; ask and MCP off"),
+            "{with}"
+        );
+        hook::s3_support::drop_lookup(&ctx);
+        let without = text(());
+        assert!(
+            without.contains("index over the size cap; hooks pass through"),
+            "{without}"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

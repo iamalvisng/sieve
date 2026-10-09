@@ -10,6 +10,7 @@ pub mod fingerprint;
 pub mod ignore;
 pub mod lang;
 pub mod lock;
+pub mod lookup;
 pub mod node_error;
 pub mod product;
 pub mod session;
@@ -23,6 +24,7 @@ pub mod write;
 
 pub use product::{product, Product, SIEVE};
 pub use wiring::{
-    span, Confidence, Crux, Edge, Graph, Kind, Meta, Node, Origin, Relation, Scope, SummaryState,
+    span, start_line, Confidence, Crux, Edge, Graph, Kind, Meta, Node, Origin, Relation, Scope,
+    SummaryState, WALK_RELATIONS,
 };
-pub use write::write_graph;
+pub use write::{edge_cmp, node_cmp, write_graph, write_graph_stamped};

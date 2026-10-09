@@ -7,6 +7,26 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-10-09
+
+0.1.3 routes searches on the output shape and records every search segment.
+
+### Added
+
+- Sieve writes a per-file lookup `sieve/.cache/lookup.v1` next to the wiring on every build. The hooks (search routing, the Read narrowing, the post-edit blast, the scope hint, the stale count) and the MCP `check_freshness` tool read one file's record from the lookup. They no longer load the whole graph. A repo over the wiring cap keeps those hooks. `ask` and the MCP graph tools still need the full graph. Sieve rebuilds a stale or missing lookup from the wiring on the first query. This rebuild does no source parse.
+
+### Changed
+
+- Search routing now routes on the output shape. If every stdout row of a Bash `grep` or `rg` command is `path:line:text` from indexed files, the hook regroups the rows by file and enclosing symbol. This holds for compound and piped commands too.
+- Every search segment of a Bash command gets a `routed` or `passed` record. `sieve stats` shows the count of each record.
+- The `pre-search` hook block and the `-n` injection are removed. `sieve init` drops the old block from an existing config.
+- The build keeps one copy of each node. This lowers the peak memory of the warm rebuild and the cold build. `wiring.json` and `ask-index.json` are byte-identical to before.
+- The README and the languages guide now say that exact links cover aliased, namespace and default imports and barrels. ADR 0004 now says the savings line is last.
+
+### Fixed
+
+- `sieve hook pre-read` no longer denies a first Read of a file that a subagent of the same session read. The read record now keys on the session id and the agent id. A file outside the repo passes through with no record. A binary file (a NUL byte in its first 8,000 bytes) passes through. The repo check runs before any file read.
+
 ## [0.1.2] - 2026-10-08
 
 ### Added
@@ -18,6 +38,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 - Two Bash hooks, `pre-search` and `post-search`, route a single simple `grep` or `rg` command. `pre-search` adds `-n`. `post-search` regroups the matches under the same rule as the Grep tool. A Bash output of 30,000 bytes or more passes.
 - `sieve init` adds the two Bash hook blocks and the Grep hook block to an existing config without duplicates.
 - A `capped` flag reports an index over the size cap.
+
 
 ### Changed
 
@@ -83,6 +104,7 @@ First public release.
   Use `--json` for machine output.
 - A local-only design. Sieve sends no telemetry.
 
+[0.1.3]: https://github.com/iamalvisng/sieve/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/iamalvisng/sieve/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/iamalvisng/sieve/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/iamalvisng/sieve/releases/tag/v0.1.0

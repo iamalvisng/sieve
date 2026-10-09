@@ -19,7 +19,6 @@ use sieve_core::lock::{self, LockGuard};
 use sieve_core::product::product;
 use sieve_core::wiring::SummaryState;
 use sieve_core::workspace;
-use sieve_core::write_graph;
 use sieve_parse::refresh::env_truthy;
 use sieve_parse::{build_graph_cached_with, BuildOptions};
 
@@ -481,8 +480,7 @@ fn build_repo(
     }
 
     let graph = &report.graph;
-    let wiring_path = context_dir.join(".graph").join("wiring.json");
-    write_graph(graph, &wiring_path).map_err(|e| e.to_string())?;
+    sieve_parse::write_wiring_and_lookup(graph, context_dir).map_err(|e| e.to_string())?;
     // The statusline reads these counts from `counts.json`, never from
     // `wiring.json`. A failed write only costs a fallback parse.
     let ready = graph

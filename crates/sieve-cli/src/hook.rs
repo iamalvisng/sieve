@@ -17,7 +17,7 @@ use crate::intercept;
 use sieve_core::askindex::{ask_index_path, read_ask_index};
 use sieve_core::product::product;
 use sieve_core::wiring::{Edge, Graph, Kind, Node};
-use sieve_parse::check::check_graph;
+use sieve_parse::check::{check_graph, check_graph_lookup, LookupCheck};
 use sieve_parse::refresh::{ensure_fresh_children, ensure_fresh_graph, RefreshOptions};
 use sieve_query::ask::{ask, scope_of, AskOptions, AskResult};
 use sieve_query::workspace::{federate_ask, load_children, FederateAskOptions};
@@ -93,12 +93,9 @@ pub fn run(args: &HookArgs, _dir_override: Option<&Path>) -> Result<(), String> 
                 print!("{text}");
             }
         }
-        // R2: add `-n` to a simple search, then regroup its output.
-        "pre-search" => {
-            if let Some(text) = crate::route::pre_search(&input) {
-                print!("{text}");
-            }
-        }
+        // Legacy: the 0.1.2 `pre-search` hook added `-n`. Routing is output
+        // only now, so an old config that still calls it gets no output.
+        "pre-search" => {}
         "post-search" => {
             if let Some(text) = crate::route::post_search(&input, &project_dir) {
                 print!("{text}");
@@ -171,8 +168,7 @@ pub(crate) fn wiring_path(context_dir: &Path) -> PathBuf {
     context_dir.join(".graph").join("wiring.json")
 }
 
-/// The default size cap, in bytes, on `wiring.json` for a hook load.
-pub const DEFAULT_WIRING_CAP_BYTES: u64 = 64 * 1024 * 1024;
+pub use sieve_core::lookup::DEFAULT_WIRING_CAP_BYTES;
 
 /// Parses the `SIEVE_WIRING_CAP_BYTES` text. A missing or bad value gives
 /// the default cap.
@@ -220,6 +216,40 @@ pub(crate) fn record_capped(context_dir: &Path) {
         return;
     }
     patch_stats_at(&cache, |s| s.capped = true);
+}
+
+/// Opens the per-file lookup when it matches the current `wiring.json`.
+/// `None` means a reader runs the full-load path.
+pub(crate) fn open_lookup(context_dir: &Path) -> Option<sieve_core::lookup::Lookup> {
+    let stamp = sieve_core::lookup::wiring_stamp(&wiring_path(context_dir))?;
+    sieve_core::lookup::Lookup::open(&sieve_parse::lookup_path(context_dir), stamp)
+}
+
+/// Helpers the S3 reader tests share.
+#[cfg(test)]
+pub(crate) mod s3_support {
+    use super::*;
+
+    /// Deletes the lookup, so every reader runs the full-load path.
+    pub(crate) fn drop_lookup(context_dir: &Path) {
+        std::fs::remove_file(sieve_parse::lookup_path(context_dir)).expect("delete lookup");
+        assert!(open_lookup(context_dir).is_none());
+    }
+
+    /// Overwrites `wiring.json` with spaces of the same length and restores
+    /// the mtime. Only a reader that uses the lookup still answers.
+    pub(crate) fn garble_wiring(context_dir: &Path) {
+        let path = wiring_path(context_dir);
+        let meta = std::fs::metadata(&path).expect("wiring meta");
+        let mtime = meta.modified().expect("wiring mtime");
+        std::fs::write(&path, vec![b' '; meta.len() as usize]).expect("garble wiring");
+        let file = std::fs::OpenOptions::new()
+            .write(true)
+            .open(&path)
+            .expect("open wiring");
+        file.set_modified(mtime).expect("restore mtime");
+        assert!(open_lookup(context_dir).is_some());
+    }
 }
 
 pub(crate) fn read_wiring(context_dir: &Path) -> Option<Graph> {
@@ -376,6 +406,11 @@ pub struct Stats {
     /// Absent when false, so the Phase 1 `stats.json` golden does not change.
     #[serde(default, skip_serializing_if = "is_false")]
     pub capped: bool,
+    /// True when `stale_count` is a lower bound: more files drifted than
+    /// the lookup check reads. Stored for a future pane reader; no reader exists on 2026-10-09.
+    /// Absent when false.
+    #[serde(rename = "staleApprox", default, skip_serializing_if = "is_false")]
+    pub stale_approx: bool,
     /// Display only, never stored: the counts are from an older wiring file.
     #[serde(skip)]
     pub stale_counts: bool,
@@ -537,8 +572,12 @@ pub(crate) fn lookup_key(input: &Value) -> String {
     }
 }
 
-/// Adds one lookup to the record of its (session, agent) key.
-pub(crate) fn record_lookup(project_dir: &Path, input: &Value, outcome: Lookup) {
+/// Adds `n` lookups with one outcome to the record of their (session, agent)
+/// key. One tool call writes once, whatever its search segment count.
+pub(crate) fn record_lookup(project_dir: &Path, input: &Value, outcome: Lookup, n: u64) {
+    if n == 0 {
+        return;
+    }
     update_session(project_dir, &lookup_key(input), |s| {
         let day = s
             .lookups_by_day
@@ -546,20 +585,39 @@ pub(crate) fn record_lookup(project_dir: &Path, input: &Value, outcome: Lookup) 
             .or_default();
         match outcome {
             Lookup::Picked => {
-                s.lookups_picked += 1;
-                day.picked += 1;
+                s.lookups_picked += n;
+                day.picked += n;
             }
             Lookup::Routed => {
-                s.lookups_routed += 1;
-                day.routed += 1;
+                s.lookups_routed += n;
+                day.routed += n;
             }
             Lookup::Passed(reason) => {
-                s.lookups_passed += 1;
-                day.passed += 1;
-                *s.lookup_pass_reasons.entry(reason.to_string()).or_insert(0) += 1;
+                s.lookups_passed += n;
+                day.passed += n;
+                *s.lookup_pass_reasons.entry(reason.to_string()).or_insert(0) += n;
             }
         }
     });
+}
+
+/// The reason of a lookup that stays out of the rate: every hit is in a
+/// file that is not code.
+pub(crate) const NON_CODE: &str = "non-code";
+
+impl SessionState {
+    /// The share of lookups that went through Sieve, in percent:
+    /// (routed + picked) / (routed + picked + passed - non-code). `None`
+    /// when no lookup counts. The second value is the non-code count that
+    /// the rate leaves out.
+    // No stats surface reads it yet; `lookupPassReasons` holds the count.
+    #[allow(dead_code)]
+    pub(crate) fn lookup_rate(&self) -> Option<(f64, u64)> {
+        let excluded = self.lookup_pass_reasons.get(NON_CODE).copied().unwrap_or(0);
+        let through = self.lookups_routed + self.lookups_picked;
+        let total = (through + self.lookups_passed).saturating_sub(excluded);
+        (total > 0).then(|| (through as f64 * 100.0 / total as f64, excluded))
+    }
 }
 
 impl SessionState {
@@ -978,18 +1036,31 @@ fn run_ask_for_prompt(
 /// throwing, and that is the no-graph branch.
 fn last_file_scope_hint(context_dir: &Path, last_file: Option<&str>) -> Option<String> {
     let last_file = last_file?;
-    let graph = read_wiring(context_dir)?;
-    let scopes = &graph.meta.scopes;
-    if scopes.len() <= 1 {
-        return None;
-    }
     let suffix = format!("/{last_file}");
-    let prefixes: HashSet<String> = graph
-        .nodes
-        .iter()
-        .filter(|n| n.kind == Kind::File && (n.path == last_file || n.path.ends_with(&suffix)))
-        .map(|n| scope_of(&n.path, scopes))
-        .collect();
+    let prefixes: HashSet<String> = if let Some(lookup) = open_lookup(context_dir) {
+        let scopes = &lookup.header().scopes;
+        if scopes.len() <= 1 {
+            return None;
+        }
+        // Dedupe by scope, not by path (E6): two paths in one scope give a hint.
+        lookup
+            .paths()
+            .filter(|p| *p == last_file || p.ends_with(&suffix))
+            .map(|p| scope_of(p, scopes))
+            .collect()
+    } else {
+        let graph = read_wiring(context_dir)?;
+        let scopes = &graph.meta.scopes;
+        if scopes.len() <= 1 {
+            return None;
+        }
+        graph
+            .nodes
+            .iter()
+            .filter(|n| n.kind == Kind::File && (n.path == last_file || n.path.ends_with(&suffix)))
+            .map(|n| scope_of(&n.path, scopes))
+            .collect()
+    };
     if prefixes.is_empty() {
         eprintln!("[sieve] prompt hook: lastFile \"{last_file}\" not found in the graph \u{2014} skipping scope hint");
         return None;
@@ -1113,20 +1184,27 @@ fn handle_post_edit(input: &Value, project_dir: &Path) {
         return;
     }
     let context_dir = resolve_context_dir(project_dir);
-    let stale = check_stale_count(project_dir, &context_dir);
+    let (stale, lookup_valid) = check_stale_count_open(project_dir, &context_dir);
     let base = basename(&file);
     patch_stats(project_dir, |s| {
         s.dirty = true;
         // `None` keeps the old count: an unknown count is not zero.
-        if let Some(n) = stale {
+        if let Some((n, approx)) = stale {
             s.stale_count = n;
+            s.stale_approx = approx;
         }
         s.last_file = Some(base.clone());
     });
-    if let Some(graph) = read_wiring(&context_dir) {
-        if let Some(blast) = format_blast_radius(&graph, &file, 8) {
-            emit("PostToolUse", &blast);
-        }
+    // `NoLookup` means the check found no valid lookup: skip a second open.
+    let from_lookup = lookup_valid
+        .then(|| open_lookup(&context_dir).and_then(|l| blast_from_lookup(l, &file, 8)))
+        .flatten();
+    let blast = match from_lookup {
+        Some(blast) => blast,
+        None => read_wiring(&context_dir).and_then(|g| format_blast_radius(&g, &file, 8)),
+    };
+    if let Some(blast) = blast {
+        emit("PostToolUse", &blast);
     }
 }
 
@@ -1174,19 +1252,41 @@ fn under_sieve(dir: &Path, file: &str) -> bool {
         .starts_with(&format!("{}/", product().context_dir_name()))
 }
 
-/// The count of drifted files, or `None` when the count is unknown: the
-/// wiring is over the cap, or `check_graph` failed (a build memory refusal
-/// too).
-fn check_stale_count(root: &Path, context_dir: &Path) -> Option<u64> {
+/// The count of drifted files and whether it is a lower bound, or `None`
+/// when the count is unknown: the wiring is over the cap, or `check_graph`
+/// failed (a build memory refusal too).
+///
+/// A valid lookup answers first, with no build. More drift than the lookup
+/// check reads gives the file count and the lower-bound flag.
+#[cfg(test)]
+fn check_stale_count(root: &Path, context_dir: &Path) -> Option<(u64, bool)> {
+    check_stale_count_open(root, context_dir).0
+}
+
+/// Like [`check_stale_count`]. The flag is true when the lookup check found
+/// a valid lookup, so the caller may open it for a second read.
+fn check_stale_count_open(root: &Path, context_dir: &Path) -> (Option<(u64, bool)>, bool) {
+    match check_graph_lookup(root, context_dir) {
+        Ok(LookupCheck::Count(g)) => {
+            let n = (g.changed.len() + g.added.len() + g.removed.len()) as u64;
+            return (Some((n, false)), true);
+        }
+        Ok(LookupCheck::OverCap(n)) => return (Some((n as u64, true)), true),
+        Ok(LookupCheck::NoLookup) | Err(_) => {}
+    }
     if wiring_over_cap(context_dir) {
         record_capped(context_dir);
-        return None;
+        return (None, false);
     }
-    match check_graph(root, context_dir) {
-        Ok(g) if g.missing => Some(0),
-        Ok(g) => Some((g.changed.len() + g.added.len() + g.removed.len()) as u64),
+    let count = match check_graph(root, context_dir) {
+        Ok(g) if g.missing => Some((0, false)),
+        Ok(g) => Some((
+            (g.changed.len() + g.added.len() + g.removed.len()) as u64,
+            false,
+        )),
         Err(_) => None,
-    }
+    };
+    (count, false)
 }
 
 fn basename(path: &str) -> String {
@@ -1224,11 +1324,8 @@ fn incoming_edges<'a>(graph: &'a Graph, file_path: &str) -> Vec<&'a Edge> {
 /// (`formatBlastRadius`), capped at `cap`, or `None` when it has none.
 fn format_blast_radius(graph: &Graph, file_path: &str, cap: usize) -> Option<String> {
     let edges = incoming_edges(graph, file_path);
-    if edges.is_empty() {
-        return None;
-    }
     let by_id: HashMap<&str, &Node> = graph.nodes.iter().map(|n| (n.id.as_str(), n)).collect();
-    let items: Vec<String> = edges
+    let top: Vec<(&str, String)> = edges
         .iter()
         .take(cap)
         .map(|e| {
@@ -1236,11 +1333,63 @@ fn format_blast_radius(graph: &Graph, file_path: &str, cap: usize) -> Option<Str
                 Some(n) => format!("{} ({})", n.name, basename(&n.path)),
                 None => e.source.clone(),
             };
-            format!(" \u{2022} {} \u{2190} {label}", e.relation.as_str())
+            (e.relation.as_str(), label)
         })
         .collect();
-    let more = if edges.len() > cap {
-        format!("\n \u{2022} +{} more", edges.len() - cap)
+    render_blast(file_path, edges.len(), &top, cap)
+}
+
+/// The blast-radius text from the lookup record of the edited file. The
+/// outer `None` means the full load must answer: the tails of `file_path`
+/// match more than one table path, or the record is unreadable. The inner
+/// `None` means no incoming edge.
+fn blast_from_lookup(
+    mut lookup: sieve_core::lookup::Lookup,
+    file_path: &str,
+    cap: usize,
+) -> Option<Option<String>> {
+    // Every tail at a `/` boundary, the whole string included.
+    let tails = std::iter::once(file_path).chain(
+        file_path
+            .match_indices('/')
+            .map(|(i, _)| &file_path[i + 1..]),
+    );
+    let hits: Vec<&str> = tails
+        .filter(|t| !t.is_empty() && lookup.paths().any(|p| p == *t))
+        .collect();
+    match hits.as_slice() {
+        [] => Some(None),
+        [path] => {
+            let record = lookup.record(path)?;
+            let top: Vec<(&str, String)> = record
+                .top
+                .iter()
+                .take(cap)
+                .map(|(relation, label)| (relation.as_str(), label.clone()))
+                .collect();
+            Some(render_blast(file_path, record.in_total, &top, cap))
+        }
+        _ => None,
+    }
+}
+
+/// Renders the blast-radius text from `total` incoming edges, of which
+/// `top` holds the first ones.
+fn render_blast(
+    file_path: &str,
+    total: usize,
+    top: &[(&str, String)],
+    cap: usize,
+) -> Option<String> {
+    if total == 0 {
+        return None;
+    }
+    let items: Vec<String> = top
+        .iter()
+        .map(|(relation, label)| format!(" \u{2022} {relation} \u{2190} {label}"))
+        .collect();
+    let more = if total > cap {
+        format!("\n \u{2022} +{} more", total - cap)
     } else {
         String::new()
     };
@@ -1288,15 +1437,29 @@ fn handle_pre_read(input: &Value, project_dir: &Path) -> Option<String> {
         .and_then(|t| t.get("file_path"))
         .and_then(Value::as_str)
         .filter(|p| !p.is_empty())?;
-    let session_id = input
+    // Reads the session id only to skip a call with none; the record key
+    // below adds the agent id, so a subagent never shares the parent's record.
+    input
         .get("session_id")
         .and_then(Value::as_str)
         .filter(|s| !s.is_empty())?;
-    let bytes = std::fs::read(file_path).ok()?;
+    let session_key = lookup_key(input);
+    let session_id = session_key.as_str();
     // Canonicalizes the path so an absolute read and a relative read of
     // the same file share one record; a raw `file_path` key would miss
     // between the two shapes and never deny the second read.
     let canonical = std::fs::canonicalize(file_path).ok()?;
+    // F3 and F1 act only on a text file inside the project. The check runs
+    // before the read, so a large file outside the project is never read.
+    if !canonical.starts_with(std::fs::canonicalize(project_dir).ok()?) {
+        return None;
+    }
+    let bytes = std::fs::read(&canonical).ok()?;
+    // ponytail: a NUL byte in the first 8000 bytes marks a binary file, the
+    // git rule; a UTF-16 text file counts as binary and passes.
+    if bytes.iter().take(8000).any(|b| *b == 0) {
+        return None;
+    }
     let key = canonical.to_string_lossy().into_owned();
     let hash = sieve_core::fingerprint::hash_source(&bytes);
     let deny = update_session(project_dir, session_id, |session| {
@@ -1382,10 +1545,12 @@ fn handle_post_read(input: &Value, project_dir: &Path) -> Option<String> {
         .and_then(|t| t.get("file_path"))
         .and_then(Value::as_str)
         .filter(|p| !p.is_empty())?;
-    let session_id = input
+    input
         .get("session_id")
         .and_then(Value::as_str)
         .filter(|s| !s.is_empty())?;
+    let session_key = lookup_key(input);
+    let session_id = session_key.as_str();
     let key = std::fs::canonicalize(file_path)
         .ok()?
         .to_string_lossy()
@@ -1598,7 +1763,7 @@ fn handle_tool_use(input: &Value, project_dir: &Path) {
     let session_id = session_id_of(input);
     record_tool_use(project_dir, &session_id, kind, saved, "claude-code");
     if kind == Some("sieve") {
-        record_lookup(project_dir, input, Lookup::Picked);
+        record_lookup(project_dir, input, Lookup::Picked, 1);
     }
 }
 
@@ -1751,7 +1916,7 @@ fn is_sieve_mcp_tool(tool_name_lower: &str) -> bool {
 /// ponytail: a manual scan, not a regex (no `regex` crate here) — covers the
 /// shapes the goldens and the session examples name; a wilder invocation
 /// (`sieve-dev` behind three pipes) can still slip past.
-fn command_invokes_sieve(command: &str) -> bool {
+pub(crate) fn command_invokes_sieve(command: &str) -> bool {
     let c = command.trim();
     for segment in c.split(['|', '&', ';']) {
         let mut rest = segment.trim_start();
@@ -1868,9 +2033,10 @@ fn handle_stop(input: &Value, project_dir: &Path) {
 /// clears them (F1). A leftover note means that `post-read` never ran for
 /// a narrowed Read. The count is the note failure record the F1 design
 /// asks for. The clear stops the session file from growing. A session with
-/// no leftover note writes nothing.
+/// no leftover note writes nothing. The key follows the agent when the
+/// input names one.
 fn count_lost_notes(input: &Value, project_dir: &Path) {
-    let id = session_id_of(input);
+    let id = lookup_key(input);
     if read_session(project_dir, &id).narrowed.is_empty() {
         return;
     }
@@ -1892,7 +2058,7 @@ struct AssistantTurn {
 /// Did this turn's reply tell the user what sieve saved
 /// (`countTallyTurn`, `handleStop`'s Stop-time tally)?
 fn count_tally_turn(input: &Value, project_dir: &Path) {
-    let id = session_id_of(input);
+    let id = lookup_key(input);
     if !read_session(project_dir, &id)
         .turn_used_sieve
         .unwrap_or(false)
@@ -2271,6 +2437,23 @@ mod tests {
     }
 
     #[test]
+    fn test_route_sieve_pick_counts_before_the_search_lexer() {
+        // A pick with a grep filter is one pick and no search segment.
+        for command in [
+            "sieve ask total | grep -v x",
+            "cd repo && sieve grep x | head",
+        ] {
+            assert_eq!(classify_tool_use("Bash", Some(command)), Some("sieve"));
+            let input = serde_json::json!({
+                "tool_name": "Bash",
+                "tool_input": {"command": command},
+                "tool_response": {"stdout": "a\n"},
+            });
+            assert!(crate::route::post_search(&input, Path::new("/nonexistent")).is_none());
+        }
+    }
+
+    #[test]
     fn command_invokes_sieve_matches_a_sieve_command_in_every_form() {
         for yes in [
             "sieve ask \"x\" . --json",
@@ -2625,6 +2808,55 @@ mod tests {
             "the second read of an unchanged file must deny"
         );
         assert!(second.unwrap().contains("\"permissionDecision\":\"deny\""));
+    }
+
+    #[test]
+    fn test_f3_subagent_read_does_not_deny_the_parent() {
+        let dir = TempDir::new("pre-read-subagent");
+        let file = dir.path.join("a.txt");
+        std::fs::write(&file, "one").expect("write file");
+        let mut sub = pre_read_input("s1", &file);
+        sub["agent_id"] = Value::from("a1");
+        let parent = pre_read_input("s1", &file);
+
+        assert_eq!(handle_pre_read(&sub, &dir.path), None);
+        assert_eq!(handle_pre_read(&parent, &dir.path), None);
+        assert!(handle_pre_read(&sub, &dir.path).is_some());
+    }
+
+    #[test]
+    fn test_f3_same_agent_reread_is_still_denied() {
+        let dir = TempDir::new("pre-read-same-agent");
+        let file = dir.path.join("a.txt");
+        std::fs::write(&file, "one").expect("write file");
+        let mut input = pre_read_input("s1", &file);
+        input["agent_id"] = Value::from("a1");
+
+        assert_eq!(handle_pre_read(&input, &dir.path), None);
+        assert!(handle_pre_read(&input, &dir.path).is_some());
+    }
+
+    #[test]
+    fn test_f3_deny_skips_a_file_outside_the_repo() {
+        let repo = TempDir::new("pre-read-repo");
+        let outside = TempDir::new("pre-read-outside");
+        let file = outside.path.join("a.txt");
+        std::fs::write(&file, "one").expect("write file");
+        let input = pre_read_input("s1", &file);
+
+        assert_eq!(handle_pre_read(&input, &repo.path), None);
+        assert_eq!(handle_pre_read(&input, &repo.path), None);
+    }
+
+    #[test]
+    fn test_f3_deny_skips_a_binary_file() {
+        let dir = TempDir::new("pre-read-binary");
+        let file = dir.path.join("a.png");
+        std::fs::write(&file, b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR").expect("write file");
+        let input = pre_read_input("s1", &file);
+
+        assert_eq!(handle_pre_read(&input, &dir.path), None);
+        assert_eq!(handle_pre_read(&input, &dir.path), None);
     }
 
     #[test]
@@ -3104,7 +3336,7 @@ mod tests {
             std::env::set_var(&seam, bash_tool_input("s1", command).to_string());
             let input = read_stdin_json();
             std::env::remove_var(&seam);
-            // `pre-search` owns grep and rg, so `pre-read` must not rewrite.
+            // `pre-read` never rewrites grep or rg; routing reads the output.
             assert!(handle_pre_bash(&input, &dir.path).is_none(), "{command}");
         }
     }
@@ -3347,6 +3579,22 @@ mod tests {
         assert_eq!(read_stats(&dir.path).expect("stats").notes_lost, 2);
     }
 
+    #[test]
+    fn test_f3_lost_notes_follow_the_agent_key() {
+        let (dir, file) = large_file_project("f3-lost-notes-agent");
+        let mut input = read_tool_input("s1", &file);
+        input["agent_id"] = Value::from("a1");
+        handle_pre_read(&input, &dir.path).expect("a large file narrows");
+        assert!(read_session(&dir.path, "s1").narrowed.is_empty());
+
+        let mut stop = serde_json::json!({ "session_id": "s1" });
+        stop["agent_id"] = Value::from("a1");
+        handle_stop(&stop, &dir.path);
+
+        assert!(read_session(&dir.path, "s1.a1").narrowed.is_empty());
+        assert_eq!(read_stats(&dir.path).expect("stats").notes_lost, 1);
+    }
+
     /// A project with a tiny `wiring.json` (over a 1-byte cap) and a
     /// `stats.json` that holds `staleCount` 7.
     fn capped_project(label: &str) -> TempDir {
@@ -3399,7 +3647,7 @@ mod tests {
         // No graph under the project: `check_graph` reports `missing`.
         let dir = TempDir::new("s0-stale-none");
         let ctx = resolve_context_dir(&dir.path);
-        assert_eq!(check_stale_count(&dir.path, &ctx), Some(0));
+        assert_eq!(check_stale_count(&dir.path, &ctx), Some((0, false)));
         // Over the cap the count is unknown.
         set_test_wiring_cap(Some(1));
         let dir = capped_project("s0-stale-none-cap");
@@ -3442,5 +3690,212 @@ mod tests {
         write_build_counts(&ctx, 1, 0, &[], 0);
         assert!(read_stats(&dir.path).expect("stats").capped);
         set_test_wiring_cap(None);
+    }
+
+    /// Builds the project with a real build. The build writes the lookup.
+    fn s3_build(dir: &TempDir) -> PathBuf {
+        let ctx = resolve_context_dir(&dir.path);
+        sieve_parse::rebuild_graph_only(&dir.path, &ctx).expect("build graph");
+        assert!(open_lookup(&ctx).is_some(), "the build writes the lookup");
+        ctx
+    }
+
+    fn s3_write(dir: &TempDir, rel: &str, body: &str) {
+        let path = dir.path.join(rel);
+        std::fs::create_dir_all(path.parent().expect("parent")).expect("mkdir");
+        std::fs::write(path, body).expect("write file");
+    }
+
+    /// `alpha` in `src/a.ts` with ten callers in `src/c0.ts` to `src/c9.ts`.
+    fn s3_blast_project(label: &str) -> TempDir {
+        let dir = TempDir::new(label);
+        s3_write(
+            &dir,
+            "src/a.ts",
+            "export function alpha() {\n  return 1;\n}\n",
+        );
+        s3_write(
+            &dir,
+            "src/lone.ts",
+            "export function lone() {\n  return 2;\n}\n",
+        );
+        for i in 0..10 {
+            s3_write(
+                &dir,
+                &format!("src/c{i}.ts"),
+                &format!(
+                    "import {{ alpha }} from './a';\nexport function caller{i}() {{\n  return alpha();\n}}\n"
+                ),
+            );
+        }
+        dir
+    }
+
+    #[test]
+    fn test_s3_blast_lookup_equals_full() {
+        let dir = s3_blast_project("s3-blast");
+        let ctx = s3_build(&dir);
+        let graph = read_wiring(&ctx).expect("graph");
+        let lookup_text = |file: &str| {
+            let lookup = open_lookup(&ctx).expect("lookup");
+            blast_from_lookup(lookup, file, 8).expect("one hit answers")
+        };
+        let mut rendered = 0;
+        for path in graph
+            .nodes
+            .iter()
+            .filter(|n| n.kind == Kind::File)
+            .map(|n| n.path.clone())
+        {
+            let absolute = dir.path.join(&path).to_string_lossy().into_owned();
+            for file in [absolute, path.clone()] {
+                let want = format_blast_radius(&graph, &file, 8);
+                assert_eq!(lookup_text(&file), want, "{file}");
+                rendered += usize::from(want.is_some());
+            }
+        }
+        assert!(rendered > 0, "some file has a caller");
+        let alpha = dir.path.join("src/a.ts").to_string_lossy().into_owned();
+        let text = lookup_text(&alpha).expect("alpha has callers");
+        assert!(
+            text.contains(" more\n") || text.ends_with(" more"),
+            "{text}"
+        );
+        // A path the table lacks gives no blast.
+        assert_eq!(lookup_text("/nowhere/none.ts"), None);
+
+        // The hook text is the same with the lookup deleted.
+        s3_support::garble_wiring(&ctx);
+        let lookup = open_lookup(&ctx).expect("lookup");
+        assert_eq!(blast_from_lookup(lookup, &alpha, 8), Some(Some(text)));
+    }
+
+    #[test]
+    fn test_s3_blast_two_table_paths_fall_back() {
+        let dir = TempDir::new("s3-blast-two");
+        s3_write(&dir, "util.ts", "export function one() {}\n");
+        s3_write(&dir, "src/util.ts", "export function two() {}\n");
+        let ctx = s3_build(&dir);
+        let file = dir.path.join("src/util.ts").to_string_lossy().into_owned();
+        // `src/util.ts` and `util.ts` both end the absolute path.
+        let lookup = open_lookup(&ctx).expect("lookup");
+        assert_eq!(blast_from_lookup(lookup, &file, 8), None);
+    }
+
+    /// Two scopes, `backend` and `web`, over a built graph.
+    fn s3_scope_project(label: &str) -> (TempDir, PathBuf) {
+        let dir = TempDir::new(label);
+        s3_write(&dir, "backend/only.ts", "export function only() {}\n");
+        s3_write(&dir, "backend/util.ts", "export function a() {}\n");
+        s3_write(&dir, "backend/sub/util.ts", "export function b() {}\n");
+        s3_write(&dir, "web/util.ts", "export function c() {}\n");
+        s3_write(&dir, "web/page.ts", "export function d() {}\n");
+        let ctx = s3_build(&dir);
+        let mut graph = read_wiring(&ctx).expect("graph");
+        let scope = |prefix: &str| sieve_core::wiring::Scope {
+            prefix: prefix.to_string(),
+            label: prefix.to_string(),
+            markers: Vec::new(),
+        };
+        graph.meta.scopes = vec![scope("backend"), scope("web")];
+        sieve_parse::write_wiring_and_lookup(&graph, &ctx).expect("write graph");
+        assert!(open_lookup(&ctx).is_some());
+        (dir, ctx)
+    }
+
+    #[test]
+    fn test_s3_scope_hint_lookup_equals_full() {
+        let (_dir, ctx) = s3_scope_project("s3-scope");
+        let names = [
+            Some("only.ts"),
+            Some("page.ts"),
+            // Two paths in one scope: one hint (E6).
+            Some("sub/util.ts"),
+            // Two scopes: no hint.
+            Some("util.ts"),
+            Some("missing.ts"),
+            None,
+        ];
+        let with: Vec<_> = names
+            .iter()
+            .map(|n| last_file_scope_hint(&ctx, *n))
+            .collect();
+        assert_eq!(with[0].as_deref(), Some("backend"));
+        assert_eq!(with[1].as_deref(), Some("web"));
+        assert_eq!(with[2].as_deref(), Some("backend"));
+        assert_eq!(with[3], None);
+        s3_support::garble_wiring(&ctx);
+        let garbled: Vec<_> = names
+            .iter()
+            .map(|n| last_file_scope_hint(&ctx, *n))
+            .collect();
+        assert_eq!(garbled, with, "the lookup answers alone");
+    }
+
+    #[test]
+    fn test_s3_scope_hint_full_path_matches_lookup() {
+        let (_dir, ctx) = s3_scope_project("s3-scope-full");
+        let names = ["only.ts", "page.ts", "sub/util.ts", "util.ts", "missing.ts"];
+        let with: Vec<_> = names
+            .iter()
+            .map(|n| last_file_scope_hint(&ctx, Some(n)))
+            .collect();
+        s3_support::drop_lookup(&ctx);
+        let full: Vec<_> = names
+            .iter()
+            .map(|n| last_file_scope_hint(&ctx, Some(n)))
+            .collect();
+        assert_eq!(full, with);
+    }
+
+    #[test]
+    fn test_p4_14_stale_count_on_the_lookup_path() {
+        let dir = TempDir::new("s3-p4-14");
+        s3_write(&dir, "a.ts", "export function a() {}\n");
+        s3_write(&dir, "b.ts", "export function b() {}\n");
+        let ctx = s3_build(&dir);
+        assert_eq!(check_stale_count(&dir.path, &ctx), Some((0, false)));
+        s3_write(
+            &dir,
+            "a.ts",
+            "export function a() {}\nexport function a2() {}\n",
+        );
+        s3_write(&dir, "c.ts", "export function c() {}\n");
+        std::fs::remove_file(dir.path.join("b.ts")).expect("delete b");
+        let with = check_stale_count(&dir.path, &ctx);
+        // The count holds node ids, not files.
+        assert!(matches!(with, Some((n, false)) if n >= 3), "{with:?}");
+        // The full path gives the same count.
+        s3_support::drop_lookup(&ctx);
+        assert_eq!(check_stale_count(&dir.path, &ctx), with);
+    }
+
+    #[test]
+    fn test_s3_stale_count_over_cap_writes_a_lower_bound() {
+        let dir = TempDir::new("s3-over-cap");
+        s3_write(&dir, "a.ts", "export function a() {}\n");
+        let ctx = s3_build(&dir);
+        let drifted = sieve_parse::check::LOOKUP_DRIFT_CAP + 5;
+        for i in 0..drifted {
+            s3_write(&dir, &format!("new{i}.ts"), "export function n() {}\n");
+        }
+        patch_stats(&dir.path, |s| s.stale_count = 2);
+        assert_eq!(
+            check_stale_count(&dir.path, &ctx),
+            Some((drifted as u64, true))
+        );
+        let edit = serde_json::json!({
+            "tool_input": { "file_path": dir.path.join("a.ts").to_string_lossy() }
+        });
+        handle_post_edit(&edit, &dir.path);
+        let stats = read_stats(&dir.path).expect("stats");
+        assert_eq!(stats.stale_count, drifted as u64);
+        assert!(stats.stale_approx);
+        // No build ran: the graph holds no new file.
+        assert!(!read_wiring(&ctx)
+            .expect("graph")
+            .nodes
+            .iter()
+            .any(|n| n.path == "new0.ts"));
     }
 }

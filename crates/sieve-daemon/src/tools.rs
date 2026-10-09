@@ -14,8 +14,8 @@ use sieve_parse::refresh::{
     ensure_fresh_children, ensure_fresh_graph, env_truthy, refresh_note, RefreshOptions,
 };
 use sieve_parse::{
-    check_context, check_graph, federated_check_text, format_check_report,
-    format_graph_check_report,
+    check_context, check_graph, check_graph_lookup, federated_check_text, format_check_report,
+    format_graph_check_report, GraphCheck, LookupCheck,
 };
 use sieve_query::ask::{ask, format_ask, AskOptions};
 use sieve_query::callers::{
@@ -91,8 +91,11 @@ fn base_tool(canonical: &str) -> &str {
 /// error.
 pub fn call(name: &str, args: &Value, root: &Path, context_dir: &Path) -> (String, bool) {
     let canonical = canonical_tool_name(name);
-    if let Some(text) = capped_text(context_dir) {
-        return (text, true);
+    // `check_freshness` tries the lookup first, so it checks the cap itself.
+    if base_tool(&canonical) != "check_freshness" {
+        if let Some(text) = capped_text(context_dir) {
+            return (text, true);
+        }
     }
     let ws = workspace::read(context_dir);
     // A capped child stops the whole call, before any refresh or load.
@@ -557,14 +560,23 @@ fn file_api(args: &Value, context_dir: &Path) -> (String, bool) {
 }
 
 fn check_freshness(root: &Path, context_dir: &Path) -> (String, bool) {
-    if let Some(text) = capped_text(context_dir) {
-        return (text, true);
-    }
-    let c = check_context(root, context_dir);
-    let g = match check_graph(root, context_dir) {
-        Ok(g) => g,
-        Err(e) => return (e.to_string(), true),
+    let g = match check_graph_lookup(root, context_dir) {
+        Ok(LookupCheck::Count(g)) => g,
+        Ok(LookupCheck::OverCap(n)) => {
+            let name = product().name;
+            let noun = if n == 1 { "file" } else { "files" };
+            return (
+                format!("{name} is behind on ~{n} {noun} \u{2014} run {name} build"),
+                false,
+            );
+        }
+        // No valid lookup: run the old path.
+        Ok(LookupCheck::NoLookup) | Err(_) => match full_graph_check(root, context_dir) {
+            Ok(g) => g,
+            Err(done) => return done,
+        },
     };
+    let c = check_context(root, context_dir);
 
     // The deep-layer part shows only when a manifest exists.
     let text = if c.missing {
@@ -579,6 +591,15 @@ fn check_freshness(root: &Path, context_dir: &Path) -> (String, bool) {
         )
     };
     (text, false)
+}
+
+/// Today's path: the cap check, then the full `check_graph`. The error
+/// value is the finished tool result.
+fn full_graph_check(root: &Path, context_dir: &Path) -> Result<GraphCheck, (String, bool)> {
+    if let Some(text) = capped_text(context_dir) {
+        return Err((text, true));
+    }
+    check_graph(root, context_dir).map_err(|e| (e.to_string(), true))
 }
 
 /// Renders the `sieve_trace_calls` text: one tree per matched symbol,
@@ -871,6 +892,28 @@ mod tests {
         assert!(is_error);
         assert!(text.contains("over the size cap"), "{text}");
         set_test_wiring_cap(None);
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn test_s3_check_freshness_lookup_equals_full() {
+        let root = std::env::temp_dir().join(format!("sieve-s3t4-{}", std::process::id()));
+        std::fs::create_dir_all(&root).expect("make dir");
+        std::fs::write(root.join("a.ts"), "export function a() {}\n").expect("write a");
+        std::fs::write(root.join("b.ts"), "export function b() {}\n").expect("write b");
+        let ctx = root.join(product().context_dir_name());
+        sieve_parse::refresh::rebuild_graph_only(&root, &ctx).expect("build graph");
+        // A drifted file, so the text is not only the in-sync line.
+        std::fs::write(root.join("a.ts"), "export function a2() {}\n").expect("edit a");
+
+        let lookup = sieve_parse::refresh::lookup_path(&ctx);
+        assert!(lookup.exists());
+        let with_lookup = check_freshness(&root, &ctx);
+        std::fs::remove_file(&lookup).expect("delete lookup");
+        let without_lookup = check_freshness(&root, &ctx);
+
+        assert_eq!(with_lookup, without_lookup);
+        assert!(with_lookup.0.contains("behind"), "{}", with_lookup.0);
         std::fs::remove_dir_all(&root).ok();
     }
 

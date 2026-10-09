@@ -15,18 +15,23 @@ pub const CEILING_ENV: &str = "SIEVE_BUILD_CEILING_BYTES";
 /// M1 point.
 const FIT_MARGIN_PERCENT: u64 = 135;
 
+/// The warm factor in percent. S2 made the warm path no larger than the
+/// cold path, so the factor is 100. Change it here after a new measure.
+const WARM_FACTOR_PERCENT: u64 = 100;
+
 /// Projects the build peak in bytes: (64 MB plus 220 KB per file) times
-/// 1.35, times 1.5 more on the warm path (the M1 result). The units are
-/// decimal: 1 MB is 1,000,000 bytes.
+/// 1.35, times the warm factor on the warm path. The units are decimal: 1 MB
+/// is 1,000,000 bytes.
 ///
-/// The six M1 points, projection against measure (MB): 880 files cold 348
-/// against 293, warm 522 against 437; 2,273 files cold 761 against 750,
-/// warm 1,142 against 1,139; 4,432 files cold 1,403 against 1,059, warm
-/// 2,104 against 1,635.
+/// The M1 points, projection against measure (MB): 880 files cold 348
+/// against 293; 2,273 files cold 761 against 750; 4,432 files cold 1,403
+/// against 1,059. Before S2 the warm measures were 1,503 MB and 1,635 MB, and
+/// the factor was 1.5. After S2 (2026-10-09), on 4,454 files, the warm peak
+/// is 902 MB against a cold peak of 941 MB, so the factor is 1.0.
 pub fn projected_peak_bytes(files: usize, warm: bool) -> u64 {
     let cold = (64 * MB + 220 * KB * files as u64) * FIT_MARGIN_PERCENT / 100;
     if warm {
-        cold * 3 / 2
+        cold * WARM_FACTOR_PERCENT / 100
     } else {
         cold
     }
@@ -125,7 +130,7 @@ mod tests {
     fn test_s0_guard_projection_numbers() {
         assert_eq!(projected_peak_bytes(0, false), 86_400_000);
         assert_eq!(projected_peak_bytes(1000, false), 383_400_000);
-        assert_eq!(projected_peak_bytes(1000, true), 575_100_000);
+        assert_eq!(projected_peak_bytes(1000, true), 383_400_000);
     }
 
     #[test]

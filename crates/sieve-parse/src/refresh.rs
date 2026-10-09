@@ -8,14 +8,18 @@
 //! definition; both callers switch to it in a later task.
 
 use std::env;
-use std::path::Path;
+use std::fs;
+use std::io;
+use std::path::{Path, PathBuf};
 
 use sieve_core::askindex::{ask_index_path, build_ask_index, write_ask_index};
 use sieve_core::fingerprint::{
     fingerprint_path, probe_drift, read_fingerprint, write_fingerprint, Drift, Fingerprint,
 };
 use sieve_core::lock::{self, LockGuard};
-use sieve_core::write_graph;
+use sieve_core::lookup::{self, wiring_stamp, Lookup, DEFAULT_WIRING_CAP_BYTES};
+use sieve_core::wiring::Graph;
+use sieve_core::write_graph_stamped;
 
 use crate::build::{build_graph_cached_with, BuildOptions};
 
@@ -96,6 +100,64 @@ pub struct RebuildReport {
     pub reused: usize,
 }
 
+/// The path of the per-file lookup index under `context_dir`.
+pub fn lookup_path(context_dir: &Path) -> PathBuf {
+    context_dir.join(".cache").join("lookup.v1")
+}
+
+/// Writes `wiring.json`, then the lookup index with the stamp of the new
+/// wiring (S3, E4). The refresh calls it now. The CLI build site calls it
+/// in task T3. A failed lookup write deletes any old lookup and still
+/// returns `Ok`, so the readers fall back to the wiring.
+pub fn write_wiring_and_lookup(graph: &Graph, context_dir: &Path) -> io::Result<()> {
+    let wiring_path = context_dir.join(".graph").join("wiring.json");
+    let stamp = write_graph_stamped(graph, &wiring_path)?;
+    let path = lookup_path(context_dir);
+    if lookup::write(graph, &path, stamp).is_err() {
+        let _ = fs::remove_file(&path);
+    }
+    Ok(())
+}
+
+/// Rewrites the lookup from `wiring.json` alone when the lookup is missing
+/// or its stamp differs from the wiring stamp (S3, E3). It parses no
+/// source and builds no graph. A failure leaves the readers on their
+/// fallback path, so it is never fatal.
+fn regenerate_lookup(context_dir: &Path, wiring_path: &Path) {
+    let Some(stamp) = wiring_stamp(wiring_path) else {
+        return;
+    };
+    let path = lookup_path(context_dir);
+    if Lookup::open(&path, stamp).is_some() {
+        return;
+    }
+    // A held lock means a writer is at work. It writes its own lookup.
+    let Ok(Some(_guard)) = LockGuard::acquire(context_dir) else {
+        return;
+    };
+    // A writer may have finished while this call waited for the lock.
+    let Some(stamp) = wiring_stamp(wiring_path) else {
+        return;
+    };
+    if Lookup::open(&path, stamp).is_some() {
+        return;
+    }
+    // The stamp is read before the wiring. A wiring replaced in between
+    // leaves a stale stamp, which the next call repairs.
+    let too_big = fs::metadata(wiring_path).map_or(true, |m| m.len() > DEFAULT_WIRING_CAP_BYTES);
+    if too_big {
+        return;
+    }
+    // ponytail: a bad wiring is re-read on every call until `sieve build`
+    // repairs it. Add a retry marker if that read shows up in a profile.
+    let graph = fs::read(wiring_path)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<Graph>(&bytes).ok());
+    if let Some(graph) = graph {
+        let _ = lookup::write(&graph, &path, stamp);
+    }
+}
+
 /// Rebuilds the graph and the fingerprint only: no cards, no `INDEX.md`,
 /// no `.gitignore` edit.
 pub fn rebuild_graph_only(root: &Path, context_dir: &Path) -> std::io::Result<RebuildReport> {
@@ -117,8 +179,7 @@ pub fn rebuild_graph_only(root: &Path, context_dir: &Path) -> std::io::Result<Re
         progress: None,
     };
     let report = build_graph_cached_with(root, context_dir, &opts)?;
-    let wiring_path = context_dir.join(".graph").join("wiring.json");
-    write_graph(&report.graph, &wiring_path)?;
+    write_wiring_and_lookup(&report.graph, context_dir)?;
 
     // A sidecar write failure is never fatal: the refresh has no build
     // report to print it on.
@@ -164,6 +225,7 @@ pub fn ensure_fresh_graph(
     let fp_path = fingerprint_path(context_dir, &stamp);
     let fp = read_fingerprint(&fp_path, &stamp);
 
+    regenerate_lookup(context_dir, &wiring_path);
     let needs_rebuild = match &fp {
         None => true,
         Some(fp) => match probe_drift(root, fp, opts.force_hash, crate::build::is_claimed) {
@@ -540,5 +602,66 @@ mod tests {
         assert_eq!(outcome, RefreshOutcome::default());
         assert!(!wiring_path(&context_dir).is_file());
         assert!(!context_dir.exists(), "a query makes no folder");
+    }
+
+    #[test]
+    fn test_s3_both_sites_write_lookup() {
+        let dir = TempDir::new("s3-sites");
+        write_repo_file(&dir.path, "a.ts", "export function a() {}\n");
+
+        // The refresh site.
+        let refresh_ctx = dir.path.join("sieve");
+        rebuild_graph_only(&dir.path, &refresh_ctx).expect("build graph");
+        let stamp = wiring_stamp(&wiring_path(&refresh_ctx)).expect("wiring stamp");
+        assert!(Lookup::open(&lookup_path(&refresh_ctx), stamp).is_some());
+
+        // The function itself, which the CLI build site calls in T3.
+        let direct_ctx = dir.path.join("direct");
+        let graph = crate::build::build_graph(&dir.path, &direct_ctx).expect("build graph");
+        write_wiring_and_lookup(&graph, &direct_ctx).expect("write both");
+        let stamp = wiring_stamp(&wiring_path(&direct_ctx)).expect("wiring stamp");
+        assert!(Lookup::open(&lookup_path(&direct_ctx), stamp).is_some());
+    }
+
+    #[test]
+    fn test_s3_stale_lookup_regenerates_from_wiring() {
+        let dir = TempDir::new("s3-stale");
+        write_repo_file(&dir.path, "a.ts", "export function a() {}\n");
+        let context_dir = dir.path.join("sieve");
+        rebuild_graph_only(&dir.path, &context_dir).expect("build graph");
+
+        // A new wiring stamp with no source drift, as after a `git pull`.
+        let mut bytes = fs::read(wiring_path(&context_dir)).expect("read wiring");
+        bytes.push(b'\n');
+        fs::write(wiring_path(&context_dir), &bytes).expect("rewrite wiring");
+        let stamp = wiring_stamp(&wiring_path(&context_dir)).expect("wiring stamp");
+        assert!(Lookup::open(&lookup_path(&context_dir), stamp).is_none());
+        let fp = fingerprint_path(&context_dir, &crate::extractor_stamp());
+        let fp_before = fs::read(&fp).expect("read fingerprint");
+
+        let outcome = ensure_fresh_graph(&dir.path, &context_dir, &RefreshOptions::default());
+
+        assert_eq!(outcome, RefreshOutcome::default());
+        assert!(Lookup::open(&lookup_path(&context_dir), stamp).is_some());
+        assert_eq!(
+            fs::read(wiring_path(&context_dir)).expect("read wiring"),
+            bytes
+        );
+        assert_eq!(fs::read(&fp).expect("read fingerprint"), fp_before);
+    }
+
+    #[test]
+    fn test_s3_lookup_write_failure_keeps_wiring() {
+        let dir = TempDir::new("s3-fail");
+        write_repo_file(&dir.path, "a.ts", "export function a() {}\n");
+        let context_dir = dir.path.join("sieve");
+        let graph = crate::build::build_graph(&dir.path, &context_dir).expect("build graph");
+        // A directory at the lookup path makes the rename fail.
+        fs::create_dir_all(lookup_path(&context_dir)).expect("create blocker");
+
+        write_wiring_and_lookup(&graph, &context_dir).expect("wiring write is not fatal");
+
+        let stamp = wiring_stamp(&wiring_path(&context_dir)).expect("wiring stamp");
+        assert!(Lookup::open(&lookup_path(&context_dir), stamp).is_none());
     }
 }
