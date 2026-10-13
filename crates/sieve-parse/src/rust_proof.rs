@@ -21,6 +21,10 @@ pub fn call_rec(
         return Some(RustRec::SameFile { target });
     }
     let name_node = root.descendant_for_byte_range(at, at + name.len())?;
+    if name_node.kind() == "field_identifier" {
+        let target = self_method_target(name_node, source, name, defs)?;
+        return Some(RustRec::SameFile { target });
+    }
     let (head, mut path) = call_path(name_node, source)?;
     let mods = mods_of(head, source)?;
     if path.first().map(String::as_str) == Some("Self") {
@@ -54,7 +58,146 @@ fn self_type(node: TsNode, source: &str) -> Option<Vec<String>> {
     if cur.kind() == "trait_item" || cur.child_by_field_name("trait").is_some() {
         return None;
     }
+    if !module_level_impl(cur) {
+        return None;
+    }
     crate::rust_items::type_segments(cur.child_by_field_name("type")?, source)
+}
+
+/// True when the parent of the `impl` is a file or a `mod` body. An `impl`
+/// inside a block gives `self` a new type (B2).
+fn module_level_impl(imp: TsNode) -> bool {
+    match imp.parent() {
+        Some(p) if p.kind() == "source_file" => true,
+        Some(p) => {
+            p.kind() == "declaration_list" && p.parent().is_some_and(|m| m.kind() == "mod_item")
+        }
+        None => false,
+    }
+}
+
+/// True when the name at byte `at` is the field name of a `x.f()` call.
+pub fn is_method_name(root: TsNode, at: usize, len: usize) -> bool {
+    root.descendant_for_byte_range(at, at + len)
+        .is_some_and(|n| n.kind() == "field_identifier")
+}
+
+/// The receiver form of a `fn`: 0 for `self`, 1 for `&self`, 2 for `&mut self`.
+/// `None` for no receiver or a typed `self`.
+fn receiver_form(func: TsNode) -> Option<u8> {
+    let first = func.child_by_field_name("parameters")?.named_child(0)?;
+    if first.kind() != "self_parameter" {
+        return None;
+    }
+    let mut walk = first.walk();
+    let kinds: Vec<&str> = first.children(&mut walk).map(|c| c.kind()).collect();
+    let by_ref = kinds.contains(&"&");
+    Some(match (by_ref, kinds.contains(&"mutable_specifier")) {
+        (false, _) => 0,
+        (true, false) => 1,
+        (true, true) => 2,
+    })
+}
+
+/// True when `node` has a `where` clause or a type parameter bound.
+fn has_bound(node: TsNode, source: &str) -> bool {
+    node.child_by_field_name("type_parameters")
+        .and_then(|tp| tp.utf8_text(source.as_bytes()).ok())
+        .is_some_and(|t| t.contains(':'))
+        || node
+            .children(&mut node.walk())
+            .any(|c| c.kind() == "where_clause")
+}
+
+/// The `fn` node id that `self.f()` reaches (RMX1). The proof holds when the
+/// caller sits in a module-level inherent `impl`, the same `impl` body holds
+/// exactly one `fn f`, and both receivers have the same form. A bound on the
+/// `impl` is no stop: the caller sits in the same block, so it holds there (B1).
+/// Any bound on `f`,
+/// `cfg`, item macro or other doubt gives `None`.
+fn self_method_target(
+    name_node: TsNode,
+    source: &str,
+    name: &str,
+    defs: &[(String, usize, usize)],
+) -> Option<String> {
+    let field = name_node.parent()?;
+    let call = field.parent()?;
+    let is_self_call = field.kind() == "field_expression"
+        && field.child_by_field_name("field").map(|n| n.id()) == Some(name_node.id())
+        && field.child_by_field_name("value").map(|v| v.kind()) == Some("self")
+        && call.kind() == "call_expression"
+        && call.child_by_field_name("function").map(|n| n.id()) == Some(field.id());
+    if !is_self_call {
+        return None;
+    }
+    let mut caller = call.parent()?;
+    while caller.kind() != "function_item" {
+        caller = caller.parent()?;
+    }
+    let body = caller.parent()?;
+    let imp = body.parent()?;
+    if body.kind() != "declaration_list"
+        || imp.kind() != "impl_item"
+        || imp.child_by_field_name("trait").is_some()
+        || !module_level_impl(imp)
+        || !plain_attrs(imp, source)
+    {
+        return None;
+    }
+    let mut target: Option<TsNode> = None;
+    for item in module_items_of(body) {
+        match item.kind() {
+            "macro_invocation" => return None,
+            "function_item" if item_name(item, source) == Some(name) => {
+                if target.is_some() || !plain_attrs(item, source) || has_bound(item, source) {
+                    return None;
+                }
+                target = Some(item);
+            }
+            _ => {}
+        }
+    }
+    let target = target?;
+    if receiver_form(target)? != receiver_form(caller)? {
+        return None;
+    }
+    defs.iter()
+        .find(|(_, s, e)| *s == target.start_byte() && *e == target.end_byte())
+        .map(|(id, _, _)| id.clone())
+}
+
+/// True when every attribute before `item` is `inline`, `allow`, `doc` or
+/// `must_use`. Any other attribute (`cfg`, `cfg_attr`, `async_trait`) may
+/// change or remove the item, so it stops the proof (F1).
+fn plain_attrs(item: TsNode, source: &str) -> bool {
+    let mut prev = item.prev_sibling();
+    while let Some(p) = prev {
+        match p.kind() {
+            "attribute_item" => {
+                let text = p.utf8_text(source.as_bytes()).unwrap_or("");
+                let name: String = text
+                    .trim_start_matches("#[")
+                    .trim_start()
+                    .chars()
+                    .take_while(|c| c.is_alphanumeric() || *c == '_')
+                    .collect();
+                if !matches!(name.as_str(), "inline" | "allow" | "doc" | "must_use") {
+                    return false;
+                }
+            }
+            "line_comment" | "block_comment" => {}
+            _ => break,
+        }
+        prev = p.prev_sibling();
+    }
+    true
+}
+
+/// The named children of an `impl` body.
+fn module_items_of(body: TsNode) -> Vec<TsNode> {
+    let mut walk = body.walk();
+    body.named_children(&mut walk).collect()
 }
 
 /// The call head and the path segments of `f()`, `a::f()` or `a::f::<T>()`,
@@ -476,5 +619,94 @@ mod tests {
     #[test]
     fn test_rsx1_cfg_on_mod_no_proof() {
         none_extracted("fn f() {}\n#[cfg(unix)]\nmod f;\nfn g() { f(); }\n");
+    }
+
+    #[test]
+    fn test_rmx1_self_method_proven() {
+        for recv in ["&self", "&mut self", "self"] {
+            let src = format!(
+                "struct S;\nimpl S {{\n fn f({recv}) {{}}\n fn g({recv}) {{ self.f(); }}\n}}\n"
+            );
+            one_extracted(&src);
+        }
+        one_extracted(
+            "mod m {\n struct S;\n impl S { fn f(&self) {} fn g(&self) { self.f(); } }\n}\n",
+        );
+        // The bounds of the impl hold in the same block (B1).
+        one_extracted(
+            "struct S<T>(T);\nimpl<T: Copy> S<T> { fn f(&self) {} fn g(&self) { self.f(); } }\n",
+        );
+        one_extracted("struct S<T>(T);\nimpl<T> S<T> where T: Copy { fn f(&self) {} fn g(&self) { self.f(); } }\n");
+        one_extracted(
+            "struct S<T>(T);\nimpl<T> S<T> { fn f(&self) {} fn g(&self) { self.f(); } }\n",
+        );
+    }
+
+    #[test]
+    fn test_rmx1_self_method_stops() {
+        // A bound on f, a where clause on f, a cfg on f.
+        none_extracted("struct S;\nimpl S { fn f<T: Copy>(&self) {} fn g(&self) { self.f(); } }\n");
+        none_extracted(
+            "struct S;\nimpl S { fn f<T>(&self) where T: Copy {} fn g(&self) { self.f(); } }\n",
+        );
+        none_extracted(
+            "struct S;\nimpl S { #[cfg(unix)] fn f(&self) {} fn g(&self) { self.f(); } }\n",
+        );
+        // Two fns named f.
+        none_extracted("struct S;\nimpl S {\n #[cfg(unix)]\n fn f(&self) {}\n #[cfg(not(unix))]\n fn f(&self) {}\n fn g(&self) { self.f(); }\n}\n");
+        // The receiver forms differ.
+        none_extracted("struct S;\nimpl S { fn f(&mut self) {} fn g(&self) { self.f(); } }\n");
+        none_extracted("struct S;\nimpl S { fn f(self) {} fn g(&self) { self.f(); } }\n");
+        // f has no receiver; f sits in another impl block; an item macro.
+        none_extracted("struct S;\nimpl S { fn f() {} fn g(&self) { self.f(); } }\n");
+        none_extracted(
+            "struct S;\nimpl S { fn f(&self) {} }\nimpl S { fn g(&self) { self.f(); } }\n",
+        );
+        none_extracted("struct S;\nimpl S { m!(); fn f(&self) {} fn g(&self) { self.f(); } }\n");
+        // A trait impl caller; another receiver.
+        none_extracted("struct S;\ntrait T { fn g(&self); }\nimpl S { fn f(&self) {} }\nimpl T for S { fn g(&self) { self.f(); } }\n");
+        none_extracted("struct S;\nimpl S { fn f(&self) {} fn g(&self, x: S) { x.f(); } }\n");
+        assert!(
+            calls("struct S;\nimpl S { fn f(&self) {} fn g(&self, x: S) { x.f(); } }\n").is_empty()
+        );
+    }
+
+    #[test]
+    fn test_rmx1_attribute_allowlist() {
+        none_extracted(
+            "struct S;\n#[async_trait]\nimpl S { fn f(&self) {} fn g(&self) { self.f(); } }\n",
+        );
+        none_extracted(
+            "struct S;\nimpl S { #[custom] fn f(&self) {} fn g(&self) { self.f(); } }\n",
+        );
+        none_extracted("struct S;\nimpl S { #[cfg_attr(unix, inline)] fn f(&self) {} fn g(&self) { self.f(); } }\n");
+        one_extracted("struct S;\n#[allow(dead_code)]\nimpl S { #[inline]\n #[must_use]\n fn f(&self) {} fn g(&self) { self.f(); } }\n");
+    }
+
+    #[test]
+    fn test_rmx1_closure_and_nested_fn() {
+        one_extracted(
+            "struct S;\nimpl S { fn f(&self) {} fn g(&self) { let c = || self.f(); c(); } }\n",
+        );
+        none_extracted(
+            "struct S;\nimpl S { fn f(&self) {} fn g(&self) { fn h() { self.f(); } } }\n",
+        );
+    }
+
+    #[test]
+    fn test_rmx1_field_and_var_receivers_no_raw_edge() {
+        let mut ext = GenericExtractor::new().expect("extractor builds");
+        let src = "struct S { a: S }\nimpl S { fn f(&self) {} fn g(&self, x: S) { self.a.f(); x.f(); } }\n";
+        let (_, raw) = ext.extract_file("a.rs", src, "rust");
+        assert!(
+            raw.iter().all(|e| e.name.as_deref() != Some("f")),
+            "{raw:?}"
+        );
+    }
+
+    #[test]
+    fn test_rmx1_nested_impl_self_method_no_proof() {
+        // B2: the inner impl gives `self` a new type.
+        none_extracted("struct L;\nimpl L { fn f(&self) {} }\nfn outer() {\n struct L;\n impl L { fn g(&self) { self.f(); } }\n}\n");
     }
 }

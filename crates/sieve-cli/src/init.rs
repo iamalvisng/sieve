@@ -158,6 +158,8 @@ pub fn run(args: &InitArgs, context_dir_override: Option<&Path>) -> Result<(), S
         notes: Vec::new(),
     };
     let mut retracted = wire_target(&root, &context_dir, &selected, args, &mut out)?;
+    // The note is stale now. Drop its cache so the statusline clears at once.
+    crate::statusline::clear_setup_cache(&context_dir);
     for child in &children {
         if args.verbose {
             eprintln!("\n\u{2014} {child}/");
@@ -213,6 +215,13 @@ fn wire_target(
     // Tracks whether any write under `HOME` was skipped for lack of
     // `--global`, so the caller prints one summary line, not one per site.
     let mut skipped_global = false;
+
+    // The writes below fix an old timeout, so warn before they run.
+    // `--no-hooks` writes no hooks. `--no-global` skips the files under `HOME`.
+    let check_hooks = !args.no_hooks;
+    for note in hosts::setup_notes_with(root, check_hooks, check_hooks && !args.no_global) {
+        say!(out, "⚠ {}", note.text);
+    }
 
     let retracted = retract_unselected(root, selected, args.global, args.verbose);
 

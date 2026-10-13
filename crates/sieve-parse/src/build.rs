@@ -180,9 +180,122 @@ fn discover_go_modules(root: &Path, files: &[PathBuf]) -> std::io::Result<Vec<Go
             .map(to_slash)
             .filter(|d| !d.is_empty())
             .unwrap_or_default();
-        modules.push(GoModule { module, dir });
+        let links = go_mod_replaces(&text)
+            .into_iter()
+            .filter_map(|(path, rel)| Some((path, join_rel(&dir, &rel)?)))
+            .collect();
+        modules.push(GoModule { module, dir, links });
+    }
+    // A `go.work` file links every module that it lists to the others.
+    for rel in files {
+        if rel.file_name().and_then(|n| n.to_str()) != Some("go.work") {
+            continue;
+        }
+        let Ok(bytes) = fs::read(root.join(rel)) else {
+            continue;
+        };
+        let work_dir = rel.parent().map(to_slash).unwrap_or_default();
+        let used: Vec<String> = go_work_uses(&String::from_utf8_lossy(&bytes))
+            .iter()
+            .filter_map(|u| join_rel(&work_dir, u))
+            .collect();
+        for m in modules.iter_mut().filter(|m| used.contains(&m.dir)) {
+            let others = used.iter().filter(|d| **d != m.dir);
+            m.links.extend(others.map(|d| (String::new(), d.clone())));
+        }
     }
     Ok(modules)
+}
+
+/// Joins the posix dir `base` and the relative path `rel`, and removes `.`
+/// and `..` parts. Gives `None` for an absolute path or a path above the
+/// repo root.
+fn join_rel(base: &str, rel: &str) -> Option<String> {
+    if rel.starts_with('/') {
+        return None;
+    }
+    let mut parts: Vec<&str> = base.split('/').filter(|p| !p.is_empty()).collect();
+    for seg in rel.split('/') {
+        match seg {
+            "" | "." => {}
+            ".." => {
+                parts.pop()?;
+            }
+            s => parts.push(s),
+        }
+    }
+    Some(parts.join("/"))
+}
+
+/// The text of a go.mod or go.work line without its `//` comment.
+fn go_line(line: &str) -> &str {
+    line.split("//").next().unwrap_or("").trim()
+}
+
+/// The `(module path, local path)` pairs of the `replace` lines of a go.mod
+/// that point at a local path (`./x` or `../x`).
+fn go_mod_replaces(text: &str) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    let mut in_block = false;
+    for raw in text.lines() {
+        let line = go_line(raw);
+        let body = if in_block {
+            if line == ")" {
+                in_block = false;
+                continue;
+            }
+            line
+        } else if let Some(rest) = line.strip_prefix("replace") {
+            let rest = rest.trim();
+            if rest == "(" {
+                in_block = true;
+                continue;
+            }
+            rest
+        } else {
+            continue;
+        };
+        let Some((left, right)) = body.split_once("=>") else {
+            continue;
+        };
+        let target = right.split_whitespace().next().unwrap_or("");
+        if !(target.starts_with("./") || target.starts_with("../")) {
+            continue;
+        }
+        if let Some(path) = left.split_whitespace().next() {
+            out.push((path.trim_matches('"').to_string(), target.to_string()));
+        }
+    }
+    out
+}
+
+/// The local dirs of the `use` lines of a go.work file.
+fn go_work_uses(text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut in_block = false;
+    for raw in text.lines() {
+        let line = go_line(raw);
+        let item = if in_block {
+            if line == ")" {
+                in_block = false;
+                continue;
+            }
+            line
+        } else if let Some(rest) = line.strip_prefix("use") {
+            let rest = rest.trim();
+            if rest == "(" {
+                in_block = true;
+                continue;
+            }
+            rest
+        } else {
+            continue;
+        };
+        if !item.is_empty() {
+            out.push(item.trim_matches('"').to_string());
+        }
+    }
+    out
 }
 
 /// Reads every `Cargo.toml` under `files` for the Rust crate table. A
@@ -409,27 +522,112 @@ pub struct BuildOptions {
     pub progress: Option<fn(usize, usize, &str)>,
 }
 
+/// A file's stat, taken before its read, and the hash of its decoded text.
+type PreHash = ((u64, f64), String);
+
+/// Hashes the decoded text of every claimed file, in threads. A file that
+/// fails to read or decode has no entry, so the build loop handles it. The
+/// stat comes before the read, so a later edit shows as a stat change.
+/// A thread that panics gives an error, and the build writes nothing.
+fn prehash(root: &Path, files: &[PathBuf]) -> std::io::Result<HashMap<String, PreHash>> {
+    let claimed: Vec<&PathBuf> = files
+        .iter()
+        .filter(|rel| claim_label(rel, &to_slash(rel)).is_some())
+        .collect();
+    if claimed.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let threads = std::thread::available_parallelism().map_or(1, |n| n.get().min(8));
+    let size = claimed.len().div_ceil(threads);
+    std::thread::scope(|scope| {
+        let handles: Vec<_> = claimed
+            .chunks(size)
+            .map(|chunk| {
+                scope.spawn(move || {
+                    chunk
+                        .iter()
+                        .filter_map(|rel| {
+                            let id = to_slash(rel);
+                            let stat = stat_print(root, &id).ok()?;
+                            let bytes = fs::read(root.join(rel)).ok()?;
+                            let text = decode_source(&bytes)?;
+                            Some((id, (stat, hex_sha256(text.as_bytes()))))
+                        })
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+        let mut out = HashMap::new();
+        for handle in handles {
+            let part = handle
+                .join()
+                .map_err(|_| std::io::Error::other("a hash thread failed"))?;
+            out.extend(part);
+        }
+        Ok(out)
+    })
+}
+
+/// Stamps a replayed cache entry with the new stat and records its
+/// language, or its recorded error.
+fn replay(
+    mut entry: CacheEntry,
+    (size, mtime_ms): (u64, f64),
+    label: String,
+    errors: &mut Vec<String>,
+    languages: &mut BTreeSet<String>,
+) -> CacheEntry {
+    entry.size = size;
+    entry.mtime_ms = mtime_ms;
+    match &entry.error {
+        // This file failed last time too.
+        Some(error) => errors.push(error.clone()),
+        None => {
+            languages.insert(label);
+        }
+    }
+    entry
+}
+
 /// [`build_graph_cached`] with explicit [`BuildOptions`].
 pub fn build_graph_cached_with(
     root: &Path,
     context_dir: &Path,
     opts: &BuildOptions,
 ) -> std::io::Result<BuildReport> {
+    let mut timer = crate::timing::Timer::start();
     let stamp = extractor_stamp();
     let cache_file = cache_path(context_dir, &stamp);
     let mut files = collect_files(root, context_dir)?;
     files.retain(|rel| under_only_dirs(&to_slash(rel), &opts.only_dirs));
+    timer.lap("walk");
     // The memory guard runs before the cache read (S0, B3).
     crate::guard::check(claimed_count(&files), !opts.no_reuse && cache_file.exists())?;
-    let mut old_cache = if opts.no_reuse {
-        ExtractCache {
-            version: CACHE_VERSION,
-            extractor: stamp.clone(),
-            files: BTreeMap::new(),
-        }
-    } else {
-        read_cache(&cache_file, &stamp)
-    };
+    // A thread hashes the claimed files while the cache parses. The prior
+    // wiring is read later, after the old cache is gone, to keep the peak
+    // memory the guard projects.
+    let (mut old_cache, mut pre) = std::thread::scope(|scope| {
+        let pre = scope.spawn(|| {
+            if opts.no_reuse || !cache_file.exists() {
+                return Ok(HashMap::new());
+            }
+            prehash(root, &files)
+        });
+        let cache = if opts.no_reuse {
+            ExtractCache {
+                version: CACHE_VERSION,
+                extractor: stamp.clone(),
+                files: BTreeMap::new(),
+            }
+        } else {
+            read_cache(&cache_file, &stamp)
+        };
+        let pre = pre
+            .join()
+            .map_err(|_| std::io::Error::other("a hash thread failed"))??;
+        Ok::<_, std::io::Error>((cache, pre))
+    })?;
+    timer.lap("read cache");
     let total = if opts.progress.is_some() {
         files
             .iter()
@@ -440,6 +638,7 @@ pub fn build_graph_cached_with(
     };
     let mut extractor = Extractor::new().map_err(std::io::Error::other)?;
     let mut generic_extractor = GenericExtractor::new().map_err(std::io::Error::other)?;
+    timer.lap("parser setup");
     let mut languages: BTreeSet<String> = BTreeSet::new();
     let mut new_files: BTreeMap<String, CacheEntry> = BTreeMap::new();
     let mut claimed_ids: Vec<String> = Vec::new();
@@ -447,6 +646,7 @@ pub fn build_graph_cached_with(
     let mut reused = 0usize;
 
     let mut errors: Vec<String> = Vec::new();
+    let [mut t_stat, mut t_read, mut t_hash, mut t_parse] = [std::time::Duration::ZERO; 4];
 
     for rel in &files {
         let id = to_slash(rel);
@@ -470,9 +670,11 @@ pub fn build_graph_cached_with(
             continue;
         };
         // A file gone between the walk and the stat leaves the set.
+        let t0 = std::time::Instant::now();
         let Ok((size, mtime_ms)) = stat_print(root, &id) else {
             continue;
         };
+        t_stat += t0.elapsed();
         claimed_ids.push(id.clone());
         if let Some(progress) = opts.progress {
             progress(claimed_ids.len(), total, &id);
@@ -482,6 +684,20 @@ pub fn build_graph_cached_with(
         // replayed. A stat may decide whether a query rebuilds; it never
         // decides what the rebuild reads, or a same-size edit inside one mtime
         // tick stays stale forever (P2-35, P1-46).
+        // The thread already hashed this file. A match replays the cache
+        // entry. A miss falls through to the read below, which parses.
+        // A changed stat means an edit after the early read: that hash is stale.
+        if let Some(((_, _), hash)) = pre
+            .remove(&id)
+            .filter(|(stat, _)| *stat == (size, mtime_ms))
+        {
+            if let Some(entry) = old_cache.files.remove(&id).filter(|e| e.hash == hash) {
+                reused += 1;
+                let entry = replay(entry, (size, mtime_ms), label, &mut errors, &mut languages);
+                new_files.insert(id, entry);
+                continue;
+            }
+        }
         let abs = root.join(rel);
         let empty_entry = |error: Option<String>| CacheEntry {
             size,
@@ -491,7 +707,10 @@ pub fn build_graph_cached_with(
             raw_edges: Vec::new(),
             error,
         };
-        let bytes = match fs::read(&abs) {
+        let t0 = std::time::Instant::now();
+        let read = fs::read(&abs);
+        t_read += t0.elapsed();
+        let bytes = match read {
             Ok(bytes) => bytes,
             Err(err) => {
                 // Recorded with an empty hash, so the freshness probe never
@@ -507,26 +726,21 @@ pub fn build_graph_cached_with(
             new_files.insert(id, empty_entry(None));
             continue;
         };
+        let t0 = std::time::Instant::now();
         let hash = hex_sha256(text.as_bytes());
+        t_hash += t0.elapsed();
 
-        if let Some(mut entry) = old_cache.files.remove(&id).filter(|e| e.hash == hash) {
+        if let Some(entry) = old_cache.files.remove(&id).filter(|e| e.hash == hash) {
             reused += 1;
-            entry.size = size;
-            entry.mtime_ms = mtime_ms;
-            match &entry.error {
-                // This file failed last time too.
-                Some(error) => errors.push(error.clone()),
-                None => {
-                    languages.insert(label);
-                }
-            }
+            let entry = replay(entry, (size, mtime_ms), label, &mut errors, &mut languages);
             new_files.insert(id, entry);
             continue;
         }
 
-        let Some((file_node, symbols, edges, label)) =
-            extract_text(rel, &text, &mut extractor, &mut generic_extractor)
-        else {
+        let t0 = std::time::Instant::now();
+        let extracted = extract_text(rel, &text, &mut extractor, &mut generic_extractor);
+        t_parse += t0.elapsed();
+        let Some((file_node, symbols, edges, label)) = extracted else {
             continue;
         };
         parsed += 1;
@@ -547,6 +761,17 @@ pub fn build_graph_cached_with(
     }
 
     drop(old_cache);
+    // The old cache is gone, so the prior wiring reads now, while the
+    // cache writes and the edges link. The peak holds the same two sets.
+    let prior = {
+        let dir = context_dir.to_path_buf();
+        std::thread::spawn(move || read_prior_nodes(&dir))
+    };
+    timer.show("stat (sum)", t_stat);
+    timer.show("read (sum)", t_read);
+    timer.show("hash (sum)", t_hash);
+    timer.show("parse (sum)", t_parse);
+    timer.lap("file loop (total)");
     let mut new_cache = ExtractCache {
         version: CACHE_VERSION,
         extractor: stamp,
@@ -555,6 +780,7 @@ pub fn build_graph_cached_with(
     if !opts.read_only {
         write_cache(&cache_file, &new_cache)?;
     }
+    timer.lap("write cache");
 
     // One copy of each node: the prints first, then the nodes move out of
     // the cache in claimed order (the walk order), never map order.
@@ -581,13 +807,20 @@ pub fn build_graph_cached_with(
         }
     }
     drop(new_cache);
+    timer.lap("prints and nodes");
 
     let go_modules = discover_go_modules(root, &files)?;
     let rust_packages = discover_rust_packages(root, &files);
     let mut graph = assemble(root, &files, nodes, &raw_edges, languages);
+    timer.lap("modules and assemble");
     graph.edges = resolve_edges_with_context(&graph.nodes, &raw_edges, &go_modules, &rust_packages);
     graph.meta.edge_count = graph.edges.len();
-    carry_meaning_layer(&mut graph.nodes, &read_prior_nodes(context_dir));
+    timer.lap("link");
+    let prior = prior
+        .join()
+        .map_err(|_| std::io::Error::other("the prior wiring thread failed"))?;
+    carry_meaning_layer(&mut graph.nodes, &prior);
+    timer.lap("carry meaning layer");
 
     Ok(BuildReport {
         graph,
@@ -1310,6 +1543,25 @@ mod tests {
             .find(|m| m.dir == "b")
             .expect("b/go.mod module");
         assert_eq!(b.module, "example.com/tabbed");
+    }
+
+    #[test]
+    fn test_gox2_go_mod_replace_and_go_work_use_read_local_paths_only() {
+        let text = "module m\nreplace a.com/x => ./x\nreplace (\n\tb.com/y v1.0.0 => ../y // c\n\tc.com/z => c.com/z v2.0.0\n)\n";
+        let got = go_mod_replaces(text);
+        assert_eq!(
+            got,
+            vec![
+                ("a.com/x".to_string(), "./x".to_string()),
+                ("b.com/y".to_string(), "../y".to_string())
+            ]
+        );
+        assert_eq!(
+            go_work_uses("go 1.21\nuse ./a\nuse (\n\t./b\n)\n"),
+            ["./a", "./b"]
+        );
+        assert_eq!(join_rel("a/b", "../y").as_deref(), Some("a/y"));
+        assert_eq!(join_rel("", "../y"), None);
     }
 
     #[test]

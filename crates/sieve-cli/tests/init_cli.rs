@@ -1227,10 +1227,10 @@ fn expected_codex_hooks() -> serde_json::Value {
         }
     };
     serde_json::json!({ "hooks": {
-        "SessionStart": block(Some("startup|resume|compact"), "session-start", 10000),
-        "UserPromptSubmit": block(None, "prompt", 15000),
-        "PostToolUse": block(Some("apply_patch|Write|Edit|MultiEdit"), "post-edit", 10000),
-        "Stop": block(None, "stop", 10000),
+        "SessionStart": block(Some("startup|resume|compact"), "session-start", 10),
+        "UserPromptSubmit": block(None, "prompt", 15),
+        "PostToolUse": block(Some("apply_patch|Write|Edit|MultiEdit"), "post-edit", 10),
+        "Stop": block(None, "stop", 10),
     } })
 }
 
@@ -1544,12 +1544,12 @@ fn test_p4_07_hooks_merge_keeps_foreign_and_drops_stale_own_entries() {
 
     let expected_post_tool_use = serde_json::json!([
         foreign,
-        claude_hook_json("Write|Edit|MultiEdit", "post-edit", 10000),
-        claude_hook_json("Bash|mcp__sieve__|Read|Grep|Glob", "tool-savings", 8000),
-        claude_hook_json("Read", "post-read", 5000),
-        claude_hook_json("Bash", "post-read", 5000),
-        claude_hook_json("Bash", "post-search", 3000),
-        claude_hook_json("Grep", "post-search", 3000),
+        claude_hook_json("Write|Edit|MultiEdit", "post-edit", 10),
+        claude_hook_json("Bash|mcp__sieve__|Read|Grep|Glob", "tool-savings", 8),
+        claude_hook_json("Read", "post-read", 5),
+        claude_hook_json("Bash", "post-read", 5),
+        claude_hook_json("Bash", "post-search", 3),
+        claude_hook_json("Grep", "post-search", 3),
     ]);
     assert_eq!(
         settings["hooks"]["PostToolUse"], expected_post_tool_use,

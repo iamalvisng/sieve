@@ -2,6 +2,7 @@
 //! `.cache/ask-index.json` file (the `ask-ranking.md` note
 //! sections 1 and 2).
 
+use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
 use std::fs;
 use std::io;
@@ -60,10 +61,15 @@ pub type Bag = Vec<(String, u32)>;
 /// Counts `tokens` into a `Bag`, in first-occurrence order.
 pub fn bag(tokens: &[String]) -> Bag {
     let mut out: Bag = Vec::new();
+    // The map gives each token its place in `out`, so a count is O(1).
+    let mut at: HashMap<&str, usize> = HashMap::new();
     for token in tokens {
-        match out.iter_mut().find(|(t, _)| t == token) {
-            Some((_, count)) => *count += 1,
-            None => out.push((token.clone(), 1)),
+        match at.get(token.as_str()) {
+            Some(&i) => out[i].1 += 1,
+            None => {
+                at.insert(token.as_str(), out.len());
+                out.push((token.clone(), 1));
+            }
         }
     }
     out
@@ -102,6 +108,25 @@ pub struct AskIndex {
     pub docs: Vec<AskDoc>,
 }
 
+/// The node count from which `build_ask_index` uses threads.
+const PARALLEL_MIN: usize = 512;
+
+/// Builds the three token bags of one node.
+fn doc_of(node: &crate::wiring::Node) -> AskDoc {
+    let body_source = format!(
+        "{} {} {}",
+        node.signature.as_deref().unwrap_or(""),
+        node.summary.as_deref().unwrap_or(""),
+        node.body_text.as_deref().unwrap_or("")
+    );
+    AskDoc {
+        id: node.id.clone(),
+        name: bag(&tokenize(&node.name)),
+        path: bag(&tokenize(&node.path)),
+        body: bag(&tokenize(&body_source)),
+    }
+}
+
 /// Builds the `ask` sidecar index from `graph` (`ask-ranking.md` sections
 /// 1.4 to 1.7 and 2.3).
 ///
@@ -113,38 +138,50 @@ pub fn build_ask_index(graph: &Graph) -> AskIndex {
     let mut nodes: Vec<_> = graph.nodes.iter().collect();
     nodes.sort_by(|a, b| collate(&a.id, &b.id));
 
+    // The token bags depend on one node each, so threads build them in
+    // chunks. The chunks join in order, so the docs match a serial build.
+    let docs: Vec<AskDoc> = if nodes.len() < PARALLEL_MIN {
+        nodes.iter().map(|node| doc_of(node)).collect()
+    } else {
+        let threads = std::thread::available_parallelism().map_or(1, |n| n.get().min(8));
+        let size = nodes.len().div_ceil(threads);
+        std::thread::scope(|scope| {
+            let handles: Vec<_> = nodes
+                .chunks(size)
+                .map(|chunk| {
+                    scope.spawn(move || chunk.iter().map(|n| doc_of(n)).collect::<Vec<_>>())
+                })
+                .collect();
+            handles
+                .into_iter()
+                .flat_map(|h| h.join().unwrap_or_else(|e| std::panic::resume_unwind(e)))
+                .collect()
+        })
+    };
+
+    // The df table counts in doc order, so its token order is serial order.
     let mut df: Vec<(String, u32)> = Vec::new();
-    let mut docs: Vec<AskDoc> = Vec::with_capacity(nodes.len());
-
-    for node in &nodes {
-        let name = bag(&tokenize(&node.name));
-        let path = bag(&tokenize(&node.path));
-        let body_source = format!(
-            "{} {} {}",
-            node.signature.as_deref().unwrap_or(""),
-            node.summary.as_deref().unwrap_or(""),
-            node.body_text.as_deref().unwrap_or("")
-        );
-        let body = bag(&tokenize(&body_source));
-
-        let mut seen: Vec<&str> = Vec::new();
-        for (token, _) in name.iter().chain(path.iter()).chain(body.iter()) {
-            if seen.contains(&token.as_str()) {
+    // The map gives each token its place in `df`, so a count is O(1).
+    let mut df_at: HashMap<&str, usize> = HashMap::new();
+    for doc in &docs {
+        let mut seen: HashSet<&str> = HashSet::new();
+        for (token, _) in doc
+            .name
+            .iter()
+            .chain(doc.path.iter())
+            .chain(doc.body.iter())
+        {
+            if !seen.insert(token.as_str()) {
                 continue;
             }
-            seen.push(token.as_str());
-            match df.iter_mut().find(|(t, _)| t == token) {
-                Some((_, count)) => *count += 1,
-                None => df.push((token.clone(), 1)),
+            match df_at.get(token.as_str()) {
+                Some(&i) => df[i].1 += 1,
+                None => {
+                    df_at.insert(token.as_str(), df.len());
+                    df.push((token.clone(), 1));
+                }
             }
         }
-
-        docs.push(AskDoc {
-            id: node.id.clone(),
-            name,
-            path,
-            body,
-        });
     }
 
     let avg_body_len = if docs.is_empty() {
@@ -316,6 +353,27 @@ mod tests {
         // a.rs#run body = "run the loop" -> tokens "run","loop" (len 2)
         // b.rs#run body = "run once" -> tokens "run","once" (len 2)
         assert_eq!(index.avg_body_len, 2.0);
+    }
+
+    #[test]
+    fn build_ask_index_with_threads_matches_the_one_thread_result() {
+        let mut graph = sample_graph();
+        for i in 0..(PARALLEL_MIN * 2) {
+            let id = format!("dir/f{i}.rs#run{i}");
+            graph.nodes.push(sample_node(
+                &id,
+                "runLoop",
+                "dir/f.rs",
+                Some("run the loop once"),
+            ));
+        }
+        let index = build_ask_index(&graph);
+        let mut nodes: Vec<_> = graph.nodes.iter().collect();
+        nodes.sort_by(|a, b| collate(&a.id, &b.id));
+        let serial: Vec<AskDoc> = nodes.iter().map(|n| doc_of(n)).collect();
+        assert_eq!(index.docs, serial);
+        let run_loop = index.df.iter().find(|(t, _)| t == "loop").map(|(_, c)| *c);
+        assert_eq!(run_loop, Some(PARALLEL_MIN as u32 * 2 + 1));
     }
 
     #[test]

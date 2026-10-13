@@ -23,6 +23,8 @@
 
 (call_expression function: (generic_function function: (scoped_identifier name: (identifier) @name))) @reference.call
 
+(call_expression function: (field_expression value: (self) field: (field_identifier) @name)) @reference.call
+
 (type_item name: (type_identifier) @name) @definition.type
 
 (macro_definition name: (identifier) @name) @definition.function

@@ -69,10 +69,17 @@ unverified when the oracle gives no single answer.
 
 | Repo | Version | Extracted | Wrong | Unverified | Oracle |
 |---|---|---|---|---|---|
-| Sieve | c26ebc3 | 5,044 | 0 | 0 | rust-analyzer 0.3.3065 |
-| ripgrep | 3fce3b5 | 1,209 | 0 | 3 (platform `cfg`) | rust-analyzer 0.3.3065 |
+| Sieve | f8a181f | 5,541 | 0 | 0 | rust-analyzer 0.3.3065 |
+| ripgrep | 3fce3b5 | 1,547 | 0 | 3 (platform `cfg`) | rust-analyzer 0.3.3065 |
+| itertools | v0.15.0 | 178 | 0 | 0 | rust-analyzer 0.3.3065 |
 | httpx | b5addb6 | 367 | 0 | 0 | scip-python 0.6.6 |
 | black | 11cff13 | 1,161 | 0 | 2 | scip-python 0.6.6 |
+| fzf | v0.74.5 | 1,434 | 0 | 72 | scip-go v0.2.7 |
+| gin | v1.12.0 | 1,573 | 0 | 0 | scip-go v0.2.7 |
+| caddy | v2.11.7 | 4,168 | 0 | 12 | scip-go v0.2.7 |
+| jsoup | jsoup-1.23.2 | 2,501 | 0 | 46 | javac tree API, JDK 21.0.12+8 |
+| commons-lang | rel/commons-lang-3.21.0 | 5,612 | 0 | 1 | javac tree API, JDK 21.0.12+8 |
+| gson | gson-parent-2.14.0 | 3,211 | 0 | 304 | javac tree API, JDK 21.0.12+8 |
 
 Before the fix, the same-file name rule gave wrong Extracted links:
 
@@ -82,10 +89,28 @@ Before the fix, the same-file name rule gave wrong Extracted links:
 | ripgrep 3fce3b5 | 173 | 938 |
 | httpx b5addb6 | 1 | 324 |
 | black 11cff13 | 20 | 833 |
+| jsoup jsoup-1.23.2 | 140 | 1,522 |
+| commons-lang rel/commons-lang-3.21.0 | 829 | 4,689 |
+| gson gson-parent-2.14.0 | 23 | 1,543 |
 
 The oracle scripts are in `scripts/oracle/`. `rs-calls.py` and
-`rs-compare.py` check Rust. `py-calls.py` and `py-compare.py` check Python.
+`rs-compare.py` check Rust. `py-calls.py` and `py-compare.py` check Python. `go-calls.py` and `go-compare.py` check Go. `JvCalls.java` and `jv-compare.py` check Java.
 `ts-calls.mjs` and `compare.mjs` check TypeScript.
+
+## Refresh after an edit
+
+Sieve refreshes the index before a query. This table shows the time of a 1-file refresh in seconds. The numbers are the median of 5 on an Apple M-series machine with a release build. The time is the time of `sieve ask` minus the time of the same query with `--no-refresh`. Output is byte-identical to a full build on all 6 repos. A refresh with no change takes 0.03 to 0.17 s, unchanged. `SIEVE_TIMING=1` prints each phase to stderr.
+
+| Repo | Files | Before | After |
+|---|---|---|---|
+| caddy v2.11.7 | 362 Go | 0.76 | 0.18 |
+| commons-lang 3.21.0 | 629 Java | 1.46 | 0.62 |
+| vite (the benchmarks commit) | 578 .ts of 1,583 | 0.85 | 0.34 |
+| Sieve source | 193 .rs | 0.91 | 0.31 |
+| gson 2.14.0 (held out) | 262 .java | 0.498 | 0.239 |
+| fzf v0.74.5 (held out) | 90 .go | 3.073 | 0.250 |
+
+The fzf "Before" time comes from a development build with a Go indexing cost that no release had. Against that build with only the Go fix, the refresh change alone takes fzf from 0.487 s to 0.250 s.
 
 ## Limits
 

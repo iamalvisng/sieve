@@ -84,6 +84,259 @@ pub struct RawEdge {
     /// `None` for every other raw edge, so their cache bytes stay the same.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub py: Option<PyRec>,
+    /// A Go `calls` edge only: the same-file proof of its target. `None`
+    /// for every other raw edge, so their cache bytes stay the same.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub go: Option<GoRec>,
+    /// A Java `calls` edge, or a Java file's facts on an `imports` record:
+    /// the data of the Java call proof. `None` for every other raw edge, so
+    /// their cache bytes stay the same.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub java: Option<JavaRec>,
+}
+
+/// What the Java pass records on a raw edge.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum JavaRec {
+    /// A call the Java index must prove (JVX, design `java-xfile.md`).
+    Cross(JavaCall),
+    /// The facts of one Java file. They ride on an `imports` raw edge that
+    /// the resolver never turns into a graph edge.
+    File(Box<JavaFileRec>),
+}
+
+/// The receiver shape of a Java call.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum JavaShape {
+    /// A call `m()` with no receiver.
+    Bare,
+    /// A call `this.m()`.
+    This,
+    /// A call `super.m()`.
+    Super,
+    /// A call `N.m()` where `N` is no local name: a field or a type.
+    Name { name: String },
+    /// A call `x.m()` where the local `x` has the written type `ty`.
+    Var { ty: String },
+    /// A call `this.f.m()`.
+    Field { name: String },
+    /// A `new Foo(..)` expression with no class body.
+    New { ty: String },
+}
+
+/// One Java call that the index proves.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JavaCall {
+    /// The receiver shape.
+    pub shape: JavaShape,
+    /// The method name, or the type name of a `new` expression.
+    pub name: String,
+    /// The count of arguments.
+    pub arity: u32,
+    /// The index of the innermost enclosing type in the file record.
+    pub ctx: u32,
+}
+
+/// The kind of a Java type declaration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum JavaKind {
+    /// A `class`.
+    Class,
+    /// An `interface`.
+    Interface,
+    /// An `enum`.
+    Enum,
+    /// A `record`.
+    Record,
+    /// An `@interface`.
+    Annotation,
+}
+
+/// One method of a Java type.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JavaMethod {
+    /// The method name.
+    pub name: String,
+    /// The node id. Empty when no node, or 2 nodes, match.
+    pub id: String,
+    /// The 1-based start line of the declaration.
+    pub line: u32,
+    /// 0 private, 1 package, 2 protected, 3 public.
+    pub vis: u8,
+    /// The method is `static`.
+    pub is_static: bool,
+    /// The method has no body and is no native method.
+    pub is_abstract: bool,
+    /// The method is `final`.
+    pub is_final: bool,
+    /// The written type of each parameter, generics dropped, `[]` for an
+    /// array or a varargs. `?` marks a type that no name can compare.
+    pub params: Vec<String>,
+}
+
+/// One Java type in the member chain of a top-level type.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JavaType {
+    /// The simple name.
+    pub name: String,
+    /// The node id. Empty when no node, or 2 nodes, match.
+    pub id: String,
+    /// The 1-based start line of the declaration.
+    pub line: u32,
+    /// The kind.
+    pub kind: JavaKind,
+    /// The index of the enclosing type.
+    pub outer: Option<u32>,
+    /// The type is `public`.
+    pub public: bool,
+    /// 0 private, 1 package, 2 protected, 3 public. A member of an
+    /// interface is public.
+    pub vis: u8,
+    /// The type is `abstract`.
+    pub is_abstract: bool,
+    /// The type is `final`.
+    pub is_final: bool,
+    /// The written superclass, generics dropped.
+    pub extends: Option<String>,
+    /// The written interfaces, generics dropped. An interface lists its
+    /// `extends` types here.
+    pub implements: Vec<String>,
+    /// The type parameter names.
+    pub tparams: Vec<String>,
+    /// Each field with its written simple type, when it has one.
+    pub fields: Vec<(String, Option<String>)>,
+    /// The record component names.
+    pub components: Vec<String>,
+    /// The member types as `(name, index)`.
+    pub members: Vec<(String, u32)>,
+    /// The methods declared in the body.
+    pub methods: Vec<JavaMethod>,
+}
+
+/// One import of a Java file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JavaImport {
+    /// The dotted path, with no `.*`.
+    pub path: String,
+    /// The import ends in `.*`.
+    pub star: bool,
+    /// The import is `import static`.
+    pub stat: bool,
+}
+
+/// A class body that no clean type owns: an anonymous class, an enum
+/// constant body or a local class (JV10, fix B4).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JavaBody {
+    /// The name of a local class, `None` for an anonymous body.
+    pub name: Option<String>,
+    /// The simple names of the supertypes.
+    pub sups: Vec<String>,
+    /// The names of the methods the body declares.
+    pub methods: Vec<String>,
+}
+
+/// The facts of one Java file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JavaFileRec {
+    /// The package name, empty for the default package.
+    pub pkg: String,
+    /// The file has a parse error.
+    pub broken: bool,
+    /// The file imports a `lombok` type.
+    pub lombok: bool,
+    /// Each import.
+    pub imports: Vec<JavaImport>,
+    /// Each type in the member chain of the top-level types.
+    pub types: Vec<JavaType>,
+    /// Each anonymous, enum constant and local class body.
+    pub bodies: Vec<JavaBody>,
+}
+
+/// What the Go pass records on a raw edge.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GoRec {
+    /// A call proven to reach the func or method node `target` of its file.
+    SameFile { target: String },
+    /// The proof before node ids exist: the func or method `name` that
+    /// starts on `line`. `method` is true for a method, false for a func.
+    /// `extract_file` turns it into `SameFile`.
+    Def {
+        name: String,
+        line: u32,
+        method: bool,
+    },
+    /// A call the package index must prove. It needs the facts of other
+    /// files of the package, or of an imported package.
+    Cross(GoCall),
+    /// The package-level facts of one Go file. It rides on an `imports` raw
+    /// edge that the resolver never turns into a graph edge.
+    File(Box<GoFileRec>),
+}
+
+/// A written Go type: `T` or `p.T`. A pointer star is dropped.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GoTy {
+    /// The qualifier `p` of `p.T`, as written in the file.
+    pub qual: Option<String>,
+    /// The type name, or the func name of a constructor.
+    pub name: String,
+}
+
+/// How a receiver variable gets its type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GoTyFrom {
+    /// The type is written: a param, `var x T`, `T{}` or `&T{}`.
+    Written,
+    /// The type is the one result of the call to the func named by the type.
+    Ctor,
+    /// The type is the argument of `new(T)`.
+    New,
+}
+
+/// The shape of a Go call that the package index proves.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GoCall {
+    /// A bare call `f()` of a package-level func in another file.
+    Bare,
+    /// A call `p.F()` where `p` is an import name.
+    Qual { pkg: String },
+    /// A call `x.M()` where the variable `x` has the type `ty`.
+    Method { ty: GoTy, from: GoTyFrom },
+}
+
+/// One type of a Go file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GoTypeRec {
+    /// The type name.
+    pub name: String,
+    /// True for a defined, non-generic, non-interface type.
+    pub plain: bool,
+    /// The field names, embedded types included.
+    pub fields: Vec<String>,
+}
+
+/// The package-level facts of one Go file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GoFileRec {
+    /// The name in the package clause.
+    pub pkg: String,
+    /// The file starts with the build line `ignore`.
+    pub ignore: bool,
+    /// The file has a parse error.
+    pub broken: bool,
+    /// The file has a dot import.
+    pub dot: bool,
+    /// Each import as `(alias, path)`.
+    pub imports: Vec<(Option<String>, String)>,
+    /// Each package-level name with its count of bindings.
+    pub names: Vec<(String, u32)>,
+    /// Each package-level func with its one written result type.
+    pub funcs: Vec<(String, Option<String>)>,
+    /// Each package-level type.
+    pub types: Vec<GoTypeRec>,
+    /// Each `(type, method, count)` of the methods in the file.
+    pub methods: Vec<(String, String, u32)>,
 }
 
 /// What the Python pass records on a raw edge.
@@ -339,6 +592,10 @@ impl Extractor {
             source,
             is_python,
             py: Default::default(),
+            go: (lang == "go" && !crate::go_tree::go_skipped(path))
+                .then(|| crate::go_tree::GoFile::new(tree.root_node(), source)),
+            java: (lang == "java")
+                .then(|| crate::java_tree::JavaFile::new(tree.root_node(), source)),
         };
         let mut sink = Sink {
             minted: &mut minted,
@@ -368,7 +625,15 @@ impl Extractor {
                     .file_edge(tree.root_node(), path, source),
             );
         }
+        if let Some(g) = &file.go {
+            edges.push(g.file_edge(path));
+        }
+        if let Some(j) = &file.java {
+            edges.push(j.file_edge(path));
+        }
         resolve_py_defs(&out, &mut edges);
+        resolve_go_defs(&out, &mut edges);
+        resolve_java_defs(&out, &mut edges);
         (out, edges)
     }
 }
@@ -409,6 +674,75 @@ fn resolve_py_defs(nodes: &[Node], edges: &mut [RawEdge]) {
     }
 }
 
+/// Turns each `GoRec::Def` into `GoRec::SameFile` with the id of the node
+/// that has the same name and start line, or drops it when none matches.
+fn resolve_go_defs(nodes: &[Node], edges: &mut [RawEdge]) {
+    for edge in edges.iter_mut() {
+        let Some(GoRec::Def { name, line, method }) = &edge.go else {
+            continue;
+        };
+        let start = format!("L{line}-");
+        let kind = if *method {
+            Kind::Method
+        } else {
+            Kind::Function
+        };
+        let target = nodes
+            .iter()
+            .find(|n| n.name == *name && n.kind == kind && n.span.starts_with(&start))
+            .map(|n| n.id.clone());
+        edge.go = target.map(|target| GoRec::SameFile { target });
+    }
+}
+
+/// Fills the node id of each type and method in a `JavaRec::File`. The node
+/// with the same name and start line gives the id. A name and line that
+/// match 0 or 2 nodes give an empty id, and no proof reaches it.
+fn resolve_java_defs(nodes: &[Node], edges: &mut [RawEdge]) {
+    if !edges
+        .iter()
+        .any(|e| matches!(e.java, Some(JavaRec::File(_))))
+    {
+        return;
+    }
+    let mut ids: HashMap<(bool, String, u32), Option<String>> = HashMap::new();
+    for n in nodes {
+        let is_method = n.kind == Kind::Method;
+        let is_type = matches!(
+            n.kind,
+            Kind::Class | Kind::Interface | Kind::Enum | Kind::Struct
+        );
+        let line = n
+            .span
+            .strip_prefix('L')
+            .and_then(|r| r.split('-').next())
+            .and_then(|l| l.parse::<u32>().ok());
+        let (Some(line), true) = (line, is_method || is_type) else {
+            continue;
+        };
+        ids.entry((is_method, n.name.clone(), line))
+            .and_modify(|v| *v = None)
+            .or_insert_with(|| Some(n.id.clone()));
+    }
+    for edge in edges.iter_mut() {
+        let Some(JavaRec::File(rec)) = &mut edge.java else {
+            continue;
+        };
+        let get = |is_method: bool, name: &str, line: u32| -> String {
+            ids.get(&(is_method, name.to_string(), line))
+                .cloned()
+                .flatten()
+                .unwrap_or_default()
+        };
+        for t in &mut rec.types {
+            t.id = get(false, &t.name, t.line);
+            for m in &mut t.methods {
+                m.id = get(true, &m.name, m.line);
+            }
+        }
+    }
+}
+
 /// The per-file constants a walk needs at every node: the file id, its
 /// source text, and whether it is a Python file.
 struct FileCtx<'a> {
@@ -417,6 +751,10 @@ struct FileCtx<'a> {
     is_python: bool,
     /// The scope tables for Python call proofs.
     py: std::cell::RefCell<crate::py_proof::PyScopes>,
+    /// The package-level facts for Go call proofs.
+    go: Option<crate::go_tree::GoFile>,
+    /// The type facts for Java call proofs.
+    java: Option<crate::java_tree::JavaFile>,
 }
 
 /// The mutable collectors a walk writes into: minted ids, symbol nodes,
@@ -491,6 +829,8 @@ fn walk(node: TsNode, ctx: &Ctx, file: &FileCtx, sink: &mut Sink) {
                 ns_export: false,
                 rust: None,
                 py: None,
+                go: None,
+                java: None,
             });
         }
         return;
@@ -531,6 +871,8 @@ fn walk(node: TsNode, ctx: &Ctx, file: &FileCtx, sink: &mut Sink) {
                     ns_export: false,
                     rust: None,
                     py: None,
+                    go: None,
+                    java: None,
                 });
             } else {
                 let (specifier, import_name, ns_export) =
@@ -563,6 +905,14 @@ fn walk(node: TsNode, ctx: &Ctx, file: &FileCtx, sink: &mut Sink) {
                 } else {
                     None
                 };
+                let go = file
+                    .go
+                    .as_ref()
+                    .and_then(|g| g.call_rec(node, &name, source));
+                let java = file
+                    .java
+                    .as_ref()
+                    .and_then(|j| j.call_rec(node, &name, arg_count, source));
                 sink.edges.push(RawEdge {
                     source: ctx.parent_id.clone(),
                     relation: Relation::Calls,
@@ -582,6 +932,8 @@ fn walk(node: TsNode, ctx: &Ctx, file: &FileCtx, sink: &mut Sink) {
                     ns_export,
                     rust: None,
                     py,
+                    go,
+                    java,
                 });
             }
         }
@@ -731,6 +1083,8 @@ fn export_record(path: &str, specifier: Option<String>, reexport: ReExport) -> R
         ns_export: false,
         rust: None,
         py: None,
+        go: None,
+        java: None,
     }
 }
 
@@ -977,6 +1331,8 @@ fn emit_definition(node: TsNode, desc: Desc, ctx: &Ctx, file: &FileCtx, sink: &m
         ns_export: false,
         rust: None,
         py: None,
+        go: None,
+        java: None,
     });
     if heritage_gate(ctx.lang, kind) {
         emit_heritage_edges(node, &id, path, source, ctx.lang, sink.edges);
@@ -1370,6 +1726,8 @@ fn emit_heritage_edges(
             ns_export: false,
             rust: None,
             py: None,
+            go: None,
+            java: None,
         });
     };
     let mut push = |relation: Relation, base: TsNode| {
@@ -2173,6 +2531,8 @@ fn maybe_emit_reference(
         ns_export: false,
         rust: None,
         py: None,
+        go: None,
+        java: None,
     });
 }
 

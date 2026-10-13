@@ -16,7 +16,7 @@ use sieve_core::Node;
 use crate::extract::RawEdge;
 
 /// The version this build writes and expects to read back.
-pub const CACHE_VERSION: u32 = 11;
+pub const CACHE_VERSION: u32 = 15;
 
 /// The most recent extract cache files Sieve keeps per context directory.
 const KEPT_CACHES: usize = 2;
@@ -84,17 +84,74 @@ pub fn write_cache(path: &Path, cache: &ExtractCache) -> io::Result<()> {
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "cache path has no parent"))?;
     fs::create_dir_all(dir)?;
 
-    let body =
-        serde_json::to_vec(cache).map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
+    let pieces = cache_pieces(cache)?;
 
     let tmp_path = dir.join(format!(".extract-tmp-{}", std::process::id()));
     {
         let mut tmp = fs::File::create(&tmp_path)?;
-        tmp.write_all(&body)?;
+        for piece in &pieces {
+            tmp.write_all(piece)?;
+        }
     }
     fs::rename(&tmp_path, path)?;
 
     prune_caches(dir)
+}
+
+/// The entry count from which `cache_pieces` uses threads.
+const PARALLEL_MIN: usize = 64;
+
+/// Serializes `cache` into byte pieces. The pieces joined in order equal
+/// `serde_json::to_vec(cache)`. Threads serialize the file entries in
+/// chunks, because that is almost all of the work.
+fn cache_pieces(cache: &ExtractCache) -> io::Result<Vec<Vec<u8>>> {
+    let bad = |err: serde_json::Error| io::Error::new(io::ErrorKind::InvalidData, err);
+    if cache.files.len() < PARALLEL_MIN {
+        return Ok(vec![serde_json::to_vec(cache).map_err(bad)?]);
+    }
+    let head = format!(
+        "{{\"version\":{},\"extractor\":{},\"files\":{{",
+        cache.version,
+        serde_json::to_string(&cache.extractor).map_err(bad)?
+    );
+    let entries: Vec<(&String, &CacheEntry)> = cache.files.iter().collect();
+    let threads = std::thread::available_parallelism().map_or(1, |n| n.get().min(8));
+    let size = entries.len().div_ceil(threads);
+    let chunks = std::thread::scope(|scope| {
+        let handles: Vec<_> = entries
+            .chunks(size)
+            .map(|chunk| {
+                scope.spawn(move || -> Result<Vec<u8>, serde_json::Error> {
+                    let mut out = Vec::new();
+                    for (key, entry) in chunk {
+                        if !out.is_empty() {
+                            out.push(b',');
+                        }
+                        serde_json::to_writer(&mut out, key)?;
+                        out.push(b':');
+                        serde_json::to_writer(&mut out, entry)?;
+                    }
+                    Ok(out)
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .map(|h| {
+                h.join()
+                    .map_err(|_| io::Error::other("cache thread failed"))
+            })
+            .collect::<io::Result<Vec<_>>>()
+    })?;
+    let mut pieces = vec![head.into_bytes()];
+    for (i, chunk) in chunks.into_iter().enumerate() {
+        if i > 0 {
+            pieces.push(b",".to_vec());
+        }
+        pieces.push(chunk.map_err(bad)?);
+    }
+    pieces.push(b"}}".to_vec());
+    Ok(pieces)
 }
 
 fn prune_caches(dir: &Path) -> io::Result<()> {
@@ -167,6 +224,18 @@ mod tests {
             extractor: stamp.to_string(),
             files,
         }
+    }
+
+    #[test]
+    fn pieces_join_to_the_serde_bytes_for_a_big_cache() {
+        let mut cache = sample_cache("stamp\"q");
+        for i in 0..300 {
+            let mut entry = cache.files["a.ts"].clone();
+            entry.size = i;
+            cache.files.insert(format!("dir/f{i}.ts"), entry);
+        }
+        let joined: Vec<u8> = cache_pieces(&cache).expect("pieces").concat();
+        assert_eq!(joined, serde_json::to_vec(&cache).expect("serde"));
     }
 
     #[test]

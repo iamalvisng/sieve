@@ -176,6 +176,14 @@ def classify(text, lines, l0, c0, c1, name, dstname, src, dst, in_macro, globs, 
     return "bare"
 
 
+def owner(sym):
+    """Owner of the target fn from its SCIP symbol: inherent, trait_impl, trait, free."""
+    m = re.search(r"impl#\[[^\]]*\](\[[^\]]*\])?[^/\[]*$", sym)
+    if m:
+        return "trait_impl" if m.group(1) else "inherent"
+    return "trait" if re.search(r"[A-Za-z0-9_]#" + FN.pattern, sym) else "free"
+
+
 def main():
     repo = os.path.realpath(sys.argv[1])
     out = open(sys.argv[2], "w") if len(sys.argv) > 2 else sys.stdout
@@ -197,6 +205,11 @@ def main():
                 defs.setdefault(o["sym"], []).append((rel, s[0] + 1, s[2] + 1, o["range"]))
     rows = []
     for rel, occs in docs:
+        rows.append({"src": rel, "line": 0, "shape": "doc", "dst": rel, "name": "", "dst_start": 0, "dst_end": 0, "owner": "none"})
+        for o in occs:  # fn definitions: lets the compare tell cfg-off callers from wrong edges
+            if o["role"] & 1 and FN.search(o.get("sym", "")) and "range" in o:
+                rows.append({"src": rel, "line": o["range"][0] + 1, "shape": "def", "dst": rel, "name": "",
+                             "dst_start": 0, "dst_end": 0, "owner": "none"})
         p = os.path.join(repo, rel)
         try:
             text = open(p, encoding="utf-8").read()
@@ -228,7 +241,7 @@ def main():
             for d in ds:
                 shape = classify(text, lines, l0, c0, c1, name, dstname, rel, d[0], inm(l0, c0), globs, imported)
                 row = {"src": rel, "line": l0 + 1, "shape": shape, "dst": d[0], "name": dstname,
-                       "dst_start": d[1], "dst_end": d[2]}
+                       "dst_start": d[1], "dst_end": d[2], "owner": owner(sym)}
                 if amb:
                     row["ambiguous"] = True
                 rows.append(row)

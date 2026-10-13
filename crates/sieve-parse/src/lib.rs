@@ -9,7 +9,13 @@ pub mod comments;
 pub mod container;
 pub mod extract;
 pub mod generic;
+mod go_index;
+mod go_proof;
+mod go_tree;
 pub mod guard;
+mod java_index;
+mod java_proof;
+mod java_tree;
 pub mod lsp;
 mod py_proof;
 mod py_stdlib;
@@ -20,6 +26,7 @@ mod rust_items;
 mod rust_proof;
 mod rust_tree;
 pub mod stamp;
+pub mod timing;
 pub use build::{
     build_graph, build_graph_cached, build_graph_cached_with, build_graph_with_raw, BuildOptions,
     BuildReport,

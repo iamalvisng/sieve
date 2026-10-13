@@ -213,28 +213,38 @@ struct Loaded {
 /// Extracts breadth-tier files with one long-lived `Parser` per grammar,
 /// same contract as [`crate::extract::Extractor`].
 pub struct GenericExtractor {
-    loaded: std::collections::HashMap<&'static str, Loaded>,
+    /// Each grammar loads on its first file. `None` marks a grammar that
+    /// failed to load.
+    loaded: std::collections::HashMap<&'static str, Option<Loaded>>,
+}
+
+/// Loads the parser and the tags query of one breadth grammar. A query
+/// that fails to compile (none do today) falls back to the walker.
+fn load_lang(name: &str) -> Option<Loaded> {
+    let language = language_for(name)?;
+    let mut parser = Parser::new();
+    parser.set_language(&language).ok()?;
+    let query = scm_for(name).and_then(|scm| {
+        let stripped = strip_predicates(scm);
+        Query::new(&language, &stripped).ok()
+    });
+    Some(Loaded { parser, query })
 }
 
 impl GenericExtractor {
-    /// Builds one `Parser` per breadth grammar, and compiles its tags
-    /// query when `scm_for` has one. A query that fails to compile (none
-    /// do today) falls back to the walker for that language.
+    /// Makes an empty extractor. Compiling every tags query costs about
+    /// 100 ms, so each grammar loads on its first file instead.
     pub fn new() -> Result<Self, tree_sitter::LanguageError> {
-        let mut loaded = std::collections::HashMap::new();
+        // A grammar that does not load is an error now, as before. Only
+        // the slow query compile waits for the first file.
         for lang in GENERIC_LANGS {
-            let Some(language) = language_for(lang.name) else {
-                continue;
-            };
-            let mut parser = Parser::new();
-            parser.set_language(&language)?;
-            let query = scm_for(lang.name).and_then(|scm| {
-                let stripped = strip_predicates(scm);
-                Query::new(&language, &stripped).ok()
-            });
-            loaded.insert(lang.name, Loaded { parser, query });
+            if let Some(language) = language_for(lang.name) {
+                Parser::new().set_language(&language)?;
+            }
         }
-        Ok(Self { loaded })
+        Ok(Self {
+            loaded: std::collections::HashMap::new(),
+        })
     }
 
     /// Extracts every symbol node and raw edge from one breadth-tier
@@ -246,7 +256,14 @@ impl GenericExtractor {
         source: &str,
         lang_name: &str,
     ) -> (Vec<Node>, Vec<RawEdge>) {
-        let Some(entry) = self.loaded.get_mut(lang_name) else {
+        let Some(lang) = GENERIC_LANGS.iter().find(|l| l.name == lang_name) else {
+            return (Vec::new(), Vec::new());
+        };
+        let slot = self
+            .loaded
+            .entry(lang.name)
+            .or_insert_with(|| load_lang(lang.name));
+        let Some(entry) = slot.as_mut() else {
             return (Vec::new(), Vec::new());
         };
         let Some(tree) = entry.parser.parse(source, None) else {
@@ -461,6 +478,13 @@ fn tags_extract(
         } else {
             None
         };
+        // RMX1: an unproven `self.f()` makes no edge.
+        if lang_name == "rust"
+            && rust.is_none()
+            && crate::rust_proof::is_method_name(root, at, name.len())
+        {
+            continue;
+        }
         raw_edges.push(RawEdge {
             source: source_id,
             relation: Relation::Calls,
@@ -484,6 +508,8 @@ fn tags_extract(
             ns_export: false,
             rust,
             py: None,
+            go: None,
+            java: None,
         });
     }
     for (name, at) in refs {
@@ -522,6 +548,8 @@ fn tags_extract(
             ns_export: false,
             rust: None,
             py: None,
+            go: None,
+            java: None,
         });
     }
 }
@@ -715,6 +743,8 @@ fn visit_includes(node: TsNode, path: &str, source: &str, raw_edges: &mut Vec<Ra
                             ns_export: false,
                             rust: None,
                             py: None,
+                            go: None,
+                            java: None,
                         });
                     }
                 }
@@ -763,6 +793,8 @@ fn visit_uses(node: TsNode, path: &str, source: &str, raw_edges: &mut Vec<RawEdg
                     ns_export: false,
                     rust: None,
                     py: None,
+                    go: None,
+                    java: None,
                 });
             }
         }

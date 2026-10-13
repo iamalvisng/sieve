@@ -111,6 +111,8 @@ pub fn push_file_record(
         ns_export: false,
         rust: Some(RustRec::File { items }),
         py: None,
+        go: None,
+        java: None,
     });
 }
 

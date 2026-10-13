@@ -7,8 +7,10 @@ use std::path::Path;
 use sieve_core::lang::lang_for_path;
 use sieve_core::{Confidence, Edge, Kind, Node, Relation};
 
-use crate::extract::{PyRec, RawEdge, ReExport, RustRec};
+use crate::extract::{GoRec, JavaRec, PyRec, RawEdge, ReExport, RustRec};
 use crate::generic::generic_lang_of;
+use crate::go_index::GoIndex;
+use crate::java_index::JavaIndex;
 use crate::py_tree::{Outcome as PyOutcome, PyIndex};
 use crate::rust_tree::{Outcome, RustIndex, RustPackage};
 
@@ -29,6 +31,10 @@ type NodeRef<'a> = &'a Node;
 pub struct GoModule {
     pub module: String,
     pub dir: String,
+    /// The other modules this one may import from the repo: a pair of
+    /// module path (`""` for a `go.work` entry) and repo dir, from
+    /// `replace => ./path` and from `go.work use`.
+    pub links: Vec<(String, String)>,
 }
 
 /// The per-node-name indexes `resolve_edges` builds once and every
@@ -62,6 +68,10 @@ struct Indexes<'a> {
     rust: RustIndex,
     /// The Python module map, for exact Python call links.
     py: PyIndex,
+    /// The Go package index, for exact Go call links.
+    go: GoIndex,
+    /// The Java type index, for exact Java call links.
+    java: JavaIndex,
     /// Ids of the definitions a `contains` raw edge marks as a direct
     /// named export (TS and JS).
     direct_exports: HashSet<&'a str>,
@@ -109,6 +119,8 @@ pub fn resolve_edges_with_context(
     let mut idx = build_indexes(nodes, raw);
     idx.rust = RustIndex::build(raw, rust_packages);
     idx.py = PyIndex::build(nodes, raw);
+    idx.go = GoIndex::build(raw, go_modules);
+    idx.java = JavaIndex::build(raw);
 
     let mut out: Vec<Edge> = Vec::new();
     let mut seen: HashSet<(String, &'static str, String)> = HashSet::new();
@@ -295,6 +307,8 @@ fn build_indexes<'a>(nodes: &'a [Node], raw: &'a [RawEdge]) -> Indexes<'a> {
         rust_crate_roots,
         rust: RustIndex::default(),
         py: PyIndex::default(),
+        go: GoIndex::default(),
+        java: JavaIndex::default(),
     }
 }
 
@@ -465,12 +479,47 @@ fn resolve_calls(raw: &RawEdge, idx: &Indexes) -> Option<Edge> {
             _ => {}
         }
     }
+    if let Some(GoRec::SameFile { target }) = &raw.go {
+        if idx.node_ids.contains(target.as_str()) {
+            return Some(Edge {
+                source: raw.source.clone(),
+                target: target.clone(),
+                relation: Relation::Calls,
+                confidence: Confidence::Extracted,
+            });
+        }
+    }
+    if let Some(GoRec::Cross(call)) = &raw.go {
+        if let Some(target) = idx.go.resolve(&raw.file, call, name) {
+            if idx.node_ids.contains(target.as_str()) {
+                return Some(Edge {
+                    source: raw.source.clone(),
+                    target,
+                    relation: Relation::Calls,
+                    confidence: Confidence::Extracted,
+                });
+            }
+        }
+    }
+    if let Some(JavaRec::Cross(call)) = &raw.java {
+        if let Some(target) = idx.java.resolve(&raw.file, &raw.source, call, name) {
+            if idx.node_ids.contains(target.as_str()) {
+                return Some(Edge {
+                    source: raw.source.clone(),
+                    target,
+                    relation: Relation::Calls,
+                    confidence: Confidence::Extracted,
+                });
+            }
+        }
+    }
     if raw.via_member {
         let recv_type = raw.recv_type.as_deref()?;
         let (target, mut confidence) =
             resolve_typed_member(&raw.file, recv_type, name, raw.arg_count, idx)?;
-        // PY0: only the Python proof gives Extracted for a `.py` call.
-        if is_python_file(&raw.file) {
+        // PY0, GO0 and JV0: only the proof gives Extracted for a `.py`, `.go`
+        // or `.java` call.
+        if is_python_file(&raw.file) || is_go_file(&raw.file) || is_java_file(&raw.file) {
             confidence = Confidence::Inferred;
         }
         return Some(Edge {
@@ -510,8 +559,12 @@ fn resolve_calls(raw: &RawEdge, idx: &Indexes) -> Option<Edge> {
     }
     let kinds = raw.kinds.clone().unwrap_or_else(|| bare_kinds(&raw.file));
     if let Some((target, mut confidence)) = resolve_name(&raw.file, name, &kinds, idx) {
-        // R0: only the Rust proof gives Extracted for a `.rs` call.
-        if raw.file.ends_with(".rs") || is_python_file(&raw.file) {
+        // R0 and JV0: only the proof gives Extracted for a `.rs` or `.java` call.
+        if raw.file.ends_with(".rs")
+            || is_python_file(&raw.file)
+            || is_go_file(&raw.file)
+            || is_java_file(&raw.file)
+        {
             confidence = Confidence::Inferred;
         }
         return Some(Edge {
@@ -938,9 +991,10 @@ fn resolve_typed_member(
                 };
                 return Some((candidates[0].id.clone(), confidence));
             }
-            // Swift: 2+ candidates surviving arity narrowing are always
-            // ambiguous, with no same-file fallback.
-            if is_swift_file(file) && candidates.len() >= 2 {
+            // Swift, Kotlin and C#: 2+ candidates surviving arity narrowing
+            // are always ambiguous. A tie-break pick is a guess, so there is
+            // no same-file fallback.
+            if is_no_tiebreak_file(file) && candidates.len() >= 2 {
                 return None;
             }
             if !candidates.is_empty() {
@@ -1069,6 +1123,11 @@ fn is_python_file(path: &str) -> bool {
     lang_for_path(Path::new(path)).is_some_and(|l| l.grammar == "python")
 }
 
+/// Reports whether `path`'s grammar is Go.
+fn is_go_file(path: &str) -> bool {
+    lang_for_path(Path::new(path)).is_some_and(|l| l.grammar == "go")
+}
+
 /// Reports whether `path`'s grammar is Java.
 fn is_java_file(path: &str) -> bool {
     lang_for_path(Path::new(path)).is_some_and(|l| l.grammar == "java")
@@ -1082,6 +1141,13 @@ fn is_php_file(path: &str) -> bool {
 /// Reports whether `path`'s grammar is Swift.
 fn is_swift_file(path: &str) -> bool {
     lang_for_path(Path::new(path)).is_some_and(|l| l.grammar == "swift")
+}
+
+/// Reports whether `path` is Swift, Kotlin or C#. These languages never
+/// pick a same-file candidate when 2 or more candidates remain.
+fn is_no_tiebreak_file(path: &str) -> bool {
+    lang_for_path(Path::new(path)).is_some_and(|l| matches!(l.grammar, "swift" | "kotlin"))
+        || generic_lang_of(path).is_some_and(|l| l.name == "c_sharp")
 }
 
 /// `resolveImport`: a bare specifier stays raw; a dot-leading specifier
@@ -1399,6 +1465,8 @@ mod tests {
             ns_export: false,
             rust: None,
             py: None,
+            go: None,
+            java: None,
         }
     }
 
@@ -1463,6 +1531,8 @@ mod tests {
             ns_export: false,
             rust: None,
             py: None,
+            go: None,
+            java: None,
         }];
         assert!(resolve_edges(&nodes, &raw).is_empty());
     }
@@ -1495,6 +1565,8 @@ mod tests {
             ns_export: false,
             rust: None,
             py: None,
+            go: None,
+            java: None,
         }];
         assert!(resolve_edges(&nodes, &raw).is_empty());
     }
@@ -1521,6 +1593,8 @@ mod tests {
             ns_export: false,
             rust: None,
             py: None,
+            go: None,
+            java: None,
         }];
         for i in (0..3).rev() {
             raw.push(RawEdge {
@@ -1542,6 +1616,8 @@ mod tests {
                 ns_export: false,
                 rust: None,
                 py: None,
+                go: None,
+                java: None,
             });
         }
         for i in 1..=3 {
@@ -1580,6 +1656,8 @@ mod tests {
             ns_export: false,
             rust: None,
             py: None,
+            go: None,
+            java: None,
         });
         nodes.push(node("a.ts#T4", "T4", Kind::Class, "a.ts", None));
         raw[0].recv_type = Some("T4".to_string());
@@ -1612,8 +1690,33 @@ mod tests {
             ns_export: false,
             rust: None,
             py: None,
+            go: None,
+            java: None,
         }];
         assert!(resolve_edges(&nodes, &raw).is_empty());
+    }
+
+    fn member_call(file: &str) -> RawEdge {
+        RawEdge {
+            via_member: true,
+            recv_type: Some("T".to_string()),
+            ..call_edge(&format!("{file}#caller"), file, "m")
+        }
+    }
+
+    #[test]
+    fn kotlin_and_csharp_ties_are_not_extracted_and_unique_stays_extracted() {
+        for file in ["a.kt", "a.kts", "a.cs", "A.KT", "A.CS"] {
+            let two = vec![
+                node(&format!("{file}#T.m"), "m", Kind::Method, file, Some("T")),
+                node(&format!("{file}#T.m~2"), "m", Kind::Method, file, Some("T")),
+            ];
+            assert!(resolve_edges(&two, &[member_call(file)]).is_empty());
+            let one = &two[..1];
+            let edges = resolve_edges(one, &[member_call(file)]);
+            assert_eq!(edges.len(), 1);
+            assert_eq!(edges[0].confidence, Confidence::Extracted);
+        }
     }
 
     #[test]
@@ -1692,6 +1795,8 @@ mod tests {
             ns_export: false,
             rust: None,
             py: None,
+            go: None,
+            java: None,
         }];
         let edges = resolve_edges(&nodes, &raw);
         assert_eq!(edges.len(), 1);
@@ -1759,6 +1864,8 @@ mod tests {
             ns_export: false,
             rust: None,
             py: None,
+            go: None,
+            java: None,
         }];
         let idx = build_indexes(&nodes, &raw);
         let hit = resolve_trait_member("a.php", "App", "label", &idx);
@@ -1787,6 +1894,8 @@ mod tests {
             ns_export: false,
             rust: None,
             py: None,
+            go: None,
+            java: None,
         }
     }
 
@@ -1800,6 +1909,7 @@ mod tests {
         let modules = vec![GoModule {
             module: "example.com/app".to_string(),
             dir: "go".to_string(),
+            links: Vec::new(),
         }];
         let raw = vec![import_edge("go/main.go", "example.com/app/util")];
         let edges = resolve_edges_with_go_modules(&nodes, &raw, &modules);
@@ -1812,6 +1922,7 @@ mod tests {
         let modules = vec![GoModule {
             module: "example.com/app".to_string(),
             dir: "go".to_string(),
+            links: Vec::new(),
         }];
         let raw = vec![import_edge("go/main.go", "fmt")];
         let edges = resolve_edges_with_go_modules(&[], &raw, &modules);

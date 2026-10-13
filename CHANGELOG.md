@@ -5,6 +5,29 @@ All notable changes to this project are in this file.
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.5] - 2026-10-13
+
+This release adds exact call links for Go and Java, exact Rust self.f() links, hook timeouts in seconds, and a faster refresh after an edit.
+
+### Added
+
+- Exact Rust `self.f()` links. Sieve marks a `self.f()` call Extracted when the caller sits in a module-level inherent impl and the same impl body holds exactly one `fn f` with an equal receiver form. Oracle results, matched Extracted before -> after, 0 wrong each: Sieve 5,398 -> 5,541, ripgrep 3fce3b5 1,206 -> 1,544, itertools v0.15.0 160 -> 178.
+- Exact Go call links. Sieve marks a Go call Extracted only when it proves one target. The proof covers a call whose scope has one binding in the same file. It also covers `pkg.F()` calls through imports and `go.mod`, across files, and receiver types written in the code. Interface calls, func values and promotion stay Inferred.
+- The oracle scripts `scripts/oracle/go-calls.py` and `scripts/oracle/go-compare.py` check Go links against scip-go. Results: fzf v0.74.5 has 1,362 matched, 0 wrong and 72 unverified. gin v1.12.0 has 1,573 matched, 0 wrong and 0 unverified. caddy v2.11.7 has 4,156 matched, 0 wrong and 12 unverified.
+
+- Exact Java call links. Sieve marks a Java call Extracted only when it proves one target. The proof covers bare calls, `this` and `super` calls, static calls through imports, typed receivers and `new`. Sieve checks overrides across the in-repo subtypes. A call to an interface or abstract target stays Inferred.
+- The oracle scripts `scripts/oracle/JvCalls.java` and `scripts/oracle/jv-compare.py` check Java links against the javac tree API (JDK 21.0.12+8).
+
+### Fixed
+
+- Sieve no longer marks a Java call Extracted by its name or by the first same-file candidate. Wrong Extracted links before and after: jsoup jsoup-1.23.2 140 to 0, commons-lang rel/commons-lang-3.21.0 829 to 0, gson gson-parent-2.14.0 23 to 0.
+- Sieve wrote hook timeouts as milliseconds, but Claude Code and Codex read seconds. Sieve now writes 3 to 15 seconds. `sieve init` rewrites old entries. If a settings file still holds old values, `sieve init` prints a warning that names the file and the command that fixes it, and the statusline shows one note until that command runs.
+
+### Changed
+
+- A 1-file refresh before a query now takes about half the time or less. Examples (median of 5): 0.76 s to 0.18 s on a 362-file Go repo, 1.46 s to 0.62 s on a 629-file Java repo, 3.07 s to 0.25 s on a Go repo with a 254 KB file. The output is byte-identical to a full build. `SIEVE_TIMING=1` prints each refresh phase to stderr. Go indexing of very large files stays near the speed of earlier releases.
+- `CACHE_VERSION` changes. The first build after the upgrade re-parses every file.
+
 ## [0.1.4] - 2026-10-13
 
 This release adds exact call links for Rust and Python.

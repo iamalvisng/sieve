@@ -178,14 +178,22 @@ pub fn rebuild_graph_only(root: &Path, context_dir: &Path) -> std::io::Result<Re
         read_only: false,
         progress: None,
     };
+    let mut timer = crate::timing::Timer::start();
     let report = build_graph_cached_with(root, context_dir, &opts)?;
-    write_wiring_and_lookup(&report.graph, context_dir)?;
-
-    // A sidecar write failure is never fatal: the refresh has no build
-    // report to print it on.
-    let ask_index = build_ask_index(&report.graph);
-    let ask_path = ask_index_path(context_dir);
-    let _ = write_ask_index(&ask_path, &ask_index);
+    timer.lap("build (total)");
+    // The ask-index builds while the wiring writes. The ask-index file
+    // writes only after the wiring write succeeded, so the pair comes from
+    // one build. A failed thread writes nothing and fails the refresh, so
+    // the next query rebuilds. A failed ask-index write is not fatal.
+    let (wiring, ask_index) = std::thread::scope(|scope| {
+        let ask = scope.spawn(|| build_ask_index(&report.graph));
+        let wiring = write_wiring_and_lookup(&report.graph, context_dir);
+        (wiring, ask.join())
+    });
+    wiring?;
+    let ask_index = ask_index.map_err(|_| io::Error::other("the ask-index thread failed"))?;
+    let _ = write_ask_index(&ask_index_path(context_dir), &ask_index);
+    timer.lap("write wiring, lookup and ask-index");
 
     let fingerprint = Fingerprint {
         version: 1,
@@ -194,6 +202,7 @@ pub fn rebuild_graph_only(root: &Path, context_dir: &Path) -> std::io::Result<Re
         only_dirs: (!only_dirs.is_empty()).then_some(only_dirs),
     };
     write_fingerprint(&path, &fingerprint)?;
+    timer.lap("write fingerprint");
 
     Ok(RebuildReport {
         files: report.files,
@@ -225,11 +234,13 @@ pub fn ensure_fresh_graph(
     let fp_path = fingerprint_path(context_dir, &stamp);
     let fp = read_fingerprint(&fp_path, &stamp);
 
+    let mut timer = crate::timing::Timer::start();
     regenerate_lookup(context_dir, &wiring_path);
-    let needs_rebuild = match &fp {
-        None => true,
+    timer.lap("regenerate lookup");
+    let first_count = match &fp {
+        None => None,
         Some(fp) => match probe_drift(root, fp, opts.force_hash, crate::build::is_claimed) {
-            Ok(drift) => drift_count(&drift) > 0,
+            Ok(drift) => Some(drift_count(&drift)),
             Err(err) => {
                 return RefreshOutcome {
                     refreshed: false,
@@ -242,7 +253,8 @@ pub fn ensure_fresh_graph(
             }
         },
     };
-    if !needs_rebuild {
+    timer.lap("first drift probe");
+    if first_count == Some(0) {
         return RefreshOutcome::default();
     }
 
@@ -271,9 +283,13 @@ pub fn ensure_fresh_graph(
     };
 
     // Re-probe under the lock: a concurrent rebuild may already have
-    // cleaned the drift.
+    // cleaned the drift. Every rebuild writes the fingerprint last, so a
+    // fingerprint that did not change means no rebuild ran meanwhile, and
+    // the first probe still holds.
+    let unchanged = fp.is_some() && read_fingerprint(&fp_path, &stamp) == fp;
     let count = match &fp {
         None => None,
+        Some(_) if unchanged => first_count,
         Some(fp) => match probe_drift(root, fp, opts.force_hash, crate::build::is_claimed) {
             Ok(drift) => {
                 let n = drift_count(&drift);
@@ -297,7 +313,9 @@ pub fn ensure_fresh_graph(
         },
     };
 
+    timer.lap("lock and second probe");
     let result = rebuild_graph_only(root, context_dir);
+    timer.lap("rebuild (total)");
     drop(guard);
     match result {
         Ok(_) => RefreshOutcome {

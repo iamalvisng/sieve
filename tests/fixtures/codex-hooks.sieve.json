@@ -7,7 +7,7 @@
           {
             "type": "command",
             "command": "node \"<SHIM>\" session-start",
-            "timeout": 10000
+            "timeout": 10
           }
         ]
       }
@@ -18,7 +18,7 @@
           {
             "type": "command",
             "command": "node \"<SHIM>\" prompt",
-            "timeout": 15000
+            "timeout": 15
           }
         ]
       }
@@ -30,7 +30,7 @@
           {
             "type": "command",
             "command": "node \"<SHIM>\" post-edit",
-            "timeout": 10000
+            "timeout": 10
           }
         ]
       }
@@ -41,7 +41,7 @@
           {
             "type": "command",
             "command": "node \"<SHIM>\" stop",
-            "timeout": 10000
+            "timeout": 10
           }
         ]
       }

@@ -10,6 +10,7 @@ use sieve_core::product::product;
 use sieve_core::wiring::{Graph, SummaryState};
 
 use crate::hook::{self, SessionState, Stats};
+use crate::hosts;
 
 /// Flags for `sieve statusline`. Takes no flags: every input arrives on
 /// stdin as JSON.
@@ -411,7 +412,74 @@ fn render_sieve_now(stats: Option<&Stats>, project_dir: &Path, ctx_pct: Option<i
         std::env::var("COLORTERM").ok().as_deref(),
     );
     let now = crate::telemetry::now_secs();
-    render_sieve_at(stats, project_dir, ctx_pct, now, depth)
+    let text = render_sieve_at(stats, project_dir, ctx_pct, now, depth);
+    let note = setup_note(project_dir, now);
+    if note.is_empty() {
+        return text;
+    }
+    // The note goes at the end of line 2, like the cap note.
+    let mut lines: Vec<String> = text.split('\n').map(String::from).collect();
+    if let Some(line2) = lines.get_mut(1) {
+        line2.push_str(&note);
+    }
+    lines.join("\n")
+}
+
+/// The seconds a setup check result stays valid.
+const SETUP_TTL_SECS: u64 = 60;
+
+/// The short note for a repo file with an old hook timeout.
+const SETUP_NOTE_REPO: &str = " \u{b7} old hook timeouts; run `sieve init`";
+
+/// The short note when a file under `HOME` has an old hook timeout.
+const SETUP_NOTE_GLOBAL: &str = " \u{b7} old hook timeouts; run `sieve init --global`";
+
+/// The cache file of the setup check.
+fn setup_cache_path(context_dir: &Path) -> std::path::PathBuf {
+    context_dir.join(".cache").join("statusline-setup.json")
+}
+
+/// Deletes the setup check cache, so the next status line checks again.
+pub fn clear_setup_cache(context_dir: &Path) {
+    // A missing file is fine: there is nothing to clear.
+    let _ = std::fs::remove_file(setup_cache_path(context_dir));
+}
+
+/// Returns the setup note text, or an empty string for no note. The check
+/// reads up to three settings files, so the result is cached.
+fn setup_note(project_dir: &Path, now: u64) -> String {
+    let context_dir = crate::stats::stats_context_dir(project_dir);
+    cached_setup_note(&context_dir, now, || {
+        match hosts::setup_notes(project_dir).first() {
+            None => String::new(),
+            Some(n) if n.global => SETUP_NOTE_GLOBAL.to_string(),
+            Some(_) => SETUP_NOTE_REPO.to_string(),
+        }
+    })
+}
+
+/// Serves the cached setup check while it is under `SETUP_TTL_SECS` old.
+/// Else `compute` runs and the cache is rewritten.
+fn cached_setup_note(context_dir: &Path, now: u64, compute: impl FnOnce() -> String) -> String {
+    let path = setup_cache_path(context_dir);
+    let hit = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+        .filter(|v| {
+            let at = v.get("at").and_then(Value::as_u64).unwrap_or(0);
+            now.saturating_sub(at) < SETUP_TTL_SECS
+        })
+        .and_then(|v| v.get("note").and_then(Value::as_str).map(String::from));
+    if let Some(note) = hit {
+        return note;
+    }
+    let note = compute();
+    // A failed write only costs a recheck on the next run.
+    let _ = std::fs::write(
+        &path,
+        serde_json::json!({"at": now, "note": &note}).to_string(),
+    );
+    note
 }
 
 /// The note for an index over the size cap, with no valid lookup.
@@ -787,6 +855,27 @@ mod tests {
         let first = text.split('\n').next().unwrap_or("");
         assert!(first.contains('\u{2580}'), "{first}");
         assert!(first.ends_with("sieve \u{2502} no savings yet"), "{first}");
+    }
+
+    #[test]
+    fn test_statusline_setup_check_runs_once_per_minute() {
+        let ctx = scratch_dir("setup");
+        std::fs::create_dir_all(ctx.join(".cache")).expect("cache dir");
+        let calls = std::cell::Cell::new(0);
+        let call = |now: u64| {
+            cached_setup_note(&ctx, now, || {
+                calls.set(calls.get() + 1);
+                SETUP_NOTE_GLOBAL.to_string()
+            })
+        };
+        assert_eq!(call(100), SETUP_NOTE_GLOBAL);
+        assert_eq!(call(159), SETUP_NOTE_GLOBAL);
+        assert_eq!(calls.get(), 1, "the cache serves the second call");
+        call(160);
+        assert_eq!(calls.get(), 2, "the cache expires after 60 seconds");
+        clear_setup_cache(&ctx);
+        assert!(!setup_cache_path(&ctx).exists(), "the cache is cleared");
+        clear_setup_cache(&ctx);
     }
 
     #[test]

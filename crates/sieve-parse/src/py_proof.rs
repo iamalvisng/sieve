@@ -168,6 +168,8 @@ impl PyScopes {
             ns_export: false,
             rust: None,
             py: Some(rec),
+            go: None,
+            java: None,
         }
     }
 

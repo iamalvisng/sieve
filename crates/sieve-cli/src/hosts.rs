@@ -841,6 +841,100 @@ fn hook_entry_is_ours(entry: &OJson) -> bool {
         .unwrap_or(false)
 }
 
+/// A hook timeout above this many seconds is an old millisecond value.
+const OLD_TIMEOUT_SECS: i64 = 60;
+
+/// One setup problem that `sieve init` fixes.
+#[derive(Debug, PartialEq)]
+pub struct SetupNote {
+    /// The full text. It names each old file and the command that fixes it.
+    pub text: String,
+    /// `true` when a file under `HOME` is old. Plain `sieve init` leaves it.
+    pub global: bool,
+}
+
+/// `true` when an event map holds a Sieve-owned block with a timeout over
+/// `OLD_TIMEOUT_SECS`.
+fn has_old_timeout(events: &OJson) -> bool {
+    let Some(pairs) = events.as_obj() else {
+        return false;
+    };
+    pairs
+        .iter()
+        .filter_map(|(_, v)| v.as_arr())
+        .flatten()
+        .filter(|entry| hook_entry_is_ours(entry))
+        .filter_map(|entry| entry.get("hooks").and_then(OJson::as_arr))
+        .flatten()
+        .any(|h| matches!(h.get("timeout"), Some(OJson::Num(n)) if *n > OLD_TIMEOUT_SECS))
+}
+
+/// `true` when `path` is a JSON object with an old Sieve hook timeout.
+fn file_has_old_timeout(path: &Path) -> bool {
+    let Ok(Some(root)) = read_json_object(path) else {
+        return false;
+    };
+    // Codex files from an older Sieve hold the events at top level.
+    has_old_timeout(&root) || root.get("hooks").is_some_and(has_old_timeout)
+}
+
+/// Reads the host files under `home` and `project_dir`. Gives one note
+/// when a Sieve hook block still holds a millisecond timeout. Reads only.
+/// A missing file, or a file that is not a JSON object, gives no note.
+/// `repo` and `global` pick which files to read. Each old file comes with
+/// the command that fixes it.
+pub fn setup_notes_in(home: &Path, project_dir: &Path, repo: bool, global: bool) -> Vec<SetupNote> {
+    let mut files: Vec<(PathBuf, &str)> = Vec::new();
+    if repo {
+        files.push((
+            project_dir.join(".claude").join("settings.json"),
+            "sieve init",
+        ));
+    }
+    if global {
+        files.push((
+            home.join(".claude").join("settings.json"),
+            "sieve init --global",
+        ));
+        files.push((
+            home.join(".codex").join("hooks.json"),
+            "sieve init --global --agents agents",
+        ));
+    }
+    let old: Vec<(PathBuf, &str)> = files
+        .into_iter()
+        .filter(|(path, _)| file_has_old_timeout(path))
+        .collect();
+    if old.is_empty() {
+        return Vec::new();
+    }
+    let list: Vec<String> = old
+        .iter()
+        .map(|(path, cmd)| format!("{} (run `{cmd}`)", path.display()))
+        .collect();
+    vec![SetupNote {
+        text: format!(
+            "Sieve hook timeouts are from an older install (milliseconds). Old files: {}",
+            list.join(", ")
+        ),
+        global: old.iter().any(|(_, cmd)| *cmd != "sieve init"),
+    }]
+}
+
+/// Like [`setup_notes_in`], with `HOME` from the environment and both
+/// scopes read.
+pub fn setup_notes(project_dir: &Path) -> Vec<SetupNote> {
+    setup_notes_with(project_dir, true, true)
+}
+
+/// Like [`setup_notes`], with the scopes picked by the caller.
+pub fn setup_notes_with(project_dir: &Path, repo: bool, global: bool) -> Vec<SetupNote> {
+    match std::env::var_os("HOME") {
+        Some(home) => setup_notes_in(Path::new(&home), project_dir, repo, global),
+        None => Vec::new(),
+    }
+}
+
 /// Returns `true` when a statusline command is already Sieve's own.
 fn statusline_is_ours(command: &str) -> bool {
     command == names::statusline_command() || command.contains(&product().statusline_file())
@@ -982,17 +1076,17 @@ fn merged_hooks_ojson(existing_hooks: Option<&OJson>) -> OJson {
     let mut hooks = OMap::from_existing(existing_hooks);
     // A managed event that exists keeps its place; a new one is appended.
     let mut post_tool_use = vec![
-        claude_hook_block(Some("Write|Edit|MultiEdit"), "post-edit", 10000),
+        claude_hook_block(Some("Write|Edit|MultiEdit"), "post-edit", 10),
         claude_hook_block(
             Some(&format!("Bash|mcp__{}__|Read|Grep|Glob", product().name)),
             "tool-savings",
-            8000,
+            8,
         ),
     ];
-    post_tool_use.push(claude_hook_block(Some("Read"), "post-read", 5000));
-    post_tool_use.push(claude_hook_block(Some("Bash"), "post-read", 5000));
-    post_tool_use.push(claude_hook_block(Some("Bash"), "post-search", 3000));
-    post_tool_use.push(claude_hook_block(Some("Grep"), "post-search", 3000));
+    post_tool_use.push(claude_hook_block(Some("Read"), "post-read", 5));
+    post_tool_use.push(claude_hook_block(Some("Bash"), "post-read", 5));
+    post_tool_use.push(claude_hook_block(Some("Bash"), "post-search", 3));
+    post_tool_use.push(claude_hook_block(Some("Grep"), "post-search", 3));
     hooks.set(
         "PostToolUse",
         merged_hook_event(existing_hooks, "PostToolUse", post_tool_use),
@@ -1002,7 +1096,7 @@ fn merged_hooks_ojson(existing_hooks: Option<&OJson>) -> OJson {
         merged_hook_event(
             existing_hooks,
             "UserPromptSubmit",
-            vec![claude_hook_block(None, "prompt", 15000)],
+            vec![claude_hook_block(None, "prompt", 15)],
         ),
     );
     hooks.set(
@@ -1010,7 +1104,7 @@ fn merged_hooks_ojson(existing_hooks: Option<&OJson>) -> OJson {
         merged_hook_event(
             existing_hooks,
             "SessionStart",
-            vec![claude_hook_block(None, "session-start", 8000)],
+            vec![claude_hook_block(None, "session-start", 8)],
         ),
     );
     hooks.set(
@@ -1018,7 +1112,7 @@ fn merged_hooks_ojson(existing_hooks: Option<&OJson>) -> OJson {
         merged_hook_event(
             existing_hooks,
             "Stop",
-            vec![claude_hook_block(None, "stop", 8000)],
+            vec![claude_hook_block(None, "stop", 8)],
         ),
     );
     hooks.set(
@@ -1027,8 +1121,8 @@ fn merged_hooks_ojson(existing_hooks: Option<&OJson>) -> OJson {
             existing_hooks,
             "PreToolUse",
             vec![
-                claude_hook_block(Some("Read"), "pre-read", 5000),
-                claude_hook_block(Some("Bash"), "pre-read", 5000),
+                claude_hook_block(Some("Read"), "pre-read", 5),
+                claude_hook_block(Some("Bash"), "pre-read", 5),
             ],
         ),
     );
@@ -1395,7 +1489,7 @@ fn merged_codex_hooks_ojson(existing: Option<&OJson>) -> OJson {
             vec![claude_hook_block(
                 Some("startup|resume|compact"),
                 "session-start",
-                10000,
+                10,
             )],
         ),
     );
@@ -1404,7 +1498,7 @@ fn merged_codex_hooks_ojson(existing: Option<&OJson>) -> OJson {
         merged_hook_event(
             existing,
             "UserPromptSubmit",
-            vec![claude_hook_block(None, "prompt", 15000)],
+            vec![claude_hook_block(None, "prompt", 15)],
         ),
     );
     hooks.set(
@@ -1415,17 +1509,13 @@ fn merged_codex_hooks_ojson(existing: Option<&OJson>) -> OJson {
             vec![claude_hook_block(
                 Some("apply_patch|Write|Edit|MultiEdit"),
                 "post-edit",
-                10000,
+                10,
             )],
         ),
     );
     hooks.set(
         "Stop",
-        merged_hook_event(
-            existing,
-            "Stop",
-            vec![claude_hook_block(None, "stop", 10000)],
-        ),
+        merged_hook_event(existing, "Stop", vec![claude_hook_block(None, "stop", 10)]),
     );
     hooks.into_ojson()
 }
@@ -1763,6 +1853,83 @@ mod tests {
         }
     }
 
+    /// Writes a synthetic Claude settings file with one hook at `timeout`.
+    fn write_hook_file(path: &Path, command: &str, timeout: i64) {
+        fs::create_dir_all(path.parent().expect("parent")).expect("dir");
+        let text = format!(
+            r#"{{"hooks":{{"PostToolUse":[{{"matcher":"Edit","hooks":[{{"type":"command","command":{},"timeout":{timeout}}}]}}]}}}}"#,
+            serde_json::to_string(command).expect("json"),
+        );
+        fs::write(path, text).expect("write");
+    }
+
+    #[test]
+    fn test_setup_notes_flag_old_millisecond_timeouts_only() {
+        let dir = TempDir::new("setup-notes");
+        let home = dir.path.join("home");
+        let project = dir.path.join("proj");
+        assert_ne!(home, Path::new("/Users/iamalvisng"));
+        let user = home.join(".claude").join("settings.json");
+        let ours = names::hook_command("post-edit");
+        let notes = |repo, global| setup_notes_in(&home, &project, repo, global);
+
+        assert!(notes(true, true).is_empty(), "missing files");
+
+        write_hook_file(&user, &ours, 10);
+        assert!(notes(true, true).is_empty(), "new values");
+
+        write_hook_file(&user, "other-tool hook x", 5000);
+        assert!(notes(true, true).is_empty(), "foreign hook");
+
+        fs::write(&user, "[1]").expect("write");
+        assert!(notes(true, true).is_empty(), "not an object");
+
+        // The local settings file is never scanned.
+        let local = project.join(".claude").join("settings.local.json");
+        write_hook_file(&local, &ours, 3000);
+        assert!(notes(true, true).is_empty(), "settings.local.json");
+    }
+
+    #[test]
+    fn test_setup_notes_name_the_command_for_each_scope() {
+        let dir = TempDir::new("setup-notes-scope");
+        let home = dir.path.join("home");
+        let project = dir.path.join("proj");
+        let ours = names::hook_command("post-edit");
+        let repo_file = project.join(".claude").join("settings.json");
+        write_hook_file(&repo_file, &ours, 3000);
+
+        let repo = setup_notes_in(&home, &project, true, true);
+        assert_eq!(repo.len(), 1);
+        assert!(!repo[0].global, "repo file only");
+        assert!(repo[0].text.contains("`sieve init`"));
+        assert!(setup_notes_in(&home, &project, false, true).is_empty());
+
+        write_hook_file(&home.join(".claude").join("settings.json"), &ours, 10000);
+        write_hook_file(&home.join(".codex").join("hooks.json"), &ours, 10000);
+        let all = setup_notes_in(&home, &project, true, true);
+        assert_eq!(all.len(), 1, "one note in total");
+        assert!(all[0].global);
+        assert!(all[0].text.contains("`sieve init --global`"));
+        assert!(all[0]
+            .text
+            .contains("`sieve init --global --agents agents`"));
+        assert!(all[0].text.contains("hooks.json"));
+        assert!(setup_notes_in(&home, &project, false, false).is_empty());
+    }
+
+    #[test]
+    fn test_setup_notes_are_gone_after_the_merge_writes() {
+        let dir = TempDir::new("setup-notes-merge");
+        let home = dir.path.join("home");
+        let project = dir.path.join("proj");
+        let user = home.join(".claude").join("settings.json");
+        write_hook_file(&user, &names::hook_command("post-edit"), 10000);
+        assert_eq!(setup_notes_in(&home, &project, true, true).len(), 1);
+        merge_claude_global_hooks(&user).expect("merge");
+        assert!(setup_notes_in(&home, &project, true, true).is_empty());
+    }
+
     #[test]
     fn write_owned_reports_created_then_unchanged_then_replaced() {
         let dir = TempDir::new("write-owned");
@@ -1921,11 +2088,11 @@ mod tests {
             {"matcher": "Write", "hooks": [
                 {"type": "command", "command": "my-own-tool", "timeout": 5000}
             ]},
-            block("Write|Edit|MultiEdit", "post-edit", 10000),
-            block("Bash|mcp__x__|Read|Grep|Glob", "tool-savings", 8000),
-            block("Read", "post-read", 5000),
-            block("Bash", "post-read", 5000),
-            block("Grep", "post-search", 3000),
+            block("Write|Edit|MultiEdit", "post-edit", 10),
+            block("Bash|mcp__x__|Read|Grep|Glob", "tool-savings", 8),
+            block("Read", "post-read", 5),
+            block("Bash", "post-read", 5),
+            block("Grep", "post-search", 3),
         ]);
         let text = serde_json::json!({"hooks": {"PostToolUse": old}}).to_string();
         fs::write(&path, text).unwrap();
@@ -2571,6 +2738,24 @@ mod tests {
             matchers.iter().any(|m| m == "Bash"),
             "the merge must register pre-read on the Bash matcher, got: {matchers:?}"
         );
+    }
+
+    #[test]
+    fn test_hook_timeout_unit_old_milliseconds_become_seconds() {
+        // The old config wrote milliseconds. The hosts read seconds.
+        let old = r#"{"UserPromptSubmit": [
+            {"hooks": [{"type": "command", "command": "sieve hook prompt", "timeout": 15000}]},
+            {"hooks": [{"type": "command", "command": "my-own-tool", "timeout": 5000}]}
+        ]}"#;
+        let existing = OJson::parse(old).expect("parse");
+        let text = merged_hooks_ojson(Some(&existing)).to_pretty();
+        let value: serde_json::Value = serde_json::from_str(&text).expect("json");
+        let entries = value["UserPromptSubmit"].as_array().expect("array");
+        assert_eq!(entries.len(), 2, "{text}");
+        assert_eq!(entries[0]["hooks"][0]["command"], "my-own-tool");
+        assert_eq!(entries[0]["hooks"][0]["timeout"], 5000);
+        assert_eq!(entries[1]["hooks"][0]["command"], "sieve hook prompt");
+        assert_eq!(entries[1]["hooks"][0]["timeout"], 15);
     }
 
     #[test]

@@ -52,8 +52,8 @@ TypeScript and JavaScript. These cover named imports, aliased imports
 They also cover barrel re-exports: `export { x } from`, `export *`, default
 re-exports and `export * as ns`. ADR 0005 and ADR 0006 hold the rules.
 
-The exact-link tier now covers TypeScript, JavaScript, Rust and Python. Sieve
-marks a Rust or Python call Extracted only when it proves one target. See
+The exact-link tier now covers TypeScript, JavaScript, Rust, Python, Go and Java.
+Sieve marks a Rust, Python, Go or Java call Extracted only when it proves one target. See
 [Concepts](concepts.md#exact-links) and ADR 0007.
 
 For Rust, these calls stay Inferred or get no edge: a method call `x.f()`,
@@ -68,6 +68,13 @@ with a decorator that can replace it, a name that the code binds more than once,
 a module that uses `globals()`, `exec` or a module `__getattr__`, and a call to a
 patched module attribute. A name from `from m import *` is exact only when the
 star import has one clear result.
+
+For Go, these calls stay Inferred or get no edge: an interface method call,
+a call through a func value, and a call to a promoted method.
+
+For Java, these calls stay Inferred or get no edge: a call to an interface or
+abstract target, and any call in a repo with a Lombok annotation or a parse error
+when a subtype can override the target.
 
 Sieve does not link these TypeScript and JavaScript cases as exact: non-relative package specifiers,
 `paths` aliases, CommonJS, `export =`, and JavaScript barrel files for re-export

@@ -15,7 +15,7 @@
           {
             "type": "command",
             "command": "sieve hook post-edit",
-            "timeout": 10000
+            "timeout": 10
           }
         ]
       },
@@ -25,7 +25,7 @@
           {
             "type": "command",
             "command": "sieve hook tool-savings",
-            "timeout": 8000
+            "timeout": 8
           }
         ]
       },
@@ -35,7 +35,7 @@
           {
             "type": "command",
             "command": "sieve hook post-read",
-            "timeout": 5000
+            "timeout": 5
           }
         ]
       },
@@ -45,7 +45,7 @@
           {
             "type": "command",
             "command": "sieve hook post-read",
-            "timeout": 5000
+            "timeout": 5
           }
         ]
       },
@@ -55,7 +55,7 @@
           {
             "type": "command",
             "command": "sieve hook post-search",
-            "timeout": 3000
+            "timeout": 3
           }
         ]
       },
@@ -65,7 +65,7 @@
           {
             "type": "command",
             "command": "sieve hook post-search",
-            "timeout": 3000
+            "timeout": 3
           }
         ]
       }
@@ -76,7 +76,7 @@
           {
             "type": "command",
             "command": "sieve hook prompt",
-            "timeout": 15000
+            "timeout": 15
           }
         ]
       }
@@ -87,7 +87,7 @@
           {
             "type": "command",
             "command": "sieve hook session-start",
-            "timeout": 8000
+            "timeout": 8
           }
         ]
       }
@@ -98,7 +98,7 @@
           {
             "type": "command",
             "command": "sieve hook stop",
-            "timeout": 8000
+            "timeout": 8
           }
         ]
       }
@@ -110,7 +110,7 @@
           {
             "type": "command",
             "command": "sieve hook pre-read",
-            "timeout": 5000
+            "timeout": 5
           }
         ]
       },
@@ -120,7 +120,7 @@
           {
             "type": "command",
             "command": "sieve hook pre-read",
-            "timeout": 5000
+            "timeout": 5
           }
         ]
       }

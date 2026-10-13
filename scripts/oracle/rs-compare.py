@@ -23,7 +23,14 @@ def span(n):
 def main():
     rows_path, graph_path = sys.argv[1:3]
     repo = sys.argv[3] if len(sys.argv) > 3 else os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(graph_path))))
-    rows = [json.loads(l) for l in open(rows_path) if l.strip()]
+    allrows = [json.loads(l) for l in open(rows_path) if l.strip()]
+    docs = {r["src"] for r in allrows if r["shape"] == "doc"}
+    defl = collections.defaultdict(list)  # fn definition lines per file
+    for r in allrows:
+        if r["shape"] == "def":
+            defl[r["src"]].append(r["line"])
+    rows = [r for r in allrows if r["shape"] not in ("doc", "def")]
+    have_defs = bool(docs)
     g = json.load(open(graph_path))
     node = {n["id"]: n for n in g["nodes"]}
     by_src = collections.defaultdict(list)
@@ -60,7 +67,7 @@ def main():
     for e in edges:
         s, t = node[e["source"]], node[e["target"]]
         ss, ts = span(s), span(t)
-        hit, amb = False, False
+        hit, amb, trait = False, False, False
         tn = t["name"].split(".")[-1]
         for i, r in enumerate(by_src[s["path"]]):
             if not (ss and ss[0] <= r["line"] <= ss[1]):
@@ -68,17 +75,27 @@ def main():
             if r["dst"] == t["path"] and ts and r["dst_start"] <= ts[0] <= r["dst_end"]:
                 covered.add(id(r))
                 if r.get("ambiguous"): amb = True
+                elif r.get("owner") == "trait": trait = True
                 else: hit = True
             elif r.get("ambiguous") and r["name"] == tn:
                 amb = True
-        if not hit and amb:
-            unver.append(e)  # oracle rows for this edge are all ambiguous
+        if trait:
+            wrong.append(("dispatched", e["source"], e["target"]))
+        elif not hit and amb:
+            unver.append(("ambiguous", e))  # oracle rows for this edge are all ambiguous
+        elif not hit and have_defs and s["path"] not in docs:
+            unver.append(("no document", e))
+        elif not hit and have_defs and ss and not any(ss[0] <= l <= ss[1] for l in defl[s["path"]]):
+            unver.append(("cfg-off caller", e))
         elif not hit:
             wrong.append((kind(t, ts) if ts else "other", e["source"], e["target"]))
     print(f"Extracted edges: {len(edges)}")
     print(f"matched: {len(edges) - len(wrong) - len(unver)}")
     print(f"unverified: {len(unver)}")
+    for k, v in collections.Counter(u[0] for u in unver).most_common():
+        print(f"  {k}: {v}")
     print(f"wrong: {len(wrong)}")
+    print(f"dispatched (trait-owned match, counted in wrong): {sum(w[0] == 'dispatched' for w in wrong)}")
     for k, v in collections.Counter(w[0] for w in wrong).most_common():
         print(f"  {k}: {v}")
     for w in wrong[:20]:
@@ -88,6 +105,10 @@ def main():
     for sh in shapes:
         rs = [r for r in rows if r["shape"] == sh]
         print(f"  {sh}: {len(rs)}, {sum(id(r) in covered for r in rs)}")
+    print("self_method matched by owner:")
+    for ow in sorted({r["owner"] for r in rows if r["shape"] == "self_method"}):
+        rs = [r for r in rows if r["shape"] == "self_method" and r["owner"] == ow]
+        print(f"  {ow}: {len(rs)}, {sum(id(r) in covered for r in rs)}")
 
 
 main()
