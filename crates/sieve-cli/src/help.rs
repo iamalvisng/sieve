@@ -166,6 +166,8 @@ Options:
   --in <path>      narrow to symbols under this path prefix, filtered before
                    scoring (segment-aware, like scopeOf)
   --json           output the result as JSON
+  --def            with one identifier: print the defining body, the callers
+                   count and the savings line
   --no-graph-rank  rank by lexical relevance only, without the
                    graph-connectivity re-rank (ablation/eval)
   --no-refresh     skip the freshness check — answer from the graph as-is

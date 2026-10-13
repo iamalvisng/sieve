@@ -60,6 +60,33 @@ vite:
 9. how does vite build for production
 10. how does vite preview the production build
 
+## Exact call links checked by an oracle
+
+An oracle is an outside tool that resolves each call with a compiler or a
+language server. The check compares every Extracted call link with the oracle
+result. A link is wrong when the oracle names a different target. A link is
+unverified when the oracle gives no single answer.
+
+| Repo | Version | Extracted | Wrong | Unverified | Oracle |
+|---|---|---|---|---|---|
+| Sieve | c26ebc3 | 5,044 | 0 | 0 | rust-analyzer 0.3.3065 |
+| ripgrep | 3fce3b5 | 1,209 | 0 | 3 (platform `cfg`) | rust-analyzer 0.3.3065 |
+| httpx | b5addb6 | 367 | 0 | 0 | scip-python 0.6.6 |
+| black | 11cff13 | 1,161 | 0 | 2 | scip-python 0.6.6 |
+
+Before the fix, the same-file name rule gave wrong Extracted links:
+
+| Repo | Wrong | Extracted |
+|---|---|---|
+| Sieve | 254 | 4,622 |
+| ripgrep 3fce3b5 | 173 | 938 |
+| httpx b5addb6 | 1 | 324 |
+| black 11cff13 | 20 | 833 |
+
+The oracle scripts are in `scripts/oracle/`. `rs-calls.py` and
+`rs-compare.py` check Rust. `py-calls.py` and `py-compare.py` check Python.
+`ts-calls.mjs` and `compare.mjs` check TypeScript.
+
 ## Limits
 
 - Sieve has not measured token savings in an agent session.

@@ -52,7 +52,24 @@ TypeScript and JavaScript. These cover named imports, aliased imports
 They also cover barrel re-exports: `export { x } from`, `export *`, default
 re-exports and `export * as ns`. ADR 0005 and ADR 0006 hold the rules.
 
-Sieve does not link these cases as exact: non-relative package specifiers,
+The exact-link tier now covers TypeScript, JavaScript, Rust and Python. Sieve
+marks a Rust or Python call Extracted only when it proves one target. See
+[Concepts](concepts.md#exact-links) and ADR 0007.
+
+For Rust, these calls stay Inferred or get no edge: a method call `x.f()`,
+`self.f()`, a trait method, `<T as Trait>::f()`, a call to a trait-impl
+function through a type, a call through a type alias, a call inside a macro
+argument, a macro call, and code made by `include!` or a procedural macro.
+A name with a `cfg` attribute on two definitions stays Inferred.
+
+For Python, these calls stay Inferred or get no edge: a method call `x.f()`
+on an unknown object, `self.f()`, `getattr`, `importlib`, a call to a function
+with a decorator that can replace it, a name that the code binds more than once,
+a module that uses `globals()`, `exec` or a module `__getattr__`, and a call to a
+patched module attribute. A name from `from m import *` is exact only when the
+star import has one clear result.
+
+Sieve does not link these TypeScript and JavaScript cases as exact: non-relative package specifiers,
 `paths` aliases, CommonJS, `export =`, and JavaScript barrel files for re-export
 records. Do not treat these links as exact.
 

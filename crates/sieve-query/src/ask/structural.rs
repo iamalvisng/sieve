@@ -1,12 +1,12 @@
 //! Structural mode: "who calls X" and "what does X call" queries
 //! (the `ask-ranking.md` note section 6).
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
 use regex::Regex;
 use sieve_core::collate::collate;
-use sieve_core::{Graph, Kind, Node, Relation};
+use sieve_core::{Edge, Graph, Kind, Node, Relation};
 
 use super::{path_under_prefix, snippet_of, AskHit};
 use crate::blast::JS_WS;
@@ -226,6 +226,58 @@ pub(crate) enum StructuralOutcome {
     None,
 }
 
+/// The edges a structural walk follows from `ids`, each with the node id at
+/// its far end. Walks the outgoing relations when `outgoing` is true, else
+/// the incoming ones. Keeps the first edge for each (far id, relation) pair.
+/// `ask` structural mode and `ask --def` share this walk.
+pub(crate) fn walked_edges<'g>(
+    graph: &'g Graph,
+    ids: &HashSet<&str>,
+    outgoing: bool,
+) -> Vec<(&'g Edge, &'g str)> {
+    let mut seen: HashSet<(&str, &str)> = HashSet::new();
+    let mut out = Vec::new();
+    for edge in &graph.edges {
+        let walked = if outgoing {
+            OUTGOING_RELS.contains(&edge.relation)
+        } else {
+            INCOMING_RELS.contains(&edge.relation)
+        };
+        if !walked {
+            continue;
+        }
+        let (anchor, other) = if outgoing {
+            (edge.source.as_str(), edge.target.as_str())
+        } else {
+            (edge.target.as_str(), edge.source.as_str())
+        };
+        if ids.contains(anchor) && seen.insert((other, edge.relation.as_str())) {
+            out.push((edge, other));
+        }
+    }
+    out
+}
+
+/// The count of distinct incoming edges for each node id, in one pass. It
+/// counts the four `INCOMING_RELS`, and keeps one edge for each (source,
+/// relation) pair, the same dedup as [`walked_edges`].
+pub(crate) fn incoming_counts(graph: &Graph) -> HashMap<&str, usize> {
+    let mut seen: HashSet<(&str, &str, &str)> = HashSet::new();
+    let mut counts: HashMap<&str, usize> = HashMap::new();
+    for edge in &graph.edges {
+        if INCOMING_RELS.contains(&edge.relation)
+            && seen.insert((
+                edge.target.as_str(),
+                edge.source.as_str(),
+                edge.relation.as_str(),
+            ))
+        {
+            *counts.entry(edge.target.as_str()).or_insert(0) += 1;
+        }
+    }
+    counts
+}
+
 /// Runs the structural mode: walks incoming or outgoing edges of the
 /// query's resolved subject. Returns [`StructuralOutcome::None`] when the
 /// query has no structural intent (section 6.1).
@@ -250,28 +302,7 @@ pub(crate) fn structural(
     let outgoing = wants_out && !wants_in;
 
     let mut hits: Vec<AskHit> = Vec::new();
-    let mut seen: HashSet<String> = HashSet::new();
-    for edge in &graph.edges {
-        let walked = if outgoing {
-            OUTGOING_RELS.contains(&edge.relation)
-        } else {
-            INCOMING_RELS.contains(&edge.relation)
-        };
-        if !walked {
-            continue;
-        }
-        let (anchor, other) = if outgoing {
-            (edge.source.as_str(), edge.target.as_str())
-        } else {
-            (edge.target.as_str(), edge.source.as_str())
-        };
-        if !ids.contains(anchor) {
-            continue;
-        }
-        let dedup_key = format!("{other}{}", edge.relation.as_str());
-        if !seen.insert(dedup_key) {
-            continue;
-        }
+    for (edge, other) in walked_edges(graph, &ids, outgoing) {
         let node = graph.nodes.iter().find(|n| n.id == other);
         hits.push(match node {
             Some(node) => AskHit {

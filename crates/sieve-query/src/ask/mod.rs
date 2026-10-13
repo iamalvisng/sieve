@@ -7,6 +7,7 @@
 //! (`format_ask`, `format_ask_json`).
 
 mod concept;
+mod def;
 mod format;
 mod fuse;
 mod lexical;
@@ -17,6 +18,7 @@ mod select;
 /// (the `query-commands.md` note section 2.4).
 pub(crate) mod structural;
 
+pub use def::{define, format_def, single_ident, Def, Ident};
 pub use format::{format_ask, format_ask_json};
 pub use fuse::scope_of;
 pub(crate) use select::round_robin_queues;
@@ -758,6 +760,22 @@ fn parse_span_pointer(pointer: &str) -> Option<(&str, u32, u32)> {
 /// under `repo_root`, clamped to the file length, and capped at
 /// [`MAX_SPAN_LINES`] with a truncation marker (section 7.8).
 fn slice_span(repo_root: &Path, path: &str, from: u32, to: u32) -> Option<String> {
+    slice_span_capped(repo_root, path, from, to, MAX_SPAN_LINES, None)
+}
+
+/// Like [`slice_span`], with a line cap and an optional cap in UTF-16 units.
+/// The char cap counts each line and its line break. The cut falls on a line
+/// end, but the first line always prints. With no char cap the
+/// marker names the whole slice, as `slice_span` always did. With a char cap
+/// the marker names the span from the first line not printed.
+pub(crate) fn slice_span_capped(
+    repo_root: &Path,
+    path: &str,
+    from: u32,
+    to: u32,
+    max_lines: usize,
+    max_chars: Option<usize>,
+) -> Option<String> {
     let bytes = std::fs::read(repo_root.join(path)).ok()?;
     // The span read goes through the source decoder.
     let source = sieve_core::fingerprint::decode_source(&bytes)?;
@@ -768,19 +786,61 @@ fn slice_span(repo_root: &Path, path: &str, from: u32, to: u32) -> Option<String
         return Some(String::new());
     }
     let slice = &lines[start - 1..end];
-    if slice.len() > MAX_SPAN_LINES {
-        let mut head: Vec<String> = slice[..MAX_SPAN_LINES]
-            .iter()
-            .map(|l| l.to_string())
-            .collect();
-        head.push(format!(
-            "… (+{} more lines; open {path}:L{start}-L{end})",
-            slice.len() - MAX_SPAN_LINES
-        ));
-        Some(head.join("\n"))
-    } else {
-        Some(slice.join("\n"))
+    let mut keep = slice.len().min(max_lines);
+    // Set when the first line alone passes the char cap and prints cut.
+    let mut first_cut: Option<String> = None;
+    if let Some(cap) = max_chars {
+        let mut used = 0;
+        let mut fit = 0;
+        for line in &slice[..keep] {
+            let width = line.encode_utf16().count() + usize::from(fit > 0);
+            if used + width > cap {
+                break;
+            }
+            used += width;
+            fit += 1;
+        }
+        if fit == 0 && keep > 0 {
+            first_cut = Some(cut_to_units(slice[0], cap));
+            keep = 1;
+        } else {
+            keep = fit;
+        }
     }
+    if keep == slice.len() && first_cut.is_none() {
+        return Some(slice.join("\n"));
+    }
+    let mut head: Vec<String> = slice[..keep].iter().map(|l| l.to_string()).collect();
+    let was_cut = first_cut.is_some();
+    if let Some(cut) = first_cut {
+        head[0] = cut;
+    }
+    let open_from = if max_chars.is_some() {
+        start + keep
+    } else {
+        start
+    };
+    let note = if was_cut { " (line cut)" } else { "" };
+    head.push(format!(
+        "… (+{} more lines; open {path}:L{open_from}-L{end}){note}",
+        slice.len() - keep
+    ));
+    Some(head.join("\n"))
+}
+
+/// The longest prefix of `line` that holds at most `cap` UTF-16 units, cut at
+/// a char boundary.
+fn cut_to_units(line: &str, cap: usize) -> String {
+    let mut used = 0;
+    let mut end = 0;
+    for (idx, c) in line.char_indices() {
+        used += c.len_utf16();
+        if used > cap {
+            break;
+        }
+        end = idx + c.len_utf8();
+    }
+    line[..end].to_string()
 }
 
 /// Attaches inlined source to every hit whose pointer is a real

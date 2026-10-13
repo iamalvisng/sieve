@@ -108,7 +108,7 @@ fn scope_footer_lines(r: &AskResult) -> Vec<String> {
 
 /// The row of one hit: `name  kind  path:start-end`. A concept hit shows
 /// its sources in place of a path.
-fn row_of(h: &AskHit) -> String {
+pub(super) fn row_of(h: &AskHit) -> String {
     let (name, kind) = sieve_core::voice::split_title(&h.title);
     let pointer = sieve_core::voice::pointer(&h.pointer);
     // A structural hit has no kind in its title: it shows `caller` or

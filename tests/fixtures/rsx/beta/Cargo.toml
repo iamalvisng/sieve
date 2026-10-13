@@ -1,0 +1,6 @@
+[package]
+name = "beta"
+edition = "2021"
+
+[dependencies]
+alpha = { path = "../alpha" }

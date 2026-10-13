@@ -76,6 +76,80 @@ pub struct RawEdge {
     /// `import_name` holds the receiver's export name.
     #[serde(default, skip_serializing_if = "is_false")]
     pub ns_export: bool,
+    /// A Rust `calls` edge only: the static proof of its target. `None` for
+    /// every other raw edge, so their cache bytes stay the same.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rust: Option<RustRec>,
+    /// A Python bare `calls` edge only: the scope proof of its target.
+    /// `None` for every other raw edge, so their cache bytes stay the same.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub py: Option<PyRec>,
+}
+
+/// What the Python pass records on a raw edge.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PyRec {
+    /// A bare call proven to reach the def or class node `target` of its file.
+    SameFile { target: String },
+    /// The proof before node ids exist: the def `name` that starts on `line`.
+    /// `extract_file` turns it into `SameFile` before it returns.
+    Def { name: String, line: u32 },
+    /// A call the module map must prove: the dotted receiver chain, empty
+    /// for a bare call. The first name of the chain is a module-level
+    /// binding of the file.
+    Call { chain: Vec<String> },
+    /// The module-level facts of one Python file. It rides on an `imports`
+    /// raw edge that the resolver never turns into a graph edge.
+    File {
+        /// Each module-level name with its one binding.
+        binds: Vec<(String, PyBind)>,
+        /// The dotted name of each plain `import a.b`.
+        dotted: Vec<String>,
+        /// Each `X.f = ...` as `(chain of X, f)`.
+        patches: Vec<(Vec<String>, String)>,
+        /// The file has a `sys.path` change.
+        sys_path: bool,
+        /// The file has parse errors.
+        broken: bool,
+        /// A star import, `globals()`, `exec(` or a module `__getattr__`.
+        opaque: bool,
+    },
+}
+
+/// The one binding of a module-level name in a Python file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PyBind {
+    /// An exact def or class, before node ids exist.
+    Def { name: String, line: u32 },
+    /// An exact def or class by node id.
+    Node { target: String },
+    /// `from module import member [as name]`; `module` keeps its dots.
+    From { module: String, member: String },
+    /// `import module [as name]`; `plain` marks `import a.b` without `as`.
+    Module { module: String, plain: bool },
+    /// Any other binding, or more than one.
+    Other,
+}
+
+/// What the Rust pass records on a raw edge.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RustRec {
+    /// A bare call proven to reach the free `fn` node `target` of its file.
+    SameFile { target: String },
+    /// A call whose target the module tree must find: the inline `mod`
+    /// chain of the call site and the path segments of the callee.
+    Call {
+        mods: Vec<String>,
+        path: Vec<String>,
+        /// True when the type part of the path has generic arguments.
+        #[serde(default, skip_serializing_if = "is_false")]
+        generic: bool,
+    },
+    /// All module-level items of one file. It rides on an `imports` raw
+    /// edge that the resolver never turns into a graph edge.
+    File {
+        items: Vec<crate::rust_items::RItem>,
+    },
 }
 
 /// One export record of a TS or JS file, for barrel resolution.
@@ -264,6 +338,7 @@ impl Extractor {
             path,
             source,
             is_python,
+            py: Default::default(),
         };
         let mut sink = Sink {
             minted: &mut minted,
@@ -286,7 +361,51 @@ impl Extractor {
         if matches!(lang, "typescript" | "tsx") {
             edges.extend(collect_reexports(tree.root_node(), source, path));
         }
+        if is_python {
+            edges.push(
+                file.py
+                    .borrow_mut()
+                    .file_edge(tree.root_node(), path, source),
+            );
+        }
+        resolve_py_defs(&out, &mut edges);
         (out, edges)
+    }
+}
+
+/// Turns each `PyRec::Def` into `PyRec::SameFile` with the id of the node
+/// that has the same name and start line, or drops it when none matches.
+fn resolve_py_defs(nodes: &[Node], edges: &mut [RawEdge]) {
+    for edge in edges.iter_mut() {
+        let Some(PyRec::Def { name, line }) = &edge.py else {
+            continue;
+        };
+        let start = format!("L{line}-");
+        let target = nodes
+            .iter()
+            .find(|n| n.name == *name && n.span.starts_with(&start))
+            .map(|n| n.id.clone());
+        edge.py = target.map(|target| PyRec::SameFile { target });
+    }
+    for edge in edges.iter_mut() {
+        let Some(PyRec::File { binds, .. }) = &mut edge.py else {
+            continue;
+        };
+        for (_, bind) in binds.iter_mut() {
+            let PyBind::Def { name, line } = bind else {
+                continue;
+            };
+            let start = format!("L{line}-");
+            *bind = match nodes
+                .iter()
+                .find(|n| n.name == *name && n.span.starts_with(&start))
+            {
+                Some(n) => PyBind::Node {
+                    target: n.id.clone(),
+                },
+                None => PyBind::Other,
+            };
+        }
     }
 }
 
@@ -296,6 +415,8 @@ struct FileCtx<'a> {
     path: &'a str,
     source: &'a str,
     is_python: bool,
+    /// The scope tables for Python call proofs.
+    py: std::cell::RefCell<crate::py_proof::PyScopes>,
 }
 
 /// The mutable collectors a walk writes into: minted ids, symbol nodes,
@@ -368,6 +489,8 @@ fn walk(node: TsNode, ctx: &Ctx, file: &FileCtx, sink: &mut Sink) {
                 default_export: false,
                 reexport: None,
                 ns_export: false,
+                rust: None,
+                py: None,
             });
         }
         return;
@@ -406,6 +529,8 @@ fn walk(node: TsNode, ctx: &Ctx, file: &FileCtx, sink: &mut Sink) {
                     default_export: false,
                     reexport: None,
                     ns_export: false,
+                    rust: None,
+                    py: None,
                 });
             } else {
                 let (specifier, import_name, ns_export) =
@@ -433,6 +558,11 @@ fn walk(node: TsNode, ctx: &Ctx, file: &FileCtx, sink: &mut Sink) {
                         )
                     })
                 };
+                let py = if file.is_python {
+                    file.py.borrow_mut().call_rec(node, &name, source)
+                } else {
+                    None
+                };
                 sink.edges.push(RawEdge {
                     source: ctx.parent_id.clone(),
                     relation: Relation::Calls,
@@ -450,6 +580,8 @@ fn walk(node: TsNode, ctx: &Ctx, file: &FileCtx, sink: &mut Sink) {
                     default_export: false,
                     reexport: None,
                     ns_export,
+                    rust: None,
+                    py,
                 });
             }
         }
@@ -597,6 +729,8 @@ fn export_record(path: &str, specifier: Option<String>, reexport: ReExport) -> R
         default_export: false,
         reexport: Some(reexport),
         ns_export: false,
+        rust: None,
+        py: None,
     }
 }
 
@@ -841,6 +975,8 @@ fn emit_definition(node: TsNode, desc: Desc, ctx: &Ctx, file: &FileCtx, sink: &m
                 || (ctx.scope.is_empty() && ctx.default_local == Some(name.as_str()))),
         reexport: None,
         ns_export: false,
+        rust: None,
+        py: None,
     });
     if heritage_gate(ctx.lang, kind) {
         emit_heritage_edges(node, &id, path, source, ctx.lang, sink.edges);
@@ -1232,6 +1368,8 @@ fn emit_heritage_edges(
             default_export: false,
             reexport: None,
             ns_export: false,
+            rust: None,
+            py: None,
         });
     };
     let mut push = |relation: Relation, base: TsNode| {
@@ -2033,6 +2171,8 @@ fn maybe_emit_reference(
         default_export: false,
         reexport: None,
         ns_export: false,
+        rust: None,
+        py: None,
     });
 }
 
@@ -3832,7 +3972,10 @@ mod tests {
     fn import_a_dot_b_as_c_gives_no_import_edge() {
         let mut extractor = Extractor::new().expect("build extractor");
         let (_nodes, edges) = extractor.extract_file("a.py", "import a.b as c\n", "python");
-        assert!(!edges.iter().any(|e| e.relation == Relation::Imports));
+        // The file record has no specifier and is never an import edge.
+        assert!(!edges
+            .iter()
+            .any(|e| e.relation == Relation::Imports && e.specifier.is_some()));
     }
 
     #[test]

@@ -482,7 +482,7 @@
       "source": "py/main.py#Calculator.total",
       "target": "py/helpers.py#add",
       "relation": "calls",
-      "confidence": "inferred"
+      "confidence": "extracted"
     },
     {
       "source": "py/main.py#run",
@@ -494,7 +494,7 @@
       "source": "py/main.py#run",
       "target": "py/main.py#Calculator.total",
       "relation": "calls",
-      "confidence": "extracted"
+      "confidence": "inferred"
     },
     {
       "source": "src/app.ts",

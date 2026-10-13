@@ -5,7 +5,26 @@ All notable changes to this project are in this file.
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 This project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.1.4] - 2026-10-13
+
+This release adds exact call links for Rust and Python.
+
+### Added
+
+- Exact Rust call links. Sieve marks a Rust call Extracted only when it proves one target. The proof covers a free function in the same file, a free function in the same crate through the module tree and `use` items, a function in another workspace crate, and `Type::f()` and `Self::f()` calls. ADR 0007 holds the rules.
+- Exact Python call links. Sieve marks a Python call Extracted only when a scope proof finds one binding in the same file, or when an import chain finds one definition in another file. Cross-file proof covers `import`, `from ... import`, relative imports and `__init__.py` re-exports.
+- The oracle scripts `scripts/oracle/rs-calls.py` and `scripts/oracle/rs-compare.py` check Rust links against rust-analyzer. The scripts `scripts/oracle/py-calls.py` and `scripts/oracle/py-compare.py` check Python links against scip-python.
+- The guide shows the oracle results in the benchmarks page.
+- `sieve ask --def <identifier>` prints the body of the top definition (at most 60 lines) and one callers line. The flag is opt-in. The session-start hint and `ask --help` name it. Sieve makes no token-saving claim for it.
+
+### Fixed
+
+- Sieve no longer marks a Rust or Python call Extracted by its name alone. The old rule linked a call to any function with the same name in the same file. Before this fix, Sieve itself had 254 wrong links of 4,622 Rust Extracted links, ripgrep 3fce3b5 had 173 of 938, httpx b5addb6 had 1 of 324 and black 11cff13 had 20 of 833. After the fix, all four have 0 wrong links. A call that Sieve cannot prove stays Inferred.
+
+### Changed
+
+- `CACHE_VERSION` changes. The first build after the upgrade re-parses every file.
+- Some Rust and Python call edges that were Extracted are now Inferred. The golden files for the Rust and Python fixtures record this change.
 
 ## [0.1.3] - 2026-10-09
 

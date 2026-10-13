@@ -28,6 +28,16 @@ A caller is a symbol that calls or references another symbol. The blast
 radius of a change is the set of symbols that depend on the changed lines.
 `--depth` sets how many hops Sieve walks over the edges.
 
+## Exact links
+
+An Extracted link is a call that Sieve proves has one target. An Inferred
+link is a call that Sieve matches by name or by a weaker rule. For TypeScript,
+JavaScript, Rust and Python, Sieve marks a call Extracted only after it follows
+the scopes, the imports and the module tree to exactly one definition. If it
+finds none or two, the link stays Inferred. An outside oracle checks the proofs:
+the TypeScript compiler, rust-analyzer and scip-python. A wrong Extracted link
+fails the check. See [Benchmarks](benchmarks.md#exact-call-links-checked-by-an-oracle).
+
 ## Fresh index
 
 Query commands refresh the index before they answer, so the answer

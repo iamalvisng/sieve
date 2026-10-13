@@ -273,12 +273,13 @@ fn mask_shas(s: &str) -> String {
         .join(" ")
 }
 
+// RSX0: the test calls `build_repo` under `use super::*`, which the same-file
+// proof does not cover yet, so the call is Inferred and gives no test row.
 const ROWS_GOLDEN: &str = "build_repo  fn  src/lib.rs:1-9
 decision  docs/decisions/LEDGER.md:3  2026-10-01, build takes a lock
           link: Code anchor
 comment  src/lib.rs:2  SAFETY: the lock is held here.
 comment  src/lib.rs:6  NOTE: never log token=[redacted]
-test  src/lib.rs:15  test_build_repo_rejects_a_negative
 history  introduced  <sha> 2026-01-01  commit subject (untrusted): add build_repo
 history  last  <sha> 2026-02-03  commit subject (untrusted): fix the bound, [redacted]
 ";

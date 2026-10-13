@@ -4795,25 +4795,25 @@
       "source": "rust/rich.rs#deep",
       "target": "rust/rich.rs#shallow",
       "relation": "calls",
-      "confidence": "extracted"
+      "confidence": "inferred"
     },
     {
       "source": "rust/rich.rs#scaled",
       "target": "rust/rich.rs#new",
       "relation": "calls",
-      "confidence": "extracted"
+      "confidence": "inferred"
     },
     {
       "source": "rust/rich.rs#total",
       "target": "rust/rich.rs#new",
       "relation": "calls",
-      "confidence": "extracted"
+      "confidence": "inferred"
     },
     {
       "source": "rust/rich.rs#total",
       "target": "rust/rich.rs#square",
       "relation": "calls",
-      "confidence": "extracted"
+      "confidence": "inferred"
     },
     {
       "source": "scala/App.scala#App",

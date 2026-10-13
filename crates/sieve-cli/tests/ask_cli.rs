@@ -278,3 +278,90 @@ fn test_p1_02_to_11_p1_49_ask_cli_matches_golden() {
         sieve-query's ask/fuse.rs): {multi_failures:?}"
     );
 }
+
+/// Runs `sieve ask <args>` in `root` and returns the stdout.
+fn ask_stdout(root: &Path, args: &[&str]) -> String {
+    let mut full = vec!["ask".to_string()];
+    full.extend(args.iter().map(|a| a.to_string()));
+    let out = run_sieve(root, &full);
+    assert_eq!(out.status.code(), Some(0), "ask {args:?}");
+    String::from_utf8(out.stdout).expect("utf8 stdout")
+}
+
+/// Lean-ask T2: `--def` on one identifier prints the definition rows, the
+/// body, the callers line, and the savings line last.
+#[test]
+fn test_ask_def_prints_the_lean_answer_and_the_savings_line_last() {
+    // The `askx` fixture holds a large file, so the savings line prints.
+    let temp = build_fixture("askx");
+    let text = ask_stdout(&temp.path, &["bigwidget", "--def"]);
+    assert!(text.starts_with("ask  bigwidget \u{b7} def\n"), "{text}");
+    assert!(text.contains("export function bigwidget"), "{text}");
+    assert!(text.contains("callers: "), "{text}");
+    let last = text.lines().last().expect("last line");
+    assert!(last.starts_with("[sieve] saved"), "{text}");
+    assert_ne!(text, ask_stdout(&temp.path, &["bigwidget"]));
+}
+
+#[test]
+fn test_ask_def_with_full_prints_the_same_bytes_as_without_def() {
+    let temp = build_fixture("basic");
+    assert_eq!(
+        ask_stdout(&temp.path, &["double", "--def", "--full"]),
+        ask_stdout(&temp.path, &["double", "--full"])
+    );
+}
+
+#[test]
+fn test_ask_def_with_json_prints_the_same_bytes_as_without_def() {
+    let temp = build_fixture("basic");
+    assert_eq!(
+        ask_stdout(&temp.path, &["double", "--def", "--json"]),
+        ask_stdout(&temp.path, &["double", "--json"])
+    );
+}
+
+#[test]
+fn test_ask_def_on_a_phrase_prints_the_same_bytes_as_without_def() {
+    let temp = build_fixture("basic");
+    assert_eq!(
+        ask_stdout(&temp.path, &["how does double work", "--def"]),
+        ask_stdout(&temp.path, &["how does double work"])
+    );
+}
+
+/// Known ceiling: a workspace parent ignores `--def`.
+#[test]
+fn test_ask_def_at_a_workspace_prints_the_federated_bytes() {
+    let (copy, build) = support::ws::built_workspace("ask-def-ws");
+    assert_eq!(build.status.code(), Some(0), "workspace build");
+    assert_eq!(
+        ask_stdout(&copy.path, &["alphaAdd", "--def"]),
+        ask_stdout(&copy.path, &["alphaAdd"])
+    );
+}
+
+#[test]
+fn test_ask_def_with_a_bad_in_prefix_fails_as_without_def() {
+    let temp = build_fixture("basic");
+    let run = |args: &[&str]| {
+        let mut full = vec!["ask".to_string()];
+        full.extend(args.iter().map(|a| a.to_string()));
+        run_sieve(&temp.path, &full)
+    };
+    let plain = run(&["double", "--in", "nosuchdir"]);
+    let def = run(&["double", "--def", "--in", "nosuchdir"]);
+    assert_eq!(plain.status.code(), Some(1));
+    assert_eq!(def.status.code(), plain.status.code());
+    assert_eq!(def.stderr, plain.stderr);
+    assert_eq!(def.stdout, plain.stdout);
+}
+
+#[test]
+fn test_ask_def_with_source_prints_the_same_bytes_as_def() {
+    let temp = build_fixture("askx");
+    assert_eq!(
+        ask_stdout(&temp.path, &["bigwidget", "--def", "--source"]),
+        ask_stdout(&temp.path, &["bigwidget", "--def"])
+    );
+}

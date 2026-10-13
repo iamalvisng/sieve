@@ -7,8 +7,10 @@ use std::path::Path;
 use sieve_core::lang::lang_for_path;
 use sieve_core::{Confidence, Edge, Kind, Node, Relation};
 
-use crate::extract::{RawEdge, ReExport};
+use crate::extract::{PyRec, RawEdge, ReExport, RustRec};
 use crate::generic::generic_lang_of;
+use crate::py_tree::{Outcome as PyOutcome, PyIndex};
+use crate::rust_tree::{Outcome, RustIndex, RustPackage};
 
 /// Known source extensions `resolveImport` probes, in probe order (edge
 /// note, section 3).
@@ -56,6 +58,10 @@ struct Indexes<'a> {
     /// Every directory (posix, `""` for the repo root) holding a `lib.rs`
     /// or `main.rs`, for `resolveRustUse`.
     rust_crate_roots: Vec<String>,
+    /// The Rust module tree and items, for exact Rust call links.
+    rust: RustIndex,
+    /// The Python module map, for exact Python call links.
+    py: PyIndex,
     /// Ids of the definitions a `contains` raw edge marks as a direct
     /// named export (TS and JS).
     direct_exports: HashSet<&'a str>,
@@ -89,7 +95,20 @@ pub fn resolve_edges_with_go_modules(
     raw: &[RawEdge],
     go_modules: &[GoModule],
 ) -> Vec<Edge> {
-    let idx = build_indexes(nodes, raw);
+    resolve_edges_with_context(nodes, raw, go_modules, &[])
+}
+
+/// Resolves every raw edge like [`resolve_edges_with_go_modules`], and also
+/// follows the module tree of `rust_packages` for exact Rust call links.
+pub fn resolve_edges_with_context(
+    nodes: &[Node],
+    raw: &[RawEdge],
+    go_modules: &[GoModule],
+    rust_packages: &[RustPackage],
+) -> Vec<Edge> {
+    let mut idx = build_indexes(nodes, raw);
+    idx.rust = RustIndex::build(raw, rust_packages);
+    idx.py = PyIndex::build(nodes, raw);
 
     let mut out: Vec<Edge> = Vec::new();
     let mut seen: HashSet<(String, &'static str, String)> = HashSet::new();
@@ -274,6 +293,8 @@ fn build_indexes<'a>(nodes: &'a [Node], raw: &'a [RawEdge]) -> Indexes<'a> {
         c_files_by_suffix,
         php_files_by_suffix,
         rust_crate_roots,
+        rust: RustIndex::default(),
+        py: PyIndex::default(),
     }
 }
 
@@ -331,7 +352,7 @@ fn owner_of(node: &Node) -> Option<String> {
 fn resolve_one(raw: &RawEdge, idx: &Indexes, go_modules: &[GoModule]) -> Option<Edge> {
     // An export record (`export ... from`, a local export name) feeds the
     // barrel walk only. It never becomes an `imports` graph edge.
-    if raw.reexport.is_some() {
+    if raw.reexport.is_some() || matches!(raw.rust, Some(RustRec::File { .. })) {
         return None;
     }
     match raw.relation {
@@ -429,10 +450,29 @@ fn resolve_calls(raw: &RawEdge, idx: &Indexes) -> Option<Edge> {
             }
         }
     }
+    if let Some(PyRec::Call { chain }) = &raw.py {
+        match idx.py.resolve_call(&raw.file, chain, name) {
+            PyOutcome::Target(target) if idx.node_ids.contains(target.as_str()) => {
+                return Some(Edge {
+                    source: raw.source.clone(),
+                    target,
+                    relation: Relation::Calls,
+                    confidence: Confidence::Extracted,
+                });
+            }
+            // PY7: a repo module that lacks the name leaves no edge.
+            PyOutcome::Drop => return None,
+            _ => {}
+        }
+    }
     if raw.via_member {
         let recv_type = raw.recv_type.as_deref()?;
-        let (target, confidence) =
+        let (target, mut confidence) =
             resolve_typed_member(&raw.file, recv_type, name, raw.arg_count, idx)?;
+        // PY0: only the Python proof gives Extracted for a `.py` call.
+        if is_python_file(&raw.file) {
+            confidence = Confidence::Inferred;
+        }
         return Some(Edge {
             source: raw.source.clone(),
             target,
@@ -440,8 +480,40 @@ fn resolve_calls(raw: &RawEdge, idx: &Indexes) -> Option<Edge> {
             confidence,
         });
     }
+    let proven = match &raw.rust {
+        Some(RustRec::SameFile { target }) => Some(target.clone()),
+        Some(RustRec::Call {
+            mods,
+            path,
+            generic,
+        }) => {
+            match idx.rust.resolve_call(&raw.file, mods, path, *generic) {
+                Outcome::Target(id) => Some(id),
+                // R13: a failed lookup for an `as` rename drops the edge.
+                Outcome::Drop => return None,
+                Outcome::Unknown => None,
+            }
+        }
+        _ => None,
+    };
+    let proven = proven.or_else(|| match &raw.py {
+        Some(PyRec::SameFile { target }) => Some(target.clone()),
+        _ => None,
+    });
+    if let Some(target) = proven.filter(|t| idx.node_ids.contains(t.as_str())) {
+        return Some(Edge {
+            source: raw.source.clone(),
+            target,
+            relation: Relation::Calls,
+            confidence: Confidence::Extracted,
+        });
+    }
     let kinds = raw.kinds.clone().unwrap_or_else(|| bare_kinds(&raw.file));
-    if let Some((target, confidence)) = resolve_name(&raw.file, name, &kinds, idx) {
+    if let Some((target, mut confidence)) = resolve_name(&raw.file, name, &kinds, idx) {
+        // R0: only the Rust proof gives Extracted for a `.rs` call.
+        if raw.file.ends_with(".rs") || is_python_file(&raw.file) {
+            confidence = Confidence::Inferred;
+        }
         return Some(Edge {
             source: raw.source.clone(),
             target,
@@ -450,7 +522,8 @@ fn resolve_calls(raw: &RawEdge, idx: &Indexes) -> Option<Edge> {
         });
     }
     if is_python_file(&raw.file) {
-        if let Some((target, confidence)) = resolve_name(&raw.file, name, &[Kind::Class], idx) {
+        if let Some((target, _)) = resolve_name(&raw.file, name, &[Kind::Class], idx) {
+            let confidence = Confidence::Inferred;
             return Some(Edge {
                 source: raw.source.clone(),
                 target,
@@ -1324,6 +1397,8 @@ mod tests {
             default_export: false,
             reexport: None,
             ns_export: false,
+            rust: None,
+            py: None,
         }
     }
 
@@ -1348,13 +1423,13 @@ mod tests {
     }
 
     #[test]
-    fn python_class_retry_resolves_a_class_call() {
+    fn python_class_retry_resolves_a_class_call_as_inferred() {
         let nodes = vec![node("a.py#Box", "Box", Kind::Class, "a.py", None)];
         let raw = vec![call_edge("a.py#caller", "a.py", "Box")];
         let edges = resolve_edges(&nodes, &raw);
         assert_eq!(edges.len(), 1);
         assert_eq!(edges[0].target, "a.py#Box");
-        assert_eq!(edges[0].confidence, Confidence::Extracted);
+        assert_eq!(edges[0].confidence, Confidence::Inferred);
     }
 
     #[test]
@@ -1386,6 +1461,8 @@ mod tests {
             default_export: false,
             reexport: None,
             ns_export: false,
+            rust: None,
+            py: None,
         }];
         assert!(resolve_edges(&nodes, &raw).is_empty());
     }
@@ -1416,6 +1493,8 @@ mod tests {
             default_export: false,
             reexport: None,
             ns_export: false,
+            rust: None,
+            py: None,
         }];
         assert!(resolve_edges(&nodes, &raw).is_empty());
     }
@@ -1440,6 +1519,8 @@ mod tests {
             default_export: false,
             reexport: None,
             ns_export: false,
+            rust: None,
+            py: None,
         }];
         for i in (0..3).rev() {
             raw.push(RawEdge {
@@ -1459,6 +1540,8 @@ mod tests {
                 default_export: false,
                 reexport: None,
                 ns_export: false,
+                rust: None,
+                py: None,
             });
         }
         for i in 1..=3 {
@@ -1495,6 +1578,8 @@ mod tests {
             default_export: false,
             reexport: None,
             ns_export: false,
+            rust: None,
+            py: None,
         });
         nodes.push(node("a.ts#T4", "T4", Kind::Class, "a.ts", None));
         raw[0].recv_type = Some("T4".to_string());
@@ -1525,6 +1610,8 @@ mod tests {
             default_export: false,
             reexport: None,
             ns_export: false,
+            rust: None,
+            py: None,
         }];
         assert!(resolve_edges(&nodes, &raw).is_empty());
     }
@@ -1603,6 +1690,8 @@ mod tests {
             default_export: false,
             reexport: None,
             ns_export: false,
+            rust: None,
+            py: None,
         }];
         let edges = resolve_edges(&nodes, &raw);
         assert_eq!(edges.len(), 1);
@@ -1668,6 +1757,8 @@ mod tests {
             default_export: false,
             reexport: None,
             ns_export: false,
+            rust: None,
+            py: None,
         }];
         let idx = build_indexes(&nodes, &raw);
         let hit = resolve_trait_member("a.php", "App", "label", &idx);
@@ -1694,6 +1785,8 @@ mod tests {
             default_export: false,
             reexport: None,
             ns_export: false,
+            rust: None,
+            py: None,
         }
     }
 

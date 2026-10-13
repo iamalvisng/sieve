@@ -17,7 +17,11 @@
 
 (call_expression function: (identifier) @name) @reference.call
 
+(call_expression function: (generic_function function: (identifier) @name)) @reference.call
+
 (call_expression function: (scoped_identifier name: (identifier) @name)) @reference.call
+
+(call_expression function: (generic_function function: (scoped_identifier name: (identifier) @name))) @reference.call
 
 (type_item name: (type_identifier) @name) @definition.type
 

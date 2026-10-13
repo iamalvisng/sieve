@@ -7,7 +7,9 @@ use clap::Args;
 
 use sieve_core::askindex::{ask_index_path, read_ask_index};
 use sieve_core::workspace;
-use sieve_query::ask::{ask, format_ask, format_ask_json, AskOptions, AskSaved};
+use sieve_query::ask::{
+    ask, define, format_ask, format_ask_json, format_def, single_ident, AskOptions, AskSaved, Ident,
+};
 use sieve_query::workspace::{federate_ask, FederateAskOptions};
 use sieve_savings::{
     append_line, ask_pack_region, savings_for, sieve_header, to_tokens, utf16_len,
@@ -45,6 +47,10 @@ pub struct AskArgs {
     #[arg(long)]
     pub json: bool,
 
+    /// With one identifier: prints the defining body and the callers count.
+    #[arg(long)]
+    pub def: bool,
+
     /// Skips the personalized PageRank pass.
     #[arg(long = "no-graph-rank")]
     pub no_graph_rank: bool,
@@ -63,8 +69,6 @@ pub fn run(args: &AskArgs, dir_override: Option<&Path>) -> Result<(), String> {
         return run_workspace(args, &root, &context_dir);
     }
     let graph = query::read_wiring_named(&context_dir)?;
-    let index = read_ask_index(&ask_index_path(&context_dir));
-
     let opts = AskOptions {
         limit: args.limit,
         in_prefix: args.in_prefix.clone(),
@@ -72,6 +76,24 @@ pub fn run(args: &AskArgs, dir_override: Option<&Path>) -> Result<(), String> {
         source: args.source,
         full: args.full,
     };
+    // ponytail: `--def` at a workspace parent prints the federated bytes
+    // (above). A lean workspace answer needs a federated `define`.
+    if args.def && !args.full && !args.json {
+        if let Some(ident) = single_ident(&args.query) {
+            // A bad `--in` prefix fails as without `--def`: `ask` runs the
+            // same prefix check first. ponytail: this scores the query once
+            // more; a shared prefix check would avoid that.
+            if args.in_prefix.is_some() {
+                ask(&graph, None, &args.query, &opts, &root).map_err(|err| err.to_string())?;
+            }
+            print!(
+                "{}",
+                render_def(&graph, &root, &ident, args.in_prefix.as_deref())
+            );
+            return Ok(());
+        }
+    }
+    let index = read_ask_index(&ask_index_path(&context_dir));
 
     let mut result =
         ask(&graph, index.as_ref(), &args.query, &opts, &root).map_err(|err| err.to_string())?;
@@ -89,6 +111,26 @@ pub fn run(args: &AskArgs, dir_override: Option<&Path>) -> Result<(), String> {
 
     print!("{}", render_text(&result));
     Ok(())
+}
+
+/// The lean `--def` answer: the definition, then the savings line computed
+/// as `--source` computes it, over the top definition's file.
+fn render_def(
+    graph: &sieve_core::wiring::Graph,
+    root: &Path,
+    ident: &Ident,
+    in_prefix: Option<&str>,
+) -> String {
+    let def = define(graph, ident, in_prefix);
+    let body = format_def(graph, root, ident, &def, in_prefix);
+    let saved = def
+        .nodes
+        .first()
+        .and_then(|top| savings_for(graph, std::slice::from_ref(&top.path)));
+    match saved.and_then(|s| savings_line(s.baseline_chars, &body)) {
+        Some(line) => append_line(&body, &line),
+        None => body,
+    }
 }
 
 /// The workspace `ask` (P1-56): each child answers, and the merged result
@@ -147,12 +189,17 @@ fn source_savings_line(
     result: &sieve_query::ask::AskResult,
     rendered_body: &str,
 ) -> Option<String> {
-    let saved = result.saved?;
-    if saved.baseline_chars == 0 {
+    savings_line(result.saved?.baseline_chars, rendered_body)
+}
+
+/// The savings sentence for a baseline and a rendered body, or `None` when
+/// the baseline is zero or the pack is not smaller.
+fn savings_line(baseline_chars: u64, rendered_body: &str) -> Option<String> {
+    if baseline_chars == 0 {
         return None;
     }
     let pack = to_tokens(utf16_len(&pack_region(rendered_body)));
-    let base = to_tokens(saved.baseline_chars);
+    let base = to_tokens(baseline_chars);
     if base <= pack {
         return None;
     }

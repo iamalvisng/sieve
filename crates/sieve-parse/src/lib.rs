@@ -11,8 +11,14 @@ pub mod extract;
 pub mod generic;
 pub mod guard;
 pub mod lsp;
+mod py_proof;
+mod py_stdlib;
+mod py_tree;
 pub mod refresh;
 pub mod resolve;
+mod rust_items;
+mod rust_proof;
+mod rust_tree;
 pub mod stamp;
 pub use build::{
     build_graph, build_graph_cached, build_graph_cached_with, build_graph_with_raw, BuildOptions,
@@ -33,4 +39,5 @@ pub use refresh::{
     write_wiring_and_lookup, RebuildReport, RefreshOptions, RefreshOutcome,
 };
 pub use resolve::resolve_edges;
+pub use rust_tree::RustPackage;
 pub use stamp::extractor_stamp;

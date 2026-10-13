@@ -683,7 +683,7 @@
       "source": "py/derived.py#Dog.twice",
       "target": "py/derived.py#Dog.speak",
       "relation": "calls",
-      "confidence": "extracted"
+      "confidence": "inferred"
     },
     {
       "source": "py/derived.py#make",
@@ -695,7 +695,7 @@
       "source": "py/derived.py#make",
       "target": "py/derived.py#Dog.speak",
       "relation": "calls",
-      "confidence": "extracted"
+      "confidence": "inferred"
     },
     {
       "source": "py/pkg/mod.py",
@@ -725,7 +725,7 @@
       "source": "py/rel.py#use",
       "target": "py/pkg/mod.py#helper",
       "relation": "calls",
-      "confidence": "inferred"
+      "confidence": "extracted"
     },
     {
       "source": "ts/base.ts",

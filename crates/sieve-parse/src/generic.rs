@@ -273,6 +273,13 @@ impl GenericExtractor {
             extract_includes(tree.root_node(), path, source, &mut raw_edges);
         } else if lang_name == "rust" {
             extract_rust_uses(tree.root_node(), path, source, &mut raw_edges);
+            crate::rust_items::push_file_record(
+                tree.root_node(),
+                path,
+                source,
+                &sink.defs,
+                &mut raw_edges,
+            );
         }
 
         (sink.nodes, raw_edges)
@@ -449,6 +456,11 @@ fn tags_extract(
             continue;
         }
         let source_id = sink.enclosing(at).unwrap_or_else(|| path.to_string());
+        let rust = if lang_name == "rust" {
+            crate::rust_proof::call_rec(root, source, at, &name, &sink.defs)
+        } else {
+            None
+        };
         raw_edges.push(RawEdge {
             source: source_id,
             relation: Relation::Calls,
@@ -470,6 +482,8 @@ fn tags_extract(
             default_export: false,
             reexport: None,
             ns_export: false,
+            rust,
+            py: None,
         });
     }
     for (name, at) in refs {
@@ -506,6 +520,8 @@ fn tags_extract(
             default_export: false,
             reexport: None,
             ns_export: false,
+            rust: None,
+            py: None,
         });
     }
 }
@@ -697,6 +713,8 @@ fn visit_includes(node: TsNode, path: &str, source: &str, raw_edges: &mut Vec<Ra
                             default_export: false,
                             reexport: None,
                             ns_export: false,
+                            rust: None,
+                            py: None,
                         });
                     }
                 }
@@ -743,6 +761,8 @@ fn visit_uses(node: TsNode, path: &str, source: &str, raw_edges: &mut Vec<RawEdg
                     default_export: false,
                     reexport: None,
                     ns_export: false,
+                    rust: None,
+                    py: None,
                 });
             }
         }

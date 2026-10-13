@@ -22,7 +22,8 @@ use crate::cache::{cache_path, read_cache, write_cache, CacheEntry, ExtractCache
 use crate::container::{container_lang_of, extract_container};
 use crate::extract::{file_residual, Extractor, RawEdge};
 use crate::generic::{generic_lang_of, GenericExtractor};
-use crate::resolve::{resolve_edges_with_go_modules, GoModule};
+use crate::resolve::{resolve_edges_with_context, GoModule};
+use crate::rust_tree::{packages, RustPackage};
 use crate::stamp::extractor_stamp;
 
 /// Marker file names that mark a monorepo scope root (P2-06).
@@ -135,8 +136,9 @@ fn carry_meaning_layer(nodes: &mut [Node], prior: &HashMap<String, PriorNode>) {
 pub fn build_graph(root: &Path, context_dir: &Path) -> std::io::Result<Graph> {
     let files = collect_files(root, context_dir)?;
     let go_modules = discover_go_modules(root, &files)?;
+    let rust_packages = discover_rust_packages(root, &files);
     let (mut graph, raw_edges) = build_graph_with_raw(root, context_dir)?;
-    graph.edges = resolve_edges_with_go_modules(&graph.nodes, &raw_edges, &go_modules);
+    graph.edges = resolve_edges_with_context(&graph.nodes, &raw_edges, &go_modules, &rust_packages);
     graph.meta.edge_count = graph.edges.len();
     Ok(graph)
 }
@@ -181,6 +183,23 @@ fn discover_go_modules(root: &Path, files: &[PathBuf]) -> std::io::Result<Vec<Go
         modules.push(GoModule { module, dir });
     }
     Ok(modules)
+}
+
+/// Reads every `Cargo.toml` under `files` for the Rust crate table. A
+/// manifest that cannot be read gives no package, so its files get no
+/// exact link.
+fn discover_rust_packages(root: &Path, files: &[PathBuf]) -> Vec<RustPackage> {
+    let rels: Vec<String> = files.iter().map(|f| to_slash(f)).collect();
+    let manifests: Vec<(String, String)> = files
+        .iter()
+        .filter(|rel| rel.file_name().and_then(|n| n.to_str()) == Some("Cargo.toml"))
+        .filter_map(|rel| {
+            let bytes = fs::read(root.join(rel)).ok()?;
+            let dir = rel.parent().map(to_slash).unwrap_or_default();
+            Some((dir, String::from_utf8(bytes).ok()?))
+        })
+        .collect();
+    packages(&manifests, &rels)
 }
 
 /// Builds the symbol graph, and also returns every raw edge, in file
@@ -291,7 +310,14 @@ pub(crate) fn claim_label(rel: &Path, id: &str) -> Option<String> {
 /// `removed` on every call (P1-46, P2-35): that file is in `fp.files` but
 /// never reaches the probe's `seen` set.
 pub(crate) fn is_claimed(rel: &Path) -> bool {
-    claim_label(rel, &to_slash(rel)).is_some()
+    claim_label(rel, &to_slash(rel)).is_some() || is_manifest(rel)
+}
+
+/// True for a `Cargo.toml`. A build fingerprints it with no node, because an
+/// edit to the edition, a target path or the package list changes the Rust
+/// call links.
+fn is_manifest(rel: &Path) -> bool {
+    rel.file_name().and_then(|n| n.to_str()) == Some("Cargo.toml")
 }
 
 /// Counts the files in `files` that a build parses. The memory guard uses
@@ -425,6 +451,22 @@ pub fn build_graph_cached_with(
     for rel in &files {
         let id = to_slash(rel);
         let Some(label) = claim_label(rel, &id) else {
+            if is_manifest(rel) {
+                if let (Ok((size, mtime_ms)), Ok(bytes)) =
+                    (stat_print(root, &id), fs::read(root.join(rel)))
+                {
+                    let hash = hex_sha256(&bytes);
+                    let entry = CacheEntry {
+                        size,
+                        mtime_ms,
+                        hash,
+                        nodes: Vec::new(),
+                        raw_edges: Vec::new(),
+                        error: None,
+                    };
+                    new_files.insert(id, entry);
+                }
+            }
             continue;
         };
         // A file gone between the walk and the stat leaves the set.
@@ -541,8 +583,9 @@ pub fn build_graph_cached_with(
     drop(new_cache);
 
     let go_modules = discover_go_modules(root, &files)?;
+    let rust_packages = discover_rust_packages(root, &files);
     let mut graph = assemble(root, &files, nodes, &raw_edges, languages);
-    graph.edges = resolve_edges_with_go_modules(&graph.nodes, &raw_edges, &go_modules);
+    graph.edges = resolve_edges_with_context(&graph.nodes, &raw_edges, &go_modules, &rust_packages);
     graph.meta.edge_count = graph.edges.len();
     carry_meaning_layer(&mut graph.nodes, &read_prior_nodes(context_dir));
 

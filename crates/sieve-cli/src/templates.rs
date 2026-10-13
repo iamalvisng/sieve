@@ -88,6 +88,7 @@ pub const SESSION_START: &str = "[sieve] This repo has a sieve/ folder: an index
 | Repo overview | sieve map |
 
 Use sieve grep in place of Grep or grep -r for code search. Use sieve skeleton before you Read a whole code file. Reason: exact file:line, hits grouped by symbol, fewer tokens.
+For one symbol name, run sieve ask <ident> --def. It prints the defining body.
 Run one command and act on the answer. Do not ask the same question again in other words.
 Before a rename or a change in many files, run sieve callers <symbol> --depth all.
 Use Read only for the exact range Sieve names. Use Grep only for files Sieve does not index, such as docs and config.

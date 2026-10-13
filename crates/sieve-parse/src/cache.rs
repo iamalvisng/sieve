@@ -16,7 +16,7 @@ use sieve_core::Node;
 use crate::extract::RawEdge;
 
 /// The version this build writes and expects to read back.
-pub const CACHE_VERSION: u32 = 5;
+pub const CACHE_VERSION: u32 = 11;
 
 /// The most recent extract cache files Sieve keeps per context directory.
 const KEPT_CACHES: usize = 2;
