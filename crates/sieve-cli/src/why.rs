@@ -1,9 +1,9 @@
-//! The `sieve why` subcommand (F6, slice 1): which decision doc entry
+//! The `sieve why` subcommand: which decision doc entry
 //! explains a symbol. The links are recorded, not guessed from prose. An
 //! entry holds a `**Code:**` line of node ids (the anchor). A commit sha in
 //! an entry links to the nodes that the commit changed (L0). The build
 //! writes the links to `.cache/why-refs.json`. A query and the post-read
-//! hook read it. Design: `docs/design/f6-why.md`. No git at query time, no
+//! hook read it. No git at query time, no
 //! network and no MCP tool.
 
 use std::collections::{BTreeMap, HashMap, HashSet};

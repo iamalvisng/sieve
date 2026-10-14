@@ -763,7 +763,7 @@ mod tests {
         assert!(text.starts_with("# f.ts\n\nfirst line\n\n"));
     }
 
-    /// F3: `oneLiner` trims the split line a second time
+    /// `oneLiner` trims the split line a second time
     /// `s.split("\n")[0].trim()`), so trailing spaces before the newline on
     /// the first line never survive into the card.
     #[test]

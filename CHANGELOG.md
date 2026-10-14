@@ -5,6 +5,26 @@ All notable changes to this project are in this file.
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.6] - 2026-10-14
+
+This release adds exact call links for C#, and fixes two setup issues in `sieve init` and `sieve uninstall`.
+
+### Added
+
+- Exact C# call links. Sieve marks a C# call Extracted only when it proves one target. The proof covers bare and `this.` calls, calls on a local, a parameter or a primary constructor parameter, and `new T()`, `base.M()`, `Type.M()` and field receivers. Sieve checks overrides across the in-repo subtypes. A call to an interface target stays Inferred.
+- The oracle scripts `scripts/oracle/CsCalls` and `scripts/oracle/cs-compare.py` check C# links against Roslyn (.NET SDK 10.0.401). Results, Extracted / matched / wrong / unverified: markdig 1.4.0 912 / 890 / 0 / 22, serilog v4.4.0 150 / 149 / 0 / 1, CsvHelper 33.1.0 2,189 / 2,166 / 0 / 23.
+
+### Changed
+
+- `CACHE_VERSION` changes. The first build after the upgrade re-parses every file.
+
+### Fixed
+
+- Sieve no longer links a C# call by its name alone. Wrong Extracted links before: markdig 6 of 528, serilog 7 of 264, CsvHelper 1 of 188. After: 0 on each.
+- `sieve init` no longer adds the allowlist entry `Bash(node dist/cli.js:*)`, and `sieve uninstall` no longer removes it. The entry runs another tool's command, so an entry the user had before init now survives uninstall. An install from 0.1.0 to 0.1.5 keeps this entry after uninstall; remove it by hand if you do not need it.
+- The viz server retries a read that a signal interrupts.
+- When `sieve init` rewrites old millisecond hook timeouts, it now says so after the write (`✓ Rewrote old millisecond hook timeouts in <path>`). Before, it printed a warning that told the user to run `sieve init`. A file that this run does not cover still gets the warning with the command that fixes it.
+
 ## [0.1.5] - 2026-10-13
 
 This release adds exact call links for Go and Java, exact Rust self.f() links, hook timeouts in seconds, and a faster refresh after an edit.

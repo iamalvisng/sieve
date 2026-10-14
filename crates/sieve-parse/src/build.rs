@@ -2,7 +2,7 @@
 //! emits one node per file with a known language. Symbol nodes and edges
 //! come later.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
@@ -137,7 +137,9 @@ pub fn build_graph(root: &Path, context_dir: &Path) -> std::io::Result<Graph> {
     let files = collect_files(root, context_dir)?;
     let go_modules = discover_go_modules(root, &files)?;
     let rust_packages = discover_rust_packages(root, &files);
-    let (mut graph, raw_edges) = build_graph_with_raw(root, context_dir)?;
+    let (mut graph, mut raw_edges) = build_graph_with_raw(root, context_dir)?;
+    let hidden = has_hidden_cs_manifest(root, &files);
+    crate::cs_tree::stamp_projects(&discover_cs_manifests(root, &files), hidden, &mut raw_edges);
     graph.edges = resolve_edges_with_context(&graph.nodes, &raw_edges, &go_modules, &rust_packages);
     graph.meta.edge_count = graph.edges.len();
     Ok(graph)
@@ -313,6 +315,62 @@ fn discover_rust_packages(root: &Path, files: &[PathBuf]) -> Vec<RustPackage> {
         })
         .collect();
     packages(&manifests, &rels)
+}
+
+/// Reads every `.csproj`, `Directory.Build.props` and `Directory.Build.targets`
+/// file under `files` as `(path, text)`, for the C# project facts. A file that
+/// this cannot read is skipped.
+fn discover_cs_manifests(root: &Path, files: &[PathBuf]) -> Vec<(String, String)> {
+    files
+        .iter()
+        .filter(|rel| {
+            let name = rel.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            name.ends_with(".csproj")
+                || name == "Directory.Build.props"
+                || name == "Directory.Build.targets"
+        })
+        .filter_map(|rel| {
+            let bytes = fs::read(root.join(rel)).ok()?;
+            Some((to_slash(rel), String::from_utf8_lossy(&bytes).into_owned()))
+        })
+        .collect()
+}
+
+/// Reports whether the repo has a `.csproj`, `.props` or `.targets` file that
+/// the walk skipped (a `build/` or `out/` folder, or an ignored file). The C#
+/// project facts cannot read such a file, so they must treat every file as
+/// risky. The scan skips dot folders, `node_modules`, `venv` and
+/// `__pycache__`.
+fn has_hidden_cs_manifest(root: &Path, files: &[PathBuf]) -> bool {
+    let known: HashSet<String> = files.iter().map(|f| to_slash(f)).collect();
+    let mut stack = vec![PathBuf::new()];
+    while let Some(rel) = stack.pop() {
+        let Ok(entries) = fs::read_dir(root.join(&rel)) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let path = rel.join(&name);
+            let Ok(kind) = entry.file_type() else {
+                continue;
+            };
+            if kind.is_dir() {
+                let skip = name.starts_with('.')
+                    || matches!(name.as_str(), "node_modules" | "venv" | "__pycache__");
+                if !skip {
+                    stack.push(path);
+                }
+            } else if kind.is_file()
+                && [".csproj", ".props", ".targets"]
+                    .iter()
+                    .any(|ext| name.ends_with(ext))
+                && !known.contains(&to_slash(&path))
+            {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// Builds the symbol graph, and also returns every raw edge, in file
@@ -811,6 +869,8 @@ pub fn build_graph_cached_with(
 
     let go_modules = discover_go_modules(root, &files)?;
     let rust_packages = discover_rust_packages(root, &files);
+    let hidden = has_hidden_cs_manifest(root, &files);
+    crate::cs_tree::stamp_projects(&discover_cs_manifests(root, &files), hidden, &mut raw_edges);
     let mut graph = assemble(root, &files, nodes, &raw_edges, languages);
     timer.lap("modules and assemble");
     graph.edges = resolve_edges_with_context(&graph.nodes, &raw_edges, &go_modules, &rust_packages);

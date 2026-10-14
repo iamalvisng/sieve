@@ -1,5 +1,5 @@
-//! The same-file proof for a Python bare call (PYX1, design
-//! `python-xfile.md` rules PY2, PY3 and PY8). The proof holds only when the
+//! The same-file proof for a Python bare call (a bare
+//! call is Extracted only when one binding is proven). The proof holds only when the
 //! scope chain of the call binds the name exactly once, and that binding is
 //! a `def` or a `class`. Any doubt gives `None`, and the call then takes the
 //! name path in `resolve.rs`, capped at Inferred.
@@ -170,6 +170,7 @@ impl PyScopes {
             py: Some(rec),
             go: None,
             java: None,
+            cs: None,
         }
     }
 
@@ -378,7 +379,7 @@ fn scan_file(root: TsNode, src: &[u8]) -> (Vec<(Vec<String>, String)>, bool) {
 }
 
 /// Records the attribute writes of `setattr`, `delattr`, `patch` and
-/// `patch.object` calls (PY9). A chain `["*"]` names a patched attribute
+/// `patch.object` calls. A chain `["*"]` names a patched attribute
 /// of any module, and the attribute `"*"` means any attribute.
 fn scan_call(call: TsNode, src: &[u8], patches: &mut Vec<(Vec<String>, String)>) {
     let (Some(func), Some(args)) = (

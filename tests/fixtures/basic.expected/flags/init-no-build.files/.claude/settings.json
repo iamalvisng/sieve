@@ -133,8 +133,7 @@
     "allow": [
       "Bash(sieve:*)",
       "Bash(npx sieve:*)",
-      "Bash(sieve-dev:*)",
-      "Bash(node dist/cli.js:*)"
+      "Bash(sieve-dev:*)"
     ]
   }
 }

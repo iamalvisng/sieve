@@ -321,7 +321,7 @@ pub fn check_graph_lookup(root: &Path, context_dir: &Path) -> io::Result<LookupC
 /// code.
 ///
 /// Sieve never writes `manifest.json` or a concept node body (Phase 1
-/// scope, the `deep-tier.md` note rule R3); this
+/// scope, the `deep-tier.md` note rule); this
 /// reads only what a meaning-tier build already left on disk. A missing
 /// manifest reports `missing: true` with every array empty, matching
 /// the report for a Tier-1-only build. With a manifest present, this

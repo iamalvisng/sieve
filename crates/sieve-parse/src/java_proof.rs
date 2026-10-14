@@ -1,11 +1,11 @@
-//! The call-site part of the Java proof (JVX, design `java-xfile.md` rules
-//! JV1, JV5 to JV9). The code reads one call, finds its scope root and its
+//! The call-site part of the Java proof (the Java
+//! call proof). The code reads one call, finds its scope root and its
 //! binders, and gives the receiver shape. The index in `java_index.rs`
 //! proves the shape against the types of the repo. Any doubt gives `None`,
 //! and the call stays Inferred.
 //!
 //! A call that sits in an anonymous class, an enum constant body, a local
-//! class or a compact constructor gives `None` (fix B5).
+//! class or a compact constructor gives `None`.
 
 use std::ops::Range;
 use std::rc::Rc;
@@ -247,7 +247,7 @@ fn local_variable(n: TsNode, src: &[u8], out: &mut Vec<Binder>) {
     });
 }
 
-/// Every name that the subtree `root` binds as a variable (JV1). Each kind
+/// Every name that the subtree `root` binds as a variable. Each kind
 /// of binder has its own arm.
 pub(crate) fn collect_binders(root: TsNode, src: &[u8]) -> Vec<Binder> {
     let mut out = Vec::new();
@@ -273,8 +273,7 @@ pub(crate) fn collect_binders(root: TsNode, src: &[u8]) -> Vec<Binder> {
 }
 
 /// The type names that the scope root `root` hides from the package: the
-/// type parameters of its method and the classes declared inside it (JV2
-/// steps 1 and 2).
+/// type parameters of its method and the classes declared inside it.
 fn local_types(root: TsNode, src: &[u8]) -> Vec<String> {
     let mut names = type_params(root, src);
     let mut stack = vec![root];
@@ -310,7 +309,7 @@ impl JavaFile {
     }
 
     /// Finds the scope root and the innermost clean type of `call`. A call
-    /// in an anonymous or local class body gives `None` (fix B5).
+    /// in an anonymous or local class body gives `None`.
     fn locate<'a>(&self, call: TsNode<'a>) -> Option<Loc<'a>> {
         let mut root = None;
         let mut cur = call.parent();
@@ -378,7 +377,7 @@ impl JavaFile {
         }))
     }
 
-    /// JV9: `new Foo(..)` with a plain type, no class body and no outer
+    /// `new Foo(..)` with a plain type, no class body and no outer
     /// instance.
     fn new_shape(&self, call: TsNode, root: TsNode, src: &[u8]) -> Option<JavaShape> {
         if call.child(0)?.kind() != "new" {
@@ -393,7 +392,7 @@ impl JavaFile {
         (!has_body && !hidden).then_some(JavaShape::New { ty })
     }
 
-    /// JV5 to JV8: the shape of the receiver `o` of a method call.
+    /// The shape of the receiver `o` of a method call.
     fn receiver_shape(&self, o: TsNode, root: TsNode, src: &[u8]) -> Option<JavaShape> {
         match o.kind() {
             "this" => Some(JavaShape::This),
@@ -416,7 +415,7 @@ impl JavaFile {
                         name: x.to_string(),
                     });
                 };
-                // A second binder of the name stops (JV1).
+                // A second binder of the name stops.
                 if mine.next().is_some() || !b.scope.as_ref()?.contains(&o.start_byte()) {
                     return None;
                 }

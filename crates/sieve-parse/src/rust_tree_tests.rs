@@ -1,4 +1,4 @@
-//! Tests for the Rust crate table, the module tree and the lookup (RSX1).
+//! Tests for the Rust crate table, the module tree and the lookup.
 
 use std::fs;
 use std::path::{Path, PathBuf};

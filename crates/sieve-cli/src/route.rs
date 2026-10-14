@@ -1,7 +1,6 @@
-//! Lookup routing (`docs/design/lookup-routing.md` and
-//! `docs/design/lookup-routing-slice3.md`).
+//! Lookup routing.
 //!
-//! Slice 1 is R1. A `PostToolUse` hook on the Grep tool re-prints the
+//! Slice 1: a `PostToolUse` hook on the Grep tool re-prints the
 //! matches grouped by file and by enclosing symbol. The new text keeps
 //! every `path:line` pair of the original, in the original order. If it
 //! cannot, the hook keeps the original output and records a pass reason.
@@ -382,7 +381,7 @@ fn shape_reason(
 
 /// `PostToolUse`: the `updatedToolOutput` JSON for a routed search, or
 /// `None`. The function counts the lookup either way. It reads a Grep tool
-/// call (R1) or a Bash call with one or more `grep` or `rg` segments (R2).
+/// call or a Bash call with one or more `grep` or `rg` segments.
 pub(crate) fn post_search(input: &Value, project_dir: &Path) -> Option<String> {
     let tool_input = input.get("tool_input")?;
     let response = input.get("tool_response")?;

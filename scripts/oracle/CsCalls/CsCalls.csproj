@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Oracle for C# call links. Roslyn comes from the pinned SDK by HintPath: no NuGet fetch.
+       Build: dotnet build with the artifacts path set to a scratch dir, config Release.
+       Run: dotnet CsCalls.dll build.json, with the flags root (repo) and o (rows.jsonl). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RoslynDir>$(DOTNET_ROOT)/sdk/$(NETCoreSdkVersion)/Roslyn/bincore</RoslynDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Microsoft.CodeAnalysis"><HintPath>$(RoslynDir)/Microsoft.CodeAnalysis.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="Microsoft.CodeAnalysis.CSharp"><HintPath>$(RoslynDir)/Microsoft.CodeAnalysis.CSharp.dll</HintPath><Private>true</Private></Reference>
+  </ItemGroup>
+</Project>

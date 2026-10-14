@@ -1,5 +1,5 @@
-//! The type index of a repo's Java files (JVX, design `java-xfile.md` rules
-//! JV2 to JV10). The resolver builds it from the file records and asks it
+//! The type index of a repo's Java files (the Java
+//! call proof). The resolver builds it from the file records and asks it
 //! to prove each `JavaCall`. A proof means the javac compile-time target is
 //! also the one runtime target. Any doubt gives `None`, and the edge stays
 //! Inferred.
@@ -21,7 +21,7 @@ type Meth = (Ty, usize);
 /// The most nested type lookups one proof makes.
 const MAX_DEPTH: u32 = 48;
 
-/// JV3: the JDK types a chain may hold, with the method names the code
+/// The JDK types a chain may hold, with the method names the code
 /// freezes for each. `Object` is in every chain.
 const JDK_TYPES: &[(&str, &str, &[&str])] = &[
     (
@@ -134,11 +134,11 @@ enum Res {
 /// The members named `m` of a type.
 struct Members {
     methods: Vec<Meth>,
-    /// An implicit member or a JDK member has the name (fix B3).
+    /// An implicit member or a JDK member has the name.
     implicit: bool,
 }
 
-/// A type or a class body that names supertypes, for JV10.
+/// A type or a class body that names supertypes.
 struct SubEntry {
     name: Option<String>,
     sups: Vec<String>,
@@ -162,7 +162,7 @@ pub struct JavaIndex {
     /// A type or local class simple name to its entries.
     by_name: HashMap<String, Vec<usize>>,
     /// A file has a Lombok import or a parse error, so a hidden override
-    /// may exist. No virtual dispatch proof holds (JV10).
+    /// may exist. No virtual dispatch proof holds.
     risky: bool,
     /// The `(source, target)` pairs where some call reaches the target at
     /// compile time but not as the one runtime target. An edge for such a
@@ -175,7 +175,7 @@ pub struct JavaIndex {
 struct Proof {
     /// The node id of the compile-time target.
     id: String,
-    /// The compile-time target is also the one runtime target (JV10).
+    /// The compile-time target is also the one runtime target.
     exact: bool,
 }
 
@@ -337,9 +337,9 @@ impl JavaIndex {
         (!id.is_empty()).then_some(Proof { id, exact: true })
     }
 
-    // ---- JV2: type names -------------------------------------------------
+    // ---- Type names -------------------------------------------------
 
-    /// JV2: the type that the simple name `n` names in the file `fi`, seen
+    /// The type that the simple name `n` names in the file `fi`, seen
     /// from the type `from` (`None` at the top of the file).
     fn lookup(&self, fi: usize, from: Option<u32>, n: &str) -> Res {
         let d = self.depth.get();
@@ -485,7 +485,7 @@ impl JavaIndex {
     }
 
     /// The class type that `name` names, seen from the type `ctx`. An
-    /// interface gives `None` (JV8).
+    /// interface gives `None`.
     fn class_type(&self, ctx: Ty, name: &str) -> Option<Ty> {
         match self.lookup(ctx.0, Some(ctx.1), name) {
             Res::Found(t)
@@ -497,10 +497,10 @@ impl JavaIndex {
         }
     }
 
-    // ---- JV4: members ----------------------------------------------------
+    // ---- Members ----------------------------------------------------
 
-    /// JV4: every member of `t` called `m`, over the whole chain, after the
-    /// inheritance filter (fix B2). `None` when a supertype is unknown.
+    /// Every member of `t` called `m`, over the whole chain, after the
+    /// inheritance filter. `None` when a supertype is unknown.
     fn members(&self, t: Ty, m: &str, depth: u32) -> Option<Members> {
         if depth > MAX_DEPTH || self.files[t.0].1.lombok {
             return None;
@@ -542,7 +542,7 @@ impl JavaIndex {
     }
 
     /// Adds the method `cand` of a supertype to the members `out` of `t`,
-    /// unless `t` does not inherit it (fix B2) or a method of the same
+    /// unless `t` does not inherit it or a method of the same
     /// signature overrides it. An own method of `t` wins. A class method
     /// wins over an interface method.
     fn inherit(&self, t: Ty, cand: Meth, out: &mut Vec<Meth>) {
@@ -612,7 +612,7 @@ impl JavaIndex {
                         .iter()
                         .any(|i| last_segment(&i.path) == base)
                 };
-                // F2: a class type parameter can share a `java.lang` name.
+                // A class type parameter can share a `java.lang` name.
                 let tparam = |t: Ty| {
                     let mut cur = Some(t.1);
                     while let Some(k) = cur {
@@ -643,9 +643,9 @@ impl JavaIndex {
         }
     }
 
-    // ---- JV5 to JV8: the call shapes ---------------------------------------
+    // ---- The call shapes ---------------------------------------
 
-    /// JV5: the innermost enclosing type that has a member `m`, and the one
+    /// The innermost enclosing type that has a member `m`, and the one
     /// method. An unknown chain, or 2 or more hits, stops.
     fn bare_target(&self, ctx: Ty, m: &str) -> Option<(Ty, Meth)> {
         let mut cur = Some(ctx.1);
@@ -663,7 +663,7 @@ impl JavaIndex {
         None
     }
 
-    /// JV6: `super.m()`. The call is not virtual, so only the target counts.
+    /// `super.m()`. The call is not virtual, so only the target counts.
     fn super_target(&self, ctx: Ty, m: &str) -> Option<String> {
         let jt = self.ty(ctx);
         if jt.kind != JavaKind::Class {
@@ -710,10 +710,10 @@ impl JavaIndex {
         Ok(false)
     }
 
-    /// JV7 and JV8: `n.m()` where `n` is no local name.
+    /// `n.m()` where `n` is no local name.
     fn name_target(&self, ctx: Ty, n: &str, m: &str) -> Option<Proof> {
         let rec = &self.files[ctx.0].1;
-        // JV8: a field of an enclosing type, innermost first.
+        // A field of an enclosing type, innermost first.
         let mut cur = Some(ctx.1);
         while let Some(i) = cur {
             let e = (ctx.0, i);
@@ -727,7 +727,7 @@ impl JavaIndex {
             }
             cur = self.ty(e).outer;
         }
-        // A static import can name a field or a type (fix B5).
+        // A static import can name a field or a type.
         let static_hit = rec
             .imports
             .iter()
@@ -735,7 +735,7 @@ impl JavaIndex {
         if static_hit {
             return None;
         }
-        // JV7: a type, and one static method.
+        // A type, and one static method.
         let Res::Found(t) = self.lookup(ctx.0, Some(ctx.1), n) else {
             return None;
         };
@@ -747,9 +747,9 @@ impl JavaIndex {
         })
     }
 
-    // ---- JV10: dispatch ----------------------------------------------------
+    // ---- Dispatch ----------------------------------------------------
 
-    /// JV10: the compile-time target `target` of a call on a `recv`, and
+    /// The compile-time target `target` of a call on a `recv`, and
     /// whether it is also the one runtime target. An abstract or an
     /// overridden target is not.
     fn dispatch(&self, recv: Ty, target: Meth, m: &str) -> Proof {
@@ -766,7 +766,7 @@ impl JavaIndex {
         }
     }
 
-    /// Reports whether JV10 sees an override of `m` for a receiver of the
+    /// Reports whether the dispatch check sees an override of `m` for a receiver of the
     /// simple name `sup` whose target sits in the type `decl`. It looks at
     /// every in-repo subtype, and at every supertype of those subtypes
     /// (an interface default method, or a class method, can override).
@@ -789,7 +789,7 @@ impl JavaIndex {
                 }
             }
         }
-        // F1: the supertypes of a subtype that are no supertypes of the
+        // The supertypes of a subtype that are no supertypes of the
         // receiver. The ancestors of the receiver are in the member union.
         let mut up: Vec<&str> = visited
             .iter()

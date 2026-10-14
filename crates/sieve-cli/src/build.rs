@@ -508,7 +508,7 @@ fn build_repo(
         errors.push(format!("ask-index: {e}"));
     }
 
-    // F6: the why sidecar. A write failure is never fatal.
+    // The why sidecar. A write failure is never fatal.
     if let Err(e) = crate::why::write_after_build(root, context_dir, graph) {
         errors.push(format!("why-refs: {e}"));
     }

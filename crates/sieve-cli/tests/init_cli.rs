@@ -3,7 +3,7 @@
 //! against the golden tree under `tests/fixtures/basic.expected/init/`.
 //! `SIEVE_BLESS=1` writes the goldens.
 //!
-//! Sieve writes no `.cjs` shim (ledger 2026-09-12: "Sieve writes no .cjs
+//! Sieve writes no `.cjs` shim (Sieve writes no .cjs
 //! shim"). Its hook commands read `sieve hook <sub>`.
 
 mod support;
@@ -13,6 +13,18 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use support::TempDir;
+
+/// Asserts that a scratch HOME is not the real HOME of the test process.
+fn assert_not_real_home(scratch: impl AsRef<Path>) {
+    let scratch = scratch.as_ref();
+    if let Some(real) = std::env::var_os("HOME") {
+        let real = PathBuf::from(real);
+        assert!(
+            scratch != real && !scratch.starts_with(&real),
+            "the scratch HOME must never be the real HOME"
+        );
+    }
+}
 
 /// Restores a path's permissions on drop, even if the caller panics
 /// before it can restore them itself.
@@ -495,7 +507,7 @@ fn test_p4_12_uninstall_strips_the_global_mirrors() {
 
 /// An unreadable `~/.claude/settings.json` makes its own strip fail, but
 /// `sieve uninstall -y` must still exit 0, warn once, and go on to strip
-/// the other two global mirrors (F6: the three global strips are each
+/// the other two global mirrors (the three global strips are each
 /// best-effort, so one failure never stops the strips after it).
 #[test]
 fn test_uninstall_warns_and_continues_past_an_unreadable_global_settings_file() {
@@ -826,10 +838,7 @@ fn test_p4_01_init_on_a_fresh_repo_builds_first_and_matches_golden() {
 /// `TempDir` and the settings file's starting bytes.
 fn seed_home_with_settings(label: &str) -> (TempDir, Vec<u8>) {
     let home = TempDir::new(label);
-    assert!(
-        !home.path.starts_with("/Users/iamalvisng"),
-        "the scratch HOME must never be the real HOME"
-    );
+    assert_not_real_home(&home.path);
     fs::create_dir_all(home.path.join(".claude")).expect("mkdir ~/.claude");
     fs::create_dir_all(home.path.join(".codex")).expect("mkdir ~/.codex");
     let settings_path = home.path.join(".claude").join("settings.json");
@@ -839,16 +848,13 @@ fn seed_home_with_settings(label: &str) -> (TempDir, Vec<u8>) {
 }
 
 /// `sieve init` without `--global` (P: "sieve init writes under HOME only
-/// with --global", ledger 2026-09-16) must leave every file under `$HOME`
+/// with --global") must leave every file under `$HOME`
 /// untouched, print the skip line once, and still write the repo files.
 #[test]
 fn init_without_global_writes_nothing_under_home() {
     let fixture = support::manifest_dir().join("../../tests/fixtures/basic");
     let (home, settings_before) = seed_home_with_settings("no-global-init-home");
-    assert!(
-        home.path != Path::new("/Users/iamalvisng"),
-        "the scratch HOME must never be the real HOME"
-    );
+    assert_not_real_home(&home.path);
     let copy = TempDir::new("no-global-init-copy");
     copy_dir(&fixture, &copy.path);
 
@@ -1070,10 +1076,7 @@ fn uninstall_dry_run_without_global_says_global_hooks_stay() {
 fn test_defect1_init_no_agents_writes_claude_only() {
     let project = TempDir::new("no-agents-project");
     let home = TempDir::new("no-agents-home");
-    assert!(
-        !home.path.starts_with("/Users/iamalvisng"),
-        "the scratch HOME must never be the real HOME"
-    );
+    assert_not_real_home(&home.path);
     fs::create_dir_all(project.path.join(".cursor")).expect("mkdir .cursor");
 
     let output = support::sieve_command()
@@ -1108,10 +1111,7 @@ fn test_defect1_init_no_agents_writes_claude_only() {
 fn test_defect2_init_agents_accepts_every_listed_id() {
     let project = TempDir::new("agents-claude-project");
     let home = TempDir::new("agents-claude-home");
-    assert!(
-        !home.path.starts_with("/Users/iamalvisng"),
-        "the scratch HOME must never be the real HOME"
-    );
+    assert_not_real_home(&home.path);
 
     let listed = support::sieve_command()
         .args(["init", "--list-agents"])
@@ -1152,10 +1152,7 @@ fn test_defect2_init_agents_accepts_every_listed_id() {
 fn test_p4_02_init_agents_without_claude_writes_no_claude_files() {
     let project = TempDir::new("agents-copilot-project");
     let home = TempDir::new("agents-copilot-home");
-    assert!(
-        !home.path.starts_with("/Users/iamalvisng"),
-        "the scratch HOME must never be the real HOME"
-    );
+    assert_not_real_home(&home.path);
 
     let output = support::sieve_command()
         .args([
@@ -1212,7 +1209,7 @@ fn test_p4_02_init_agents_without_claude_writes_no_claude_files() {
 /// The four Codex hook events the spec row for P4-05 lists
 /// (`04-hosts-mcp-hooks.md` section 1, "Codex hooks"), with every matcher and
 /// every timeout. They nest under a top-level `hooks` key. The command form is
-/// `sieve hook <sub>`, not `node "<shim>" <sub>`, per the ledger entry of
+/// `sieve hook <sub>`, not `node "<shim>" <sub>`, as a decision of
 /// 2026-09-12 ("Sieve writes no .cjs shim").
 fn expected_codex_hooks() -> serde_json::Value {
     let block = |matcher: Option<&str>, sub: &str, timeout: u64| {
@@ -1237,10 +1234,7 @@ fn expected_codex_hooks() -> serde_json::Value {
 /// Runs `sieve init -y --agents agents --global --no-build` in a fresh
 /// fixture copy, with `home` as `$HOME`. Returns the stderr text.
 fn run_init_agents_global(home: &Path) -> String {
-    assert!(
-        !home.starts_with("/Users/iamalvisng"),
-        "the scratch HOME must never be the real HOME"
-    );
+    assert_not_real_home(home);
     let fixture = support::manifest_dir().join("../../tests/fixtures/basic");
     let copy = TempDir::new("p4-05-copy");
     copy_dir(&fixture, &copy.path);
@@ -1292,10 +1286,7 @@ fn test_p4_05_init_global_writes_the_codex_hooks_exactly() {
 fn init_claude_settings(env: &[(&str, &str)], extra_args: &[&str]) -> serde_json::Value {
     let fixture = support::manifest_dir().join("../../tests/fixtures/basic");
     let home = TempDir::new("p4-11-home");
-    assert!(
-        !home.path.starts_with("/Users/iamalvisng"),
-        "the scratch HOME must never be the real HOME"
-    );
+    assert_not_real_home(&home.path);
     let copy = TempDir::new("p4-11-copy");
     copy_dir(&fixture, &copy.path);
     let mut cmd = support::sieve_command();
@@ -1373,10 +1364,7 @@ fn test_p4_11_a_foreign_env_does_not_remove_the_statusline() {
 /// `args` after the base arguments. Asserts a zero exit. Returns the
 /// stderr text.
 fn run_init_in(project: &Path, home: &Path, args: &[&str]) -> String {
-    assert!(
-        !home.starts_with("/Users/iamalvisng"),
-        "the scratch HOME must never be the real HOME"
-    );
+    assert_not_real_home(home);
     let output = support::sieve_command()
         .args(["init", "--no-build", "--verbose"])
         .args(args)
@@ -1518,7 +1506,7 @@ fn test_p4_06_foreign_statusline_is_kept_with_a_warning() {
 }
 
 /// One of Sieve's own Claude hook blocks, in the ledgered `sieve hook <sub>`
-/// command form (ledger 2026-09-12, "Sieve writes no .cjs shim").
+/// command form (Sieve writes no .cjs shim).
 fn claude_hook_json(matcher: &str, sub: &str, timeout: u64) -> serde_json::Value {
     serde_json::json!({
         "matcher": matcher,
@@ -1562,14 +1550,14 @@ fn test_p4_07_hooks_merge_keeps_foreign_and_drops_stale_own_entries() {
 }
 
 /// P4-09: the allow merge keeps a foreign entry, drops every prior entry
-/// of Sieve's own, then appends the four entries once, in order. A repeat
+/// of Sieve's own, then appends the three entries once, in order. A repeat
 /// run leaves the list as it is.
 ///
-/// This test seeds the four exact entries. It does not seed the bare
+/// This test seeds two exact entries. It does not seed the bare
 /// `Bash` form the prefix regex also drops; Sieve keeps that
 /// form today, and the main thread owns that decision.
 #[test]
-fn test_p4_09_allow_merge_appends_the_four_entries_once() {
+fn test_p4_09_allow_merge_appends_the_three_entries_once() {
     let seed = r#"{"permissions":{"allow":["Bash(npx sieve:*)","Bash(ls:*)","Bash(sieve:*)"],"deny":["Bash(rm:*)"]}}"#;
     let (settings, _stderr, project, home) = init_claude_over_seed(seed);
     let expected = serde_json::json!([
@@ -1577,7 +1565,6 @@ fn test_p4_09_allow_merge_appends_the_four_entries_once() {
         "Bash(sieve:*)",
         "Bash(npx sieve:*)",
         "Bash(sieve-dev:*)",
-        "Bash(node dist/cli.js:*)",
     ]);
     assert_eq!(
         settings["permissions"]["allow"], expected,
@@ -1594,6 +1581,36 @@ fn test_p4_09_allow_merge_appends_the_four_entries_once() {
     assert_eq!(
         again["permissions"]["allow"], expected,
         "a repeat run must not stack the entries, got: {again}"
+    );
+}
+
+/// P4-09: a foreign `Bash(node dist/cli.js:*)` entry survives an init and
+/// an uninstall. Sieve never wrote it and never owned it.
+#[test]
+fn test_p4_09_foreign_node_dist_entry_survives_init_and_uninstall() {
+    let seed = r#"{"permissions":{"allow":["Bash(node dist/cli.js:*)"]}}"#;
+    let (settings, _stderr, project, home) = init_claude_over_seed(seed);
+    // The tests must never touch the real HOME.
+    assert_not_real_home(&home.path);
+    let foreign = serde_json::json!("Bash(node dist/cli.js:*)");
+    assert!(
+        settings["permissions"]["allow"]
+            .as_array()
+            .is_some_and(|a| a.contains(&foreign)),
+        "init must keep the foreign entry, got: {settings}"
+    );
+    let out = support::sieve_command()
+        .args(["uninstall", "-y"])
+        .current_dir(&project.path)
+        .env("HOME", &home.path)
+        .output()
+        .expect("run sieve uninstall");
+    assert!(out.status.success(), "uninstall failed");
+    let after = read_json(&project.path.join(".claude").join("settings.json"));
+    assert_eq!(
+        after["permissions"]["allow"],
+        serde_json::json!(["Bash(node dist/cli.js:*)"]),
+        "uninstall must keep only the foreign entry, got: {after}"
     );
 }
 
@@ -1711,10 +1728,7 @@ fn test_p4_49_dry_run_removes_nothing_and_plans_no_removal() {
 /// Runs `sieve <args>` under the default `sieve` product in `project`,
 /// with a temp `home`. Never passes `--global`. Asserts a zero exit.
 fn run_sieve_product(project: &Path, home: &Path, args: &[&str]) -> String {
-    assert!(
-        !home.starts_with("/Users/iamalvisng"),
-        "the scratch HOME must never be the real HOME"
-    );
+    assert_not_real_home(home);
     let output = support::sieve_command()
         .args(args)
         .current_dir(project)
@@ -1760,7 +1774,7 @@ fn assert_user_files_survive(label: &str, files: &[(&str, &str)], uninstall_too:
     }
 }
 
-/// P4-49 F1: an `mcpServers` bucket with no Sieve key stays, even when it
+/// P4-49 an `mcpServers` bucket with no Sieve key stays, even when it
 /// is empty.
 #[test]
 fn test_p4_49_empty_mcp_bucket_without_our_key_survives() {
@@ -1774,7 +1788,7 @@ fn test_p4_49_empty_mcp_bucket_without_our_key_survives() {
     );
 }
 
-/// P4-49 F2: a user hook `my-sieve hook x` and an empty `permissions`
+/// P4-49 a user hook `my-sieve hook x` and an empty `permissions`
 /// object stay.
 #[test]
 fn test_p4_49_user_claude_settings_survive() {
@@ -1782,7 +1796,7 @@ fn test_p4_49_user_claude_settings_survive() {
     assert_user_files_survive("f2", &[(".claude/settings.json", seed)], true);
 }
 
-/// P4-49 F4: a commented TOML header and a marker quoted inside a line are
+/// P4-49 a commented TOML header and a marker quoted inside a line are
 /// not Sieve's wiring (the strip anchors on whole trimmed lines).
 #[test]
 fn test_p4_49_quoted_headers_and_markers_survive() {
@@ -1802,7 +1816,7 @@ fn test_p4_49_quoted_headers_and_markers_survive() {
     );
 }
 
-/// P4-49 F7: a removed file prunes the empty directories it leaves. A directory
+/// P4-49 a removed file prunes the empty directories it leaves. A directory
 /// that holds another file stays, and the repo root stays.
 #[test]
 fn test_p4_49_retract_prunes_empty_dirs_only() {
@@ -2298,10 +2312,7 @@ fn test_p4_52_report_words_follow_golden() {
 /// Runs `sieve uninstall` in `project` with `home` as `$HOME`. Returns
 /// the stderr text without the update nudge.
 fn run_uninstall_in(project: &Path, home: &Path, args: &[&str]) -> String {
-    assert!(
-        !home.starts_with("/Users/iamalvisng"),
-        "the scratch HOME must never be the real HOME"
-    );
+    assert_not_real_home(home);
     let output = support::sieve_command()
         .arg("uninstall")
         .args(args)
@@ -2450,10 +2461,7 @@ fn test_p1_72_uninstall_strips_the_sieve_ignore_blocks_and_keeps_user_lines() {
 
 /// Runs `init` with no `--verbose` in a fresh project and returns stderr.
 fn run_init_compact(project: &Path, home: &Path, args: &[&str]) -> String {
-    assert!(
-        !home.starts_with("/Users/iamalvisng"),
-        "the scratch HOME must never be the real HOME"
-    );
+    assert_not_real_home(home);
     let output = support::sieve_command()
         .arg("init")
         .args(args)

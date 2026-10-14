@@ -179,7 +179,7 @@ public class JvCalls {
 
         @Override public Void visitNewClass(NewClassTree n, Void v) {
             boolean body = n.getClassBody() != null;
-            // O7: with a class body the target is the anonymous class, not the named type
+            // With a class body the target is the anonymous class, not the named type
             Element e = trees.getElement(body ? getCurrentPath() : new TreePath(getCurrentPath(), n.getIdentifier()));
             if (e != null && e.getKind() == ElementKind.CONSTRUCTOR) e = e.getEnclosingElement();
             if (e instanceof TypeElement) emit(e, "new", pos(n), e.getSimpleName().toString(), null, body);

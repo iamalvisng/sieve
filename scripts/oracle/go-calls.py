@@ -2,7 +2,7 @@
 """Oracle for Go call links. Usage: python3 -I go-calls.py <repo> <index.scip> [rows.jsonl]
 
 Reads an index.scip made by scip-go (run it once per go.mod, with the pinned Go
-and scip-go; see docs/design/go-xfile.md section 4) and writes one JSON row per
+and scip-go) and writes one JSON row per
 call reference:
   {src, line, shape, dst, name, dst_start, dst_end}
 A call reference is a reference occurrence of a func or method symbol whose next
@@ -10,8 +10,7 @@ source char (after blanks) is "(" or "[". Lines are 1-based. Paths are relative
 to <repo>. dst is the in-repo Definition occurrence; dst_start and dst_end are
 its enclosing range (the whole func). A dst outside the repo (module cache,
 paths that start with "..") is dropped (T2).
-Fixes: dedupe by (file, range, symbol) for the `p` and `p [p.test]` twins (T1,
-O6). A symbol with several in-repo definitions (build-tag twins) resolves to
+Fixes: dedupe by (file, range, symbol) for the `p` and `p [p.test]` twins (T1). A symbol with several in-repo definitions (build-tag twins) resolves to
 the definitions in the reference's own directory; if not unique, one row per
 candidate is written with "ambiguous": true.
 Shapes: bare (f(x)), qual (pkg.F(x)), method (x.M(y)), generic (next char "[").
@@ -118,7 +117,7 @@ def main():
             line = lines[l0]
             rest = line[c1:].lstrip()
             if not rest or rest[0] not in "([":
-                continue  # O7: `f (` is kept, `f/*c*/(` is a known miss
+                continue  # `f (` is kept, `f/*c*/(` is a known miss
             before = line[:c0].rstrip()
             ismeth = "#" in sym.rsplit("/", 1)[-1]
             if rest[0] == "[":

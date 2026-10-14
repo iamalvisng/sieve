@@ -6,9 +6,9 @@ An edge is right if the oracle has a row with the same src file, a row line
 inside the span of the Sieve source node, and a dst span (same dst file) that
 contains the start line of the Sieve target node. A source node with no span (a
 package-level `var x = f()` call has the file node as source) uses the whole
-file as its span (O2). An edge whose only oracle rows are ambiguous counts as
+file as its span. An edge whose only oracle rows are ambiguous counts as
 unverified. An unmatched edge whose call sits in a file with a `//go:build` or
-`// +build` line, a GOOS/GOARCH file-name suffix or `import "C"` (O5) counts as
+`// +build` line, a GOOS/GOARCH file-name suffix or `import "C"` counts as
 unverified. An edge in a testdata, _x or .x dir counts as skipped-dir. Prints: Extracted Go edges, matched, wrong (first 20 with file:line),
 unverified, a count per call shape, and the oracle coverage per shape.
 """
@@ -71,7 +71,7 @@ def main():
     shapes = collections.Counter()
     for e in edges:
         s, t = node[e["source"]], node[e["target"]]
-        ss = span(s) or (1, 10 ** 9)  # O2: a file source spans the whole file
+        ss = span(s) or (1, 10 ** 9)  # A file source spans the whole file
         ts = span(t)
         tn = t["name"].split(".")[-1]
         sh, ln = shape(s, ss if span(s) else (1, len(text(s["path"]).split("\n"))), tn)

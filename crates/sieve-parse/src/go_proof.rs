@@ -1,5 +1,5 @@
-//! The same-file proof for a Go call (GOX1, design `go-xfile.md` rules GO0,
-//! GO2, GO5 and GO7, with the fixes B1, B2 and B4). A proof means exactly
+//! The same-file proof for a Go call (a call is Extracted only when
+//! exactly one binding is proven). A proof means exactly
 //! 1 binding. Any doubt gives `None`, and the call then takes the name path
 //! in `resolve.rs`, capped at Inferred.
 //!
@@ -101,7 +101,7 @@ impl GoFile {
             method,
         };
         match func.kind() {
-            // GO2: a bare call.
+            // A bare call.
             "identifier" => {
                 if text(func, src) != name || count(name) > 0 || self.aliases.contains(name) {
                     return None;
@@ -112,7 +112,7 @@ impl GoFile {
                     None => (!BUILTINS.contains(&name)).then_some(GoRec::Cross(GoCall::Bare)),
                 }
             }
-            // GO4 and GO5: a call on a name.
+            // A call on a name.
             "selector_expression" => {
                 let field = func.child_by_field_name("field")?;
                 let x = func.child_by_field_name("operand")?;
@@ -122,7 +122,7 @@ impl GoFile {
                 let x = text(x, src);
                 let mut mine = binders.get(x).into_iter().flatten();
                 let Some(b) = mine.next() else {
-                    // GO4: `x` is no local name, so it may be an import.
+                    // `x` is no local name, so it may be an import.
                     return Some(GoRec::Cross(GoCall::Qual { pkg: x.to_string() }));
                 };
                 if !matches!(top.kind(), "function_declaration" | "method_declaration") {
@@ -137,7 +137,7 @@ impl GoFile {
                     Ty::New(t) => (t, GoTyFrom::New),
                     Ty::Unknown => return None,
                 };
-                // B1: a local binding of a type name or qualifier hides it.
+                // A local binding of a type name or qualifier hides it.
                 // The same holds for `new` and for a constructor name.
                 let hidden = count(&ty.name) > 0
                     || ty.qual.as_deref().is_some_and(|q| count(q) > 0)
@@ -180,7 +180,7 @@ impl GoFile {
         if count(&ty) > 0 || !self.bound_once(&ty) {
             return None;
         }
-        // GO7: an interface, an alias or a generic type never proves.
+        // An interface, an alias or a generic type never proves.
         let info = self.types.get(&ty).filter(|t| t.plain)?;
         if info.fields.contains(name) {
             return None;
@@ -408,7 +408,7 @@ fn collect(top: TsNode, src: &[u8]) -> Vec<Binder> {
                     });
                 }
             }
-            // B2: `case x := <-ch:` is a receive_statement.
+            // `case x := <-ch:` is a receive_statement.
             "receive_statement" => {
                 if let Some(l) = n.child_by_field_name("left") {
                     for (_, name) in idents(l, src) {
@@ -431,7 +431,7 @@ fn collect(top: TsNode, src: &[u8]) -> Vec<Binder> {
                     }
                 }
             }
-            // B4: a type switch var has no single written type.
+            // A type switch var has no single written type.
             "type_switch_statement" => {
                 if let Some(l) = n.child_by_field_name("alias") {
                     for (_, name) in idents(l, src) {
@@ -633,7 +633,7 @@ mod tests {
         none_extracted(
             "package p\nfunc f() {}\nfunc g(v any) { switch f := v.(type) { case func(): f() } }\n",
         );
-        // B4: one var, two types, no proof.
+        // One var, two types, no proof.
         let src = "package p\ntype T struct{}\nfunc (T) M() {}\ntype U struct{}\nfunc (U) M() {}\nfunc g(v any) { switch x := v.(type) { case T: x.M(); case U: x.M() } }\n";
         none_extracted(src);
     }
@@ -647,7 +647,7 @@ mod tests {
 
     #[test]
     fn test_gox1_stop_receive_statement() {
-        // B2: `case f := <-ch` binds f.
+        // `case f := <-ch` binds f.
         none_extracted(
             "package p\nfunc f() {}\nfunc g(ch chan func()) { select { case f := <-ch: f() } }\n",
         );

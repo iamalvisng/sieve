@@ -563,7 +563,7 @@ mod tests {
                 .filter(|a| !a.is_global_set())
                 .filter_map(|a| a.get_long())
                 // `--global` on `init` and `uninstall` is a Sieve-only flag
-                // (ledger 2026-09-16); the text does not list it.
+                // (a deliberate design choice); the text does not list it.
                 .filter(|l| *l != "help" && *l != "global" && *l != "mod")
                 .map(|l| format!("--{l}"))
                 .collect();

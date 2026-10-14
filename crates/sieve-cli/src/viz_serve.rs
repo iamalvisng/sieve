@@ -150,6 +150,7 @@ fn read_path(stream: &mut TcpStream) -> Result<String, Option<u16>> {
             .ok_or(None)?;
         stream.set_read_timeout(Some(left)).map_err(|_| None)?;
         match stream.read(&mut chunk) {
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
             Ok(0) | Err(_) => return Err(None),
             Ok(n) => buf.extend_from_slice(&chunk[..n]),
         }
@@ -211,7 +212,9 @@ fn events_from(mut stream: TcpStream, dir: &Path, mut seen: Snapshot) {
             Err(e)
                 if matches!(
                     e.kind(),
-                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                    std::io::ErrorKind::WouldBlock
+                        | std::io::ErrorKind::TimedOut
+                        | std::io::ErrorKind::Interrupted
                 ) => {}
             Err(_) => return,
         }
@@ -426,7 +429,10 @@ mod tests {
         let mut got = String::new();
         let mut buf = [0u8; 256];
         while !got.contains("data: change\n\n") {
-            let n = client.read(&mut buf).expect("read");
+            let n = match client.read(&mut buf) {
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                r => r.expect("read"),
+            };
             assert!(n > 0, "closed early: {got:?}");
             got.push_str(&String::from_utf8_lossy(&buf[..n]));
         }

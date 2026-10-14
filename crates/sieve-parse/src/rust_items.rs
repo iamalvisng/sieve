@@ -1,5 +1,5 @@
-//! The module-level items of one Rust file (RSX1, design `rust-xfile.md`
-//! rules R2, R3 and R6). The resolver reads these records to build the
+//! The module-level items of one Rust file (the Rust
+//! call proof). The resolver reads these records to build the
 //! module tree and to look a name up. Anything this pass cannot read
 //! becomes a record that stops a lookup.
 
@@ -113,6 +113,7 @@ pub fn push_file_record(
         py: None,
         go: None,
         java: None,
+        cs: None,
     });
 }
 

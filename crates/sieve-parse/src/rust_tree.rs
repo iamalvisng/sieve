@@ -1,5 +1,4 @@
-//! The Rust crate table, the module tree and the name lookup (RSX1, design
-//! `rust-xfile.md` rules R1, R2, R3, R5, R6, R7, R9, R13 and R14). A call
+//! The Rust crate table, the module tree and the name lookup. A call
 //! gets an exact target only when the lookup ends at exactly one free
 //! `fn`. Every doubt gives `Unknown`, and the call takes the capped name
 //! path in `resolve.rs`.
@@ -21,7 +20,7 @@ pub struct RustPackage {
     pub edition: u16,
     /// The target root files (`src/lib.rs`, `src/bin/*.rs`, `tests/*.rs`, ...).
     pub roots: Vec<String>,
-    /// The crates each root file sees by name (R8): the lib root file of
+    /// The crates each root file sees by name: the lib root file of
     /// the crate, or `None` when the name is blocked.
     pub externs: BTreeMap<String, BTreeMap<String, Option<String>>>,
 }
@@ -289,7 +288,7 @@ fn split_top(body: &str) -> Vec<&str> {
     out
 }
 
-/// Records one line of a dependency table (R8). A shape the scanner cannot
+/// Records one line of a dependency table. A shape the scanner cannot
 /// read blocks the dependency, which only loses an edge.
 fn read_dep(
     m: &mut Manifest,
@@ -506,7 +505,7 @@ fn lib_table(pkgs: &PkgMap) -> LibTable {
     libs
 }
 
-/// The crates a target root of package `dir` sees by name (R8). A name maps
+/// The crates a target root of package `dir` sees by name. A name maps
 /// to `None` when it is blocked: a rename, a registry crate, or no single
 /// in-repo package with that lib name.
 fn externs_of(
@@ -594,7 +593,7 @@ pub struct RustIndex {
     child_files: HashMap<(Mk, String), String>,
     editions: HashMap<String, u16>,
     files: HashSet<String>,
-    /// For each target root file, the crates it names (R8).
+    /// For each target root file, the crates it names.
     externs: HashMap<String, BTreeMap<String, Option<String>>>,
 }
 
@@ -764,7 +763,7 @@ impl RustIndex {
         false
     }
 
-    /// R10: the id of the one inherent `fn f` of the struct, enum or union
+    /// The id of the one inherent `fn f` of the struct, enum or union
     /// that `prefix` names, or `None` when any doubt remains.
     fn type_assoc(&self, m: &Mk, prefix: &[String], f: &str, generic: bool) -> Option<String> {
         let mut walk = Walk {
@@ -924,7 +923,7 @@ struct Walk<'a> {
 }
 
 impl Walk<'_> {
-    /// L(m, name, ns): items, then `use` bindings, then globs (R3).
+    /// L(m, name, ns): items, then `use` bindings, then globs.
     fn lookup(&mut self, m: &Mk, name: &str, ns: Ns, pub_only: bool, depth: u32) -> Res {
         if depth > MAX_DEPTH || self.budget == 0 {
             return Res::Stop;
@@ -1051,7 +1050,7 @@ impl Walk<'_> {
         }
     }
 
-    /// Walks a path from module `m` (R7 and R9). The last segment is looked
+    /// Walks a path from module `m`. The last segment is looked
     /// up in namespace `ns`; every segment before it must be a module.
     fn resolve_path(&mut self, m: &Mk, path: &[String], ns: Ns, depth: u32) -> Res {
         let ix = self.ix;
@@ -1059,7 +1058,7 @@ impl Walk<'_> {
             return Res::Stop;
         };
         let mut i = 1;
-        // True once the walk crossed into another crate (R8): from there on
+        // True once the walk crossed into another crate: from there on
         // only `pub` items and `pub use` re-exports are visible.
         let mut outside = false;
         let mut cur = match first.as_str() {

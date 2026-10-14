@@ -1,5 +1,5 @@
 //! The module map and the cross-file lookup for exact Python call links
-//! (PYX2, design `python-xfile.md` rules PY1, PY3, PY4, PY5, PY7 and PY9).
+//! (cross-file Python proof).
 //! A lookup gives a target only when the chain of bindings is unique. Any
 //! doubt gives `Unknown`, and the call keeps the capped name path.
 
@@ -74,7 +74,7 @@ pub struct PyIndex {
     nested: HashMap<String, Vec<String>>,
     /// Each `(module, name)` that a `X.f = ...` write touches.
     patched: HashSet<(Mod, String)>,
-    /// Names that a `patch("a.b.name")` string target patches (PY9).
+    /// Names that a `patch("a.b.name")` string target patches.
     patched_names: HashSet<String>,
 }
 
@@ -99,7 +99,7 @@ fn push_unique(map: &mut HashMap<String, Vec<String>>, key: &str, value: &str) {
 
 impl PyIndex {
     /// Reads the File nodes and the file records, then finds the module
-    /// attributes that the repo writes to (PY9).
+    /// attributes that the repo writes to.
     pub fn build(nodes: &[Node], raw: &[RawEdge]) -> Self {
         let mut ix = Self::default();
         for e in raw {
@@ -201,7 +201,7 @@ impl PyIndex {
         }
     }
 
-    /// PY1: the module for an absolute dotted name imported by `from`.
+    /// The module for an absolute dotted name imported by `from`.
     fn find_abs(&self, from: &str, dotted: &str) -> At {
         if self.files.get(from).is_none_or(|i| i.sys_path) {
             return At::Stop;
@@ -254,7 +254,7 @@ impl PyIndex {
             .collect()
     }
 
-    /// PY4: the module for a relative import of `text` (`..a.b`) in `from`.
+    /// The module for a relative import of `text` (`..a.b`) in `from`.
     fn find_rel(&self, from: &str, text: &str) -> At {
         let rest = text.trim_start_matches('.');
         let level = text.len() - rest.len();
@@ -339,7 +339,7 @@ impl PyIndex {
         };
         let mut w = Walk::new(self);
         if chain.is_empty() {
-            // PY7: the local name of an alias is free, so a name match on
+            // The local name of an alias is free, so a name match on
             // it means nothing.
             let alias = matches!(
                 info.binds.get(name),
@@ -354,7 +354,7 @@ impl PyIndex {
         let Some(m) = self.chain_module(&mut w, file, chain) else {
             return Outcome::Unknown;
         };
-        // A sibling submodule `m/name.py` may be the attribute (as in PY4).
+        // A sibling submodule `m/name.py` may be the attribute.
         if !matches!(self.submodule(&m, name), At::Absent) {
             return Outcome::Unknown;
         }
@@ -434,7 +434,7 @@ impl<'a> Walk<'a> {
         }
     }
 
-    /// PY4: `from t import name`. The name is a submodule only if `t`
+    /// `from t import name`. The name is a submodule only if `t`
     /// binds nothing under it.
     fn member(&mut self, t: &Mod, name: &str, depth: u32) -> Val {
         let v = self.bind(t, name, depth);
@@ -652,7 +652,7 @@ mod tests {
             ),
         ]);
         assert!(extracted(&got, "main.py#g", "lib.py#f"), "{got:?}");
-        // PY7: a repo module that lacks the name leaves no edge.
+        // A repo module that lacks the name leaves no edge.
         let got = run(&[
             LIB,
             ("o.py", "def nope():\n    pass\n"),

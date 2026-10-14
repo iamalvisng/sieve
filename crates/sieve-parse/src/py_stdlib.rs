@@ -1,6 +1,6 @@
 //! The frozen list of top-level standard library module names (Python 3.12
 //! `sys.stdlib_module_names`, plus the modules that 3.13 removed). A call
-//! through one of these names never gets an exact repo link (PY1).
+//! through one of these names never gets an exact repo link.
 
 /// Top-level standard library module names, sorted.
 const STDLIB: &[&str] = &[

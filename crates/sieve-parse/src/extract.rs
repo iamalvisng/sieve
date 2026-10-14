@@ -93,12 +93,213 @@ pub struct RawEdge {
     /// their cache bytes stay the same.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub java: Option<JavaRec>,
+    /// A C# `calls` edge, or a C# file's facts on an `imports` record: the
+    /// data of the C# call proof. `None` for every other raw edge, so
+    /// their cache bytes stay the same.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cs: Option<CsRec>,
+}
+
+/// What the C# pass records on a raw edge.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CsRec {
+    /// A call the C# index must prove.
+    Cross(CsCall),
+    /// The facts of one C# file. They ride on an `imports` raw edge that
+    /// the resolver never turns into a graph edge.
+    File(Box<CsFileRec>),
+}
+
+/// The receiver shape of a C# call.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CsShape {
+    /// A call `M()` with no receiver.
+    Bare,
+    /// A call `this.M()`.
+    This,
+    /// A call `x.M()` where the local `x` has the written type `ty`.
+    Var { ty: String },
+    /// A `new T(..)` expression.
+    New { ty: String },
+    /// A call `base.M()`.
+    Base,
+    /// A call `x.M()` where `x` is no local name: a field of the class,
+    /// else a type. The index decides which one it is.
+    Name { name: String },
+    /// A call `this.f.M()` where `f` is a field.
+    Field { name: String },
+}
+
+/// One C# call that the index proves.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CsCall {
+    /// The receiver shape.
+    pub shape: CsShape,
+    /// The method name, or the type name of a `new` expression.
+    pub name: String,
+    /// The count of arguments.
+    pub arity: u32,
+    /// The index of the innermost enclosing type in the file record.
+    pub ctx: u32,
+    /// The primary constructor parameter that the receiver names, if any.
+    /// A member of the class chain with that name hides the parameter.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recv: Option<String>,
+}
+
+/// The kind of a C# type declaration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CsKind {
+    /// A `class`.
+    Class,
+    /// A `struct` or a `record struct`.
+    Struct,
+    /// An `interface`.
+    Interface,
+    /// An `enum`.
+    Enum,
+    /// A `record` class.
+    Record,
+    /// A `delegate`.
+    Delegate,
+}
+
+/// One method of a C# type.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CsMethod {
+    /// The method name.
+    pub name: String,
+    /// The node id. Empty when no node matches.
+    pub id: String,
+    /// 0 private, 1 private protected, 2 protected, 3 internal,
+    /// 4 protected internal, 5 public.
+    pub vis: u8,
+    /// The method is `static`.
+    pub is_static: bool,
+    /// The method is `virtual`, `override` or `abstract`.
+    pub is_virtual: bool,
+    /// The method is `override`.
+    pub is_override: bool,
+    /// The method is `abstract`.
+    pub is_abstract: bool,
+    /// The method is `sealed`.
+    pub is_sealed: bool,
+    /// The method is `partial`.
+    pub is_partial: bool,
+    /// The method is an extension method (its first parameter has `this`).
+    pub is_ext: bool,
+    /// The count of parameters.
+    pub arity: u32,
+    /// A parameter is optional or `params`.
+    pub loose: bool,
+    /// The written type of each parameter, with its `ref`, `out` or `in`
+    /// mode, and no spaces. `?` marks a generic method.
+    pub params: Vec<String>,
+}
+
+/// One C# type declaration.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CsType {
+    /// The simple name.
+    pub name: String,
+    /// The node id. Empty when the type has no node.
+    pub id: String,
+    /// The kind.
+    pub kind: CsKind,
+    /// The index of the enclosing type.
+    pub outer: Option<u32>,
+    /// The dotted namespace of the declaration.
+    pub ns: String,
+    /// The type is `partial`.
+    pub partial: bool,
+    /// The type is `sealed`.
+    pub sealed: bool,
+    /// The type is `static`.
+    pub is_static: bool,
+    /// The type is `abstract`.
+    pub is_abstract: bool,
+    /// The type has a `file` modifier or sits in a conditional region the
+    /// proof cannot read.
+    pub unknown: bool,
+    /// 0 private, 1 private protected, 2 protected, 3 internal,
+    /// 4 protected internal, 5 public.
+    pub vis: u8,
+    /// The written base types, generics dropped.
+    pub bases: Vec<String>,
+    /// The type parameter names.
+    pub tparams: Vec<String>,
+    /// The primary constructor parameters, each with its written type.
+    pub pctor: Vec<(String, Option<String>)>,
+    /// The member types as `(name, index)`.
+    pub members: Vec<(String, u32)>,
+    /// The methods declared in the body.
+    pub methods: Vec<CsMethod>,
+    /// The names of the fields, properties, events and constants.
+    pub others: Vec<String>,
+    /// The fields with a written simple type, as `(name, type)`. The type
+    /// is `None` when the field type is not a plain name.
+    #[serde(default)]
+    pub fields: Vec<(String, Option<String>)>,
+}
+
+/// One `using` directive of a C# file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CsUsing {
+    /// The dotted path. Empty for an alias.
+    pub path: String,
+    /// The alias name, for `using A = ..;`.
+    pub alias: Option<String>,
+    /// The directive is `using static`.
+    pub stat: bool,
+    /// The directive is `global using`.
+    pub global: bool,
+}
+
+/// The facts of one C# file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CsFileRec {
+    /// The file has a parse error.
+    pub broken: bool,
+    /// A `using` directive sits inside a namespace block.
+    pub inner_using: bool,
+    /// The file has an `extern alias`.
+    pub extern_alias: bool,
+    /// The file names the type `dynamic`.
+    pub dynamic: bool,
+    /// A file with a parse error or a C# 14 `extension` block: the text has
+    /// an extension member that the proof cannot name.
+    pub lost_ext: bool,
+    /// A file with a parse error: the name of each extension method that
+    /// its text declares.
+    pub lost_ext_names: Vec<String>,
+    /// A file with a parse error: each word after `override` in its text.
+    pub lost_overrides: Vec<String>,
+    /// A file with a parse error: each type name that its text declares.
+    pub lost_types: Vec<String>,
+    /// Each `using` directive of the file.
+    pub usings: Vec<CsUsing>,
+    /// Each type declaration of the file.
+    pub types: Vec<CsType>,
+    /// The project of the file. The build fills it from the `.csproj` files.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub proj: Option<CsProj>,
+}
+
+/// The project that holds a C# file: the nearest `.csproj` above it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CsProj {
+    /// The directory of the `.csproj` file, relative to the repo root.
+    pub dir: String,
+    /// The project can add usings or extension methods that the index
+    /// cannot see: a `<Using>` item, an `Sdk` other than the plain one, or
+    /// interceptors.
+    pub risky: bool,
 }
 
 /// What the Java pass records on a raw edge.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum JavaRec {
-    /// A call the Java index must prove (JVX, design `java-xfile.md`).
+    /// A call the Java index must prove.
     Cross(JavaCall),
     /// The facts of one Java file. They ride on an `imports` raw edge that
     /// the resolver never turns into a graph edge.
@@ -225,7 +426,7 @@ pub struct JavaImport {
 }
 
 /// A class body that no clean type owns: an anonymous class, an enum
-/// constant body or a local class (JV10, fix B4).
+/// constant body or a local class.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct JavaBody {
     /// The name of a local class, `None` for an anonymous body.
@@ -831,6 +1032,7 @@ fn walk(node: TsNode, ctx: &Ctx, file: &FileCtx, sink: &mut Sink) {
                 py: None,
                 go: None,
                 java: None,
+                cs: None,
             });
         }
         return;
@@ -873,6 +1075,7 @@ fn walk(node: TsNode, ctx: &Ctx, file: &FileCtx, sink: &mut Sink) {
                     py: None,
                     go: None,
                     java: None,
+                    cs: None,
                 });
             } else {
                 let (specifier, import_name, ns_export) =
@@ -934,6 +1137,7 @@ fn walk(node: TsNode, ctx: &Ctx, file: &FileCtx, sink: &mut Sink) {
                     py,
                     go,
                     java,
+                    cs: None,
                 });
             }
         }
@@ -1085,6 +1289,7 @@ fn export_record(path: &str, specifier: Option<String>, reexport: ReExport) -> R
         py: None,
         go: None,
         java: None,
+        cs: None,
     }
 }
 
@@ -1333,6 +1538,7 @@ fn emit_definition(node: TsNode, desc: Desc, ctx: &Ctx, file: &FileCtx, sink: &m
         py: None,
         go: None,
         java: None,
+        cs: None,
     });
     if heritage_gate(ctx.lang, kind) {
         emit_heritage_edges(node, &id, path, source, ctx.lang, sink.edges);
@@ -1728,6 +1934,7 @@ fn emit_heritage_edges(
             py: None,
             go: None,
             java: None,
+            cs: None,
         });
     };
     let mut push = |relation: Relation, base: TsNode| {
@@ -2533,6 +2740,7 @@ fn maybe_emit_reference(
         py: None,
         go: None,
         java: None,
+        cs: None,
     });
 }
 
@@ -4737,7 +4945,7 @@ mod tests {
 
     #[test]
     fn test_xfile3_local_records_in_every_file() {
-        // The attack edit E1 widened this rule: a Local record now exists in
+        // A Local record now exists in
         // every file, for each export name that mints no function node.
         let src = "export * from './x';\nexport function f() {}\nexport const g = () => 1;\nexport const v = 1, { w } = o;\nconst h = 2;\nexport { h, h as k };\nexport default 5;\n";
         assert_eq!(

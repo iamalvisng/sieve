@@ -276,7 +276,7 @@ fn rename_table_cli_init_writes_sieve_branded_claude_files_and_no_old_name() {
     let claude_dir = copy.path.join(".claude");
     assert!(
         !claude_dir.join("helpers").exists(),
-        "init must write nothing under .claude/helpers/ (ledger 2026-09-12)"
+        "init must write nothing under .claude/helpers/"
     );
     let settings: serde_json::Value = serde_json::from_str(
         &fs::read_to_string(claude_dir.join("settings.json")).expect("read settings.json"),

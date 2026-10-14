@@ -1,7 +1,7 @@
-//! Phase 2 feature F1, unit 1: classify a hook call as a file read or a
+//! Phase 2 narrow-read rule, unit 1: classify a hook call as a file read or a
 //! call to leave alone. The module is pure. It reads a file only to
 //! measure the bytes the tool call would return. A `grep`, an `rg` and a
-//! Grep tool call pass through, because F1 dropped its Grep path.
+//! Grep tool call pass through, because the narrow-read rule dropped its Grep path.
 
 use std::path::{Path, PathBuf};
 
@@ -42,16 +42,16 @@ pub(crate) enum Intent {
     /// of bytes the tool call would return, not the file size. `bounded`
     /// is true when the call names its own bound: a line count, a byte
     /// count, a line span, or a Read `offset` or `limit`. A bounded call
-    /// asks for a part of the file. F1 exists to stop a wholesale read, so
-    /// F1 never rewrites a bounded call. A live probe on 2026-09-30 found
-    /// the reason: F1 named `sed -n '6,200p'`, then rewrote that command,
+    /// asks for a part of the file. The narrow-read rule exists to stop a wholesale read, so
+    /// The narrow-read rule never rewrites a bounded call. A live probe on 2026-09-30 found
+    /// the reason: the narrow-read rule named `sed -n '6,200p'`, then rewrote that command,
     /// and the agent looped.
     ReadFile {
         path: String,
         raw_bytes: u64,
         bounded: bool,
     },
-    /// F1 does nothing with this call.
+    /// The narrow-read rule does nothing with this call.
     PassThrough,
 }
 
@@ -264,7 +264,7 @@ fn line_count(data: &[u8]) -> u64 {
     data.split_inclusive(|b| *b == b'\n').count() as u64
 }
 
-/// Answers an intent from the graph on disk. `None` means F1 has nothing
+/// Answers an intent from the graph on disk. `None` means the narrow-read rule has nothing
 /// better than the raw call, so the caller passes the call through.
 ///
 /// A `ReadFile` answer is the file skeleton. `answer` reads it from the
@@ -367,9 +367,8 @@ fn answer_read(
     ))
 }
 
-/// The smallest graph answer that counts as a real answer, in bytes. A Fable
-/// 5.1 review on 2026-09-29 found the reason. `sieve skeleton` on a
-/// non-source file prints "no definitions indexed", about 40 bytes. A plain
+/// The smallest graph answer that counts as a real answer, in bytes.
+/// `sieve skeleton` on a non-source file prints "no definitions indexed", about 40 bytes. A plain
 /// "smaller wins" rule lets that non-answer beat every JSON, Markdown, TOML
 /// and lock file. Every real answer holds a note line, which is longer.
 pub(crate) const MIN_ANSWER_BYTES: u64 = 64;
@@ -377,26 +376,26 @@ pub(crate) const MIN_ANSWER_BYTES: u64 = 64;
 /// The graph answer must be at most `1 / MIN_SAVING_FACTOR` of the raw
 /// cost. Interception costs the agent one turn to read the note and choose
 /// its next step. A saving of a few bytes does not pay for that turn.
-// ponytail: 2 is a choice, not a measurement. The F1 replay harness is
+// ponytail: 2 is a choice, not a measurement. The narrow-read replay harness is
 // what would set it. Tune it when that harness exists.
 pub(crate) const MIN_SAVING_FACTOR: u64 = 2;
 
-/// The smallest raw cost F1 intercepts, in bytes. Below it, `decide` passes
+/// The smallest raw cost the narrow-read rule intercepts, in bytes. Below it, `decide` passes
 /// the call through no matter how good the ratio is. A live probe on
-/// 2026-09-30 found the reason. F1 narrowed a 246-line file of 8,180 bytes
+/// 2026-09-30 found the reason. The narrow-read rule narrowed a 246-line file of 8,180 bytes
 /// to five lines, because its 2,020-byte skeleton passed the ratio. The
 /// agent then spent a second call to hold any of the body. For a file that
 /// small, the whole file is the better answer.
-// ponytail: 16,384 is a choice, not a measurement. The F1 replay harness
+// ponytail: 16,384 is a choice, not a measurement. The narrow-read replay harness
 // is what would set it. It is twice the 8,180-byte loss and one third of
 // the 49 KB file where the 2026-09-29 probe measured a win.
 pub(crate) const MIN_RAW_BYTES: u64 = 16_384;
 
-/// Decides whether F1 intercepts. It returns the graph answer to send, or
+/// Decides whether the narrow-read rule intercepts. It returns the graph answer to send, or
 /// `None` to pass the call through. `raw_bytes` is the measured cost of the
 /// raw call. `None` means nobody measured it.
 ///
-/// F1 intercepts only when the answer is real, the raw cost is measured
+/// The narrow-read rule intercepts only when the answer is real, the raw cost is measured
 /// and at least `MIN_RAW_BYTES`, the saving passes the ratio, and the
 /// answer is smaller than the raw cost. `PassThrough` never intercepts.
 pub(crate) fn decide(

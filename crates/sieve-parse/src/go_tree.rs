@@ -1,4 +1,4 @@
-//! The package-level facts of one Go file (GOX1). The same-file proof in
+//! The package-level facts of one Go file. The same-file proof in
 //! `go_proof.rs` reads these facts. The file holds the names it binds at
 //! package level, its funcs, its types and its methods. A dot import, a
 //! `//go:build ignore` line or a parse error stops every proof of the file.
@@ -18,7 +18,7 @@ pub(crate) fn text<'a>(n: TsNode, src: &'a [u8]) -> &'a str {
         .unwrap_or("")
 }
 
-/// Reports whether the go tool skips the file `path` (GO1): a dir named
+/// Reports whether the go tool skips the file `path`: a dir named
 /// `testdata`, a dir or file name that starts with `_` or `.`.
 pub(crate) fn go_skipped(path: &str) -> bool {
     path.split('/')
@@ -223,6 +223,7 @@ impl GoFile {
                 methods,
             }))),
             java: None,
+            cs: None,
         }
     }
 

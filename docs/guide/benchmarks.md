@@ -80,6 +80,9 @@ unverified when the oracle gives no single answer.
 | jsoup | jsoup-1.23.2 | 2,501 | 0 | 46 | javac tree API, JDK 21.0.12+8 |
 | commons-lang | rel/commons-lang-3.21.0 | 5,612 | 0 | 1 | javac tree API, JDK 21.0.12+8 |
 | gson | gson-parent-2.14.0 | 3,211 | 0 | 304 | javac tree API, JDK 21.0.12+8 |
+| markdig | 1.4.0 | 912 | 0 | 22 | Roslyn, .NET SDK 10.0.401 |
+| serilog | v4.4.0 | 150 | 0 | 1 | Roslyn, .NET SDK 10.0.401 |
+| CsvHelper | 33.1.0 | 2,189 | 0 | 23 | Roslyn, .NET SDK 10.0.401 |
 
 Before the fix, the same-file name rule gave wrong Extracted links:
 
@@ -92,9 +95,12 @@ Before the fix, the same-file name rule gave wrong Extracted links:
 | jsoup jsoup-1.23.2 | 140 | 1,522 |
 | commons-lang rel/commons-lang-3.21.0 | 829 | 4,689 |
 | gson gson-parent-2.14.0 | 23 | 1,543 |
+| markdig 1.4.0 | 6 | 528 |
+| serilog v4.4.0 | 7 | 264 |
+| CsvHelper 33.1.0 | 1 | 188 |
 
 The oracle scripts are in `scripts/oracle/`. `rs-calls.py` and
-`rs-compare.py` check Rust. `py-calls.py` and `py-compare.py` check Python. `go-calls.py` and `go-compare.py` check Go. `JvCalls.java` and `jv-compare.py` check Java.
+`rs-compare.py` check Rust. `py-calls.py` and `py-compare.py` check Python. `go-calls.py` and `go-compare.py` check Go. `JvCalls.java` and `jv-compare.py` check Java. `CsCalls` and `cs-compare.py` check C#.
 `ts-calls.mjs` and `compare.mjs` check TypeScript.
 
 ## Refresh after an edit

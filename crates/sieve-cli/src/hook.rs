@@ -1,6 +1,6 @@
 //! `sieve hook <event>`: the five Claude Code hook events that the hook shim
 //! answers — `session-start`, `prompt`, `post-edit`, `tool-savings`, `stop`
-//! (the `hosts-hooks.md` note section 3) — plus `pre-read`, Sieve's own F3
+//! (the `hosts-hooks.md` note section 3) — plus `pre-read`, Sieve's own repeat-read rule
 //! event that denies a second read of a file whose content has not changed
 //! since the last read.
 
@@ -397,7 +397,7 @@ pub struct Stats {
     pub synced_at: Option<String>,
     #[serde(rename = "lastFile")]
     pub last_file: Option<String>,
-    /// The count of F1 notes that never reached the agent (the `narrowed`
+    /// The count of narrow-read notes that never reached the agent (the `narrowed`
     /// entries left in a session at `stop`). Absent at zero, so the Phase 1
     /// `stats.json` golden does not change.
     #[serde(rename = "notesLost", default, skip_serializing_if = "is_zero")]
@@ -501,12 +501,12 @@ pub struct SessionState {
         skip_serializing_if = "BTreeMap::is_empty"
     )]
     pub saved_by_day: BTreeMap<String, u64>,
-    /// One record per file path read this session (F3, "remembered
+    /// One record per file path read this session (repeat-read, "remembered
     /// reads"). Empty on every Phase 1 session, so `skip_serializing_if`
     /// keeps `state.json` byte-identical to the Phase 1 golden.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub reads: BTreeMap<String, ReadRecord>,
-    /// The note text for each Read that F1 narrowed and `post-read` has
+    /// The note text for each Read that the narrow-read rule narrowed and `post-read` has
     /// not yet answered, by canonical path. Empty on every Phase 1
     /// session, so the golden `state.json` does not change.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -633,7 +633,7 @@ impl SessionState {
 }
 
 /// One file's remembered read: the content hash seen last, and whether
-/// that read already earned this session's one denial (F3).
+/// that read already earned this session's one denial.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct ReadRecord {
     pub hash: String,
@@ -736,7 +736,7 @@ pub(crate) fn update_session<R>(
     update_session_checked(project_dir, id, change).0
 }
 
-/// [`update_session`], and whether the write to disk succeeded. F1 needs
+/// [`update_session`], and whether the write to disk succeeded. The narrow-read rule needs
 /// the flag: a narrowed Read with no record on disk gets no note.
 fn update_session_checked<R>(
     project_dir: &Path,
@@ -767,7 +767,7 @@ fn read_stats_at(cache: &Path) -> Option<Stats> {
 }
 
 /// Read-modify-write over `stats.json` under a lock, so two parallel hook
-/// calls do not lose each other's update (F3).
+/// calls do not lose each other's update.
 fn patch_stats(project_dir: &Path, patch: impl FnOnce(&mut Stats)) {
     patch_stats_at(&cache_dir(project_dir), patch);
 }
@@ -1402,7 +1402,7 @@ fn render_blast(
 }
 
 // ---------------------------------------------------------------------------
-// pre-read (F3, "remembered reads", then F1, "narrow a large Read")
+// pre-read ("remembered reads", then "narrow a large Read")
 // ---------------------------------------------------------------------------
 
 /// Denies a second read of a file whose bytes have not changed since the
@@ -1419,15 +1419,15 @@ fn render_blast(
 /// read could deny the other session's first read of the same path. A
 /// missing, non-string, or empty session id skips this handler entirely.
 ///
-/// F1 runs after F3. F1 narrows a large Read to `NARROWED_LINES` when the
-/// cached skeleton is smaller. The two features share one rule. An F3
+/// The narrow-read rule runs after the repeat-read rule. The narrow-read rule narrows a large Read to `NARROWED_LINES` when the
+/// cached skeleton is smaller. The two features share one rule. A repeat-read
 /// record claims that the agent holds the file content. A narrowed Read
-/// does not deliver that content. So F1 must remove F3's record when F1
-/// narrows. Otherwise F3 denies the next read with a false claim, and the
+/// does not deliver that content. So the narrow-read rule must remove the repeat-read rule's record when the narrow-read rule
+/// narrows. Otherwise the repeat-read rule denies the next read with a false claim, and the
 /// span read that the note names gets the same false deny.
 ///
-/// F1 records the note text in the session before it returns the allow
-/// JSON. If that record does not reach the disk, F1 passes the read
+/// The narrow-read rule records the note text in the session before it returns the allow
+/// JSON. If that record does not reach the disk, the narrow-read rule passes the read
 /// through, so a narrowed Read never goes without its `post-read` note.
 /// Every call first clears the old note for the path, so a full read
 /// never gets a stale note from an earlier narrowing.
@@ -1449,7 +1449,7 @@ fn handle_pre_read(input: &Value, project_dir: &Path) -> Option<String> {
     // the same file share one record; a raw `file_path` key would miss
     // between the two shapes and never deny the second read.
     let canonical = std::fs::canonicalize(file_path).ok()?;
-    // F3 and F1 act only on a text file inside the project. The check runs
+    // The repeat-read rule and the narrow-read rule act only on a text file inside the project. The check runs
     // before the read, so a large file outside the project is never read.
     if !canonical.starts_with(std::fs::canonicalize(project_dir).ok()?) {
         return None;
@@ -1463,7 +1463,7 @@ fn handle_pre_read(input: &Value, project_dir: &Path) -> Option<String> {
     let key = canonical.to_string_lossy().into_owned();
     let hash = sieve_core::fingerprint::hash_source(&bytes);
     let deny = update_session(project_dir, session_id, |session| {
-        // Every read clears the old F1 note. Only a narrowing below writes a
+        // Every read clears the old narrow-read note. Only a narrowing below writes a
         // new one. So `post-read` never sends a note for a full read.
         session.narrowed.remove(&key);
         let unchanged_and_not_yet_denied = session
@@ -1501,9 +1501,9 @@ fn handle_pre_read(input: &Value, project_dir: &Path) -> Option<String> {
     else {
         return None;
     };
-    // A Read with `offset` or `limit` asks for a part of the file. F1 never
-    // narrows it. F3 has already run above. The F1 note tells the agent to
-    // Read a span, so F1 must not block that span.
+    // A Read with `offset` or `limit` asks for a part of the file. The narrow-read rule never
+    // narrows it. The repeat-read rule has already run above. The narrow-read note tells the agent to
+    // Read a span, so the narrow-read rule must not block that span.
     if bounded {
         return None;
     }
@@ -1511,8 +1511,8 @@ fn handle_pre_read(input: &Value, project_dir: &Path) -> Option<String> {
     let graph_answer = intercept::answer(project_dir, &context_dir, &intent);
     let note = intercept::decide(&intent, Some(raw_bytes), graph_answer)?;
     let (_, recorded) = update_session_checked(project_dir, session_id, |session| {
-        // F3's record claims that the agent holds the content. F1 did not
-        // deliver the content. So F1 removes the record.
+        // The repeat-read rule's record claims that the agent holds the content. The narrow-read rule did not
+        // deliver the content. So the narrow-read rule removes the record.
         session.reads.remove(&key);
         session.narrowed.insert(key, note);
     });
@@ -1536,7 +1536,7 @@ fn pre_read_narrow_json(file_path: &str) -> String {
     .to_string()
 }
 
-/// Answers a narrowed Read (F1). If `pre-read` recorded a note for this
+/// Answers a narrowed Read. If `pre-read` recorded a note for this
 /// file, the handler returns the `PostToolUse` JSON with the note as
 /// `additionalContext` and clears the record. Otherwise it returns `None`.
 fn handle_post_read(input: &Value, project_dir: &Path) -> Option<String> {
@@ -1558,7 +1558,7 @@ fn handle_post_read(input: &Value, project_dir: &Path) -> Option<String> {
     let note = update_session(project_dir, session_id, |session| {
         session.narrowed.remove(&key)
     });
-    // F6: one line when the read range holds a node with a decision link.
+    // One line when the read range holds a node with a decision link.
     let hint = why_read_hint(input, project_dir, file_path);
     let text = match (note, hint) {
         (Some(n), Some(h)) => format!("{n}\n{h}"),
@@ -1580,14 +1580,14 @@ fn read_range(input: &Value) -> Option<(usize, usize)> {
     Some((start, end))
 }
 
-/// The F6 decision hint for a Read of `file_path`, or `None`.
+/// The decision hint for a Read of `file_path`, or `None`.
 fn why_read_hint(input: &Value, project_dir: &Path, file_path: &str) -> Option<String> {
     let context_dir = resolve_context_dir(project_dir);
     crate::why::read_hint(project_dir, &context_dir, file_path, read_range(input))
 }
 
 // ---------------------------------------------------------------------------
-// pre-read and post-read for a Bash read (F1, "narrow a large cat")
+// pre-read and post-read for a Bash read ("narrow a large cat")
 // ---------------------------------------------------------------------------
 
 /// True when the hook stdin names the Bash tool.
@@ -1595,7 +1595,7 @@ fn is_bash_call(input: &Value) -> bool {
     input.get("tool_name").and_then(Value::as_str) == Some("Bash")
 }
 
-/// Narrows a Bash read of one large file (F1). `classify` accepts a `cat`,
+/// Narrows a Bash read of one large file. `classify` accepts a `cat`,
 /// `head`, `tail`, `sed -n`, `less` or `bat` of one file. It rejects a
 /// quote, a variable, a glob and a compound command. The handler rewrites
 /// the command to `head -5 '<path>'` through `updatedInput`. The agent then
@@ -1603,15 +1603,15 @@ fn is_bash_call(input: &Value) -> bool {
 ///
 /// A bounded command passes through, whatever its cost. `head -N`,
 /// `tail -N`, `head -c N`, `tail -c N` and `sed -n 'A,Bp'` ask for a part
-/// of the file. That is the behaviour F1 wants. Only a wholesale `cat`,
+/// of the file. That is the behaviour the narrow-read rule wants. Only a wholesale `cat`,
 /// `less` or `bat` is a candidate for the rewrite.
 ///
 /// The record comes before the rewrite, as in `handle_pre_read`. If the
 /// record does not reach the disk, the command passes through. Every call
 /// first clears the old note for the path.
 ///
-/// F3 does not apply here. The F3 deny fires only on the Read tool. A Bash
-/// read never creates and never removes an F3 record.
+/// The repeat-read rule does not apply here. The repeat-read deny fires only on the Read tool. A Bash
+/// read never creates and never removes a repeat-read record.
 fn handle_pre_bash(input: &Value, project_dir: &Path) -> Option<String> {
     let session_id = input
         .get("session_id")
@@ -1692,7 +1692,7 @@ fn pre_bash_narrow_json(input: &Value, key: &str) -> String {
     .to_string()
 }
 
-/// Answers a narrowed Bash read (F1). If the command is one
+/// Answers a narrowed Bash read. If the command is one
 /// `handle_pre_bash` built, and `pre-read` recorded a note for its key,
 /// the handler returns the `PostToolUse` JSON with the note and clears the
 /// record. Otherwise it returns `None`.
@@ -2029,9 +2029,9 @@ fn handle_stop(input: &Value, project_dir: &Path) {
     // scope here.
 }
 
-/// Adds the leftover F1 notes of this session to `Stats.notes_lost` and
-/// clears them (F1). A leftover note means that `post-read` never ran for
-/// a narrowed Read. The count is the note failure record the F1 design
+/// Adds the leftover narrow-read notes of this session to `Stats.notes_lost` and
+/// clears them. A leftover note means that `post-read` never ran for
+/// a narrowed Read. The count is the note failure record the narrow-read design
 /// asks for. The clear stops the session file from growing. A session with
 /// no leftover note writes nothing. The key follows the agent when the
 /// input names one.
@@ -3050,7 +3050,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // F1, "narrow a large Read"
+    // "narrow a large Read"
     // -----------------------------------------------------------------------
 
     /// The `PreToolUse` stdin shape for a Read tool call: `pre_read_input`
@@ -3267,7 +3267,7 @@ mod tests {
         let input = read_tool_input("s1", &file);
         handle_pre_read(&input, &dir.path).expect("narrows");
 
-        // The file shrinks. F1 now passes the read through in full.
+        // The file shrinks. The narrow-read rule now passes the read through in full.
         std::fs::write(&file, "pub fn f0() -> u64 {\n    0\n}\n").expect("rewrite file");
         assert_eq!(handle_pre_read(&input, &dir.path), None);
         assert_eq!(
@@ -3278,7 +3278,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // F1, the Bash read path
+    // Narrow-read, the Bash read path
     // -----------------------------------------------------------------------
 
     /// The `PreToolUse` stdin shape for a Bash tool call.
@@ -3527,7 +3527,7 @@ mod tests {
         let input = bash_tool_input("s1", &format!("cat {}", file.display()));
         handle_pre_bash(&input, &dir.path).expect("narrows");
 
-        // The file shrinks. F1 now passes the cat through in full.
+        // The file shrinks. The narrow-read rule now passes the cat through in full.
         std::fs::write(&file, "pub fn f0() -> u64 {\n    0\n}\n").expect("rewrite file");
         assert_eq!(handle_pre_bash(&input, &dir.path), None);
         let rewritten = bash_tool_input("s1", &narrowed_bash_command(&canonical_key(&file)));
@@ -3543,7 +3543,7 @@ mod tests {
         let (dir, big) = large_file_project("f1-bash-f3");
         let small = dir.path.join("src").join("small.rs");
         std::fs::write(&small, "pub fn one() {}\n").expect("write file");
-        // A Read of the small file passes and writes its F3 record.
+        // A Read of the small file passes and writes its repeat-read record.
         assert_eq!(
             handle_pre_read(&read_tool_input("s1", &small), &dir.path),
             None

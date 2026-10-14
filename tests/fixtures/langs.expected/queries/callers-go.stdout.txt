@@ -17,7 +17,9 @@ Greet  method  csharp/App.cs:6-6
 no callers found — the index has no incoming links for this symbol. 31 symbols share the name Greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve grep Greet
 
 Greet  method  csharp/App.cs:16-18
-no callers found — the index has no incoming links for this symbol. 31 symbols share the name Greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve grep Greet
+1 caller
+└─ Main  method  csharp/App.cs:20-23
+      22: Console.WriteLine(app.Greet());
 
 greet  method  dart/app.dart:8-10
 no callers found — the index has no incoming links for this symbol. 31 symbols share the name greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve grep greet
@@ -116,4 +118,4 @@ greet  method  vue/App.vue:13-15
 
 greet  fn  zig/app.zig:6-8
 no callers found — the index has no incoming links for this symbol. 31 symbols share the name greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve grep greet
-[sieve] saved ≈ 143 tokens
+[sieve] saved ≈ 175 tokens

@@ -7,7 +7,8 @@ use std::path::Path;
 use sieve_core::lang::lang_for_path;
 use sieve_core::{Confidence, Edge, Kind, Node, Relation};
 
-use crate::extract::{GoRec, JavaRec, PyRec, RawEdge, ReExport, RustRec};
+use crate::cs_index::CsIndex;
+use crate::extract::{CsRec, CsShape, GoRec, JavaRec, PyRec, RawEdge, ReExport, RustRec};
 use crate::generic::generic_lang_of;
 use crate::go_index::GoIndex;
 use crate::java_index::JavaIndex;
@@ -72,6 +73,8 @@ struct Indexes<'a> {
     go: GoIndex,
     /// The Java type index, for exact Java call links.
     java: JavaIndex,
+    /// The C# type index, for exact C# call links.
+    cs: CsIndex,
     /// Ids of the definitions a `contains` raw edge marks as a direct
     /// named export (TS and JS).
     direct_exports: HashSet<&'a str>,
@@ -121,6 +124,7 @@ pub fn resolve_edges_with_context(
     idx.py = PyIndex::build(nodes, raw);
     idx.go = GoIndex::build(raw, go_modules);
     idx.java = JavaIndex::build(raw);
+    idx.cs = CsIndex::build(raw);
 
     let mut out: Vec<Edge> = Vec::new();
     let mut seen: HashSet<(String, &'static str, String)> = HashSet::new();
@@ -309,6 +313,7 @@ fn build_indexes<'a>(nodes: &'a [Node], raw: &'a [RawEdge]) -> Indexes<'a> {
         py: PyIndex::default(),
         go: GoIndex::default(),
         java: JavaIndex::default(),
+        cs: CsIndex::default(),
     }
 }
 
@@ -474,7 +479,7 @@ fn resolve_calls(raw: &RawEdge, idx: &Indexes) -> Option<Edge> {
                     confidence: Confidence::Extracted,
                 });
             }
-            // PY7: a repo module that lacks the name leaves no edge.
+            // A repo module that lacks the name leaves no edge.
             PyOutcome::Drop => return None,
             _ => {}
         }
@@ -513,13 +518,33 @@ fn resolve_calls(raw: &RawEdge, idx: &Indexes) -> Option<Edge> {
             }
         }
     }
+    if let Some(CsRec::Cross(call)) = &raw.cs {
+        if let Some(target) = idx.cs.resolve(&raw.file, &raw.source, call, name) {
+            if idx.node_ids.contains(target.as_str()) {
+                return Some(Edge {
+                    source: raw.source.clone(),
+                    target,
+                    relation: Relation::Calls,
+                    confidence: Confidence::Extracted,
+                });
+            }
+        }
+        // Only a bare call keeps the old name path.
+        if call.shape != CsShape::Bare {
+            return None;
+        }
+    }
     if raw.via_member {
         let recv_type = raw.recv_type.as_deref()?;
         let (target, mut confidence) =
             resolve_typed_member(&raw.file, recv_type, name, raw.arg_count, idx)?;
-        // PY0, GO0 and JV0: only the proof gives Extracted for a `.py`, `.go`
-        // or `.java` call.
-        if is_python_file(&raw.file) || is_go_file(&raw.file) || is_java_file(&raw.file) {
+        // Only the proof gives Extracted for a `.py`,
+        // `.go`, `.java` or `.cs` call.
+        if is_python_file(&raw.file)
+            || is_go_file(&raw.file)
+            || is_java_file(&raw.file)
+            || is_csharp_file(&raw.file)
+        {
             confidence = Confidence::Inferred;
         }
         return Some(Edge {
@@ -538,7 +563,7 @@ fn resolve_calls(raw: &RawEdge, idx: &Indexes) -> Option<Edge> {
         }) => {
             match idx.rust.resolve_call(&raw.file, mods, path, *generic) {
                 Outcome::Target(id) => Some(id),
-                // R13: a failed lookup for an `as` rename drops the edge.
+                // A failed lookup for an `as` rename drops the edge.
                 Outcome::Drop => return None,
                 Outcome::Unknown => None,
             }
@@ -559,11 +584,13 @@ fn resolve_calls(raw: &RawEdge, idx: &Indexes) -> Option<Edge> {
     }
     let kinds = raw.kinds.clone().unwrap_or_else(|| bare_kinds(&raw.file));
     if let Some((target, mut confidence)) = resolve_name(&raw.file, name, &kinds, idx) {
-        // R0 and JV0: only the proof gives Extracted for a `.rs` or `.java` call.
+        // Only the proof gives Extracted for a `.rs`,
+        // `.java` or `.cs` call.
         if raw.file.ends_with(".rs")
             || is_python_file(&raw.file)
             || is_go_file(&raw.file)
             || is_java_file(&raw.file)
+            || is_csharp_file(&raw.file)
         {
             confidence = Confidence::Inferred;
         }
@@ -1128,6 +1155,13 @@ fn is_go_file(path: &str) -> bool {
     lang_for_path(Path::new(path)).is_some_and(|l| l.grammar == "go")
 }
 
+/// Reports whether `path`'s grammar is C#.
+fn is_csharp_file(path: &str) -> bool {
+    Path::new(path)
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("cs"))
+}
+
 /// Reports whether `path`'s grammar is Java.
 fn is_java_file(path: &str) -> bool {
     lang_for_path(Path::new(path)).is_some_and(|l| l.grammar == "java")
@@ -1467,6 +1501,7 @@ mod tests {
             py: None,
             go: None,
             java: None,
+            cs: None,
         }
     }
 
@@ -1533,6 +1568,7 @@ mod tests {
             py: None,
             go: None,
             java: None,
+            cs: None,
         }];
         assert!(resolve_edges(&nodes, &raw).is_empty());
     }
@@ -1567,6 +1603,7 @@ mod tests {
             py: None,
             go: None,
             java: None,
+            cs: None,
         }];
         assert!(resolve_edges(&nodes, &raw).is_empty());
     }
@@ -1595,6 +1632,7 @@ mod tests {
             py: None,
             go: None,
             java: None,
+            cs: None,
         }];
         for i in (0..3).rev() {
             raw.push(RawEdge {
@@ -1618,6 +1656,7 @@ mod tests {
                 py: None,
                 go: None,
                 java: None,
+                cs: None,
             });
         }
         for i in 1..=3 {
@@ -1658,6 +1697,7 @@ mod tests {
             py: None,
             go: None,
             java: None,
+            cs: None,
         });
         nodes.push(node("a.ts#T4", "T4", Kind::Class, "a.ts", None));
         raw[0].recv_type = Some("T4".to_string());
@@ -1692,6 +1732,7 @@ mod tests {
             py: None,
             go: None,
             java: None,
+            cs: None,
         }];
         assert!(resolve_edges(&nodes, &raw).is_empty());
     }
@@ -1707,6 +1748,13 @@ mod tests {
     #[test]
     fn kotlin_and_csharp_ties_are_not_extracted_and_unique_stays_extracted() {
         for file in ["a.kt", "a.kts", "a.cs", "A.KT", "A.CS"] {
+            // Only the C# proof gives Extracted, so a unique typed
+            // member call stays Inferred.
+            let want = if file.to_lowercase().ends_with(".cs") {
+                Confidence::Inferred
+            } else {
+                Confidence::Extracted
+            };
             let two = vec![
                 node(&format!("{file}#T.m"), "m", Kind::Method, file, Some("T")),
                 node(&format!("{file}#T.m~2"), "m", Kind::Method, file, Some("T")),
@@ -1715,7 +1763,7 @@ mod tests {
             let one = &two[..1];
             let edges = resolve_edges(one, &[member_call(file)]);
             assert_eq!(edges.len(), 1);
-            assert_eq!(edges[0].confidence, Confidence::Extracted);
+            assert_eq!(edges[0].confidence, want);
         }
     }
 
@@ -1797,6 +1845,7 @@ mod tests {
             py: None,
             go: None,
             java: None,
+            cs: None,
         }];
         let edges = resolve_edges(&nodes, &raw);
         assert_eq!(edges.len(), 1);
@@ -1866,6 +1915,7 @@ mod tests {
             py: None,
             go: None,
             java: None,
+            cs: None,
         }];
         let idx = build_indexes(&nodes, &raw);
         let hit = resolve_trait_member("a.php", "App", "label", &idx);
@@ -1896,6 +1946,7 @@ mod tests {
             py: None,
             go: None,
             java: None,
+            cs: None,
         }
     }
 
@@ -2558,7 +2609,7 @@ mod xfile_tests {
 
     #[test]
     fn test_xfile_nested_unknown_star_aborts_the_walk() {
-        // Attack finding F2: `mid` has an unresolved star, so `top` must not
+        // `mid` has an unresolved star, so `top` must not
         // fall through to its second star `lib`.
         let mid = (
             "mid.ts",

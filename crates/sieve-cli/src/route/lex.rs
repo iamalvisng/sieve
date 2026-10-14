@@ -1,5 +1,4 @@
-//! The Bash lexer of the routing hook (`docs/design/lookup-routing-slice3.md`,
-//! section A). It splits one command into segments and sorts each segment.
+//! The Bash lexer of the routing hook. It splits one command into segments and sorts each segment.
 
 /// One word of a segment, with its quotes removed.
 #[derive(Debug, Clone, PartialEq)]

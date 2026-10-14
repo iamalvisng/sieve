@@ -1,5 +1,5 @@
-//! The same-file proof for a Rust bare call (RSX1, design `rust-xfile.md`
-//! rules R4, R5 and R14). The proof holds only when the call reaches
+//! The same-file proof for a Rust bare call (a bare
+//! call is Extracted only when one binding is proven). The proof holds only when the call reaches
 //! exactly one free `fn` item of its own module. Any doubt gives `None`,
 //! and the call then takes the capped name path in `resolve.rs`.
 
@@ -49,7 +49,7 @@ pub fn call_rec(
 }
 
 /// The type path of the innermost enclosing `impl` of `node`, or `None`
-/// when that block is a trait impl or a trait body (R10).
+/// when that block is a trait impl or a trait body.
 fn self_type(node: TsNode, source: &str) -> Option<Vec<String>> {
     let mut cur = node.parent()?;
     while !matches!(cur.kind(), "impl_item" | "trait_item") {
@@ -65,7 +65,7 @@ fn self_type(node: TsNode, source: &str) -> Option<Vec<String>> {
 }
 
 /// True when the parent of the `impl` is a file or a `mod` body. An `impl`
-/// inside a block gives `self` a new type (B2).
+/// inside a block gives `self` a new type.
 fn module_level_impl(imp: TsNode) -> bool {
     match imp.parent() {
         Some(p) if p.kind() == "source_file" => true,
@@ -109,10 +109,10 @@ fn has_bound(node: TsNode, source: &str) -> bool {
             .any(|c| c.kind() == "where_clause")
 }
 
-/// The `fn` node id that `self.f()` reaches (RMX1). The proof holds when the
+/// The `fn` node id that `self.f()` reaches. The proof holds when the
 /// caller sits in a module-level inherent `impl`, the same `impl` body holds
 /// exactly one `fn f`, and both receivers have the same form. A bound on the
-/// `impl` is no stop: the caller sits in the same block, so it holds there (B1).
+/// `impl` is no stop: the caller sits in the same block, so it holds there.
 /// Any bound on `f`,
 /// `cfg`, item macro or other doubt gives `None`.
 fn self_method_target(
@@ -169,7 +169,7 @@ fn self_method_target(
 
 /// True when every attribute before `item` is `inline`, `allow`, `doc` or
 /// `must_use`. Any other attribute (`cfg`, `cfg_attr`, `async_trait`) may
-/// change or remove the item, so it stops the proof (F1).
+/// change or remove the item, so it stops the proof.
 fn plain_attrs(item: TsNode, source: &str) -> bool {
     let mut prev = item.prev_sibling();
     while let Some(p) = prev {
@@ -632,7 +632,7 @@ mod tests {
         one_extracted(
             "mod m {\n struct S;\n impl S { fn f(&self) {} fn g(&self) { self.f(); } }\n}\n",
         );
-        // The bounds of the impl hold in the same block (B1).
+        // The bounds of the impl hold in the same block.
         one_extracted(
             "struct S<T>(T);\nimpl<T: Copy> S<T> { fn f(&self) {} fn g(&self) { self.f(); } }\n",
         );
@@ -706,7 +706,7 @@ mod tests {
 
     #[test]
     fn test_rmx1_nested_impl_self_method_no_proof() {
-        // B2: the inner impl gives `self` a new type.
+        // The inner impl gives `self` a new type.
         none_extracted("struct L;\nimpl L { fn f(&self) {} }\nfn outer() {\n struct L;\n impl L { fn g(&self) { self.f(); } }\n}\n");
     }
 }

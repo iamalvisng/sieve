@@ -2,7 +2,7 @@
   "meta": {
     "version": 1,
     "nodeCount": 276,
-    "edgeCount": 160,
+    "edgeCount": 164,
     "languages": [
       "c",
       "c_sharp",
@@ -4080,6 +4080,30 @@
     {
       "source": "cpp/rich.cpp#total",
       "target": "cpp/rich.cpp#twice",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "csharp/App.cs#Main",
+      "target": "csharp/App.cs#App",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "csharp/App.cs#Main",
+      "target": "csharp/App.cs#Greet~2",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "csharp/Rich.cs#Total",
+      "target": "csharp/Rich.cs#Area~2",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "csharp/Rich.cs#Total",
+      "target": "csharp/Rich.cs#Circle",
       "relation": "calls",
       "confidence": "extracted"
     },

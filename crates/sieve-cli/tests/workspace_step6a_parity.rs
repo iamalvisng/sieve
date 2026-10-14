@@ -83,7 +83,7 @@ fn test_p4_45_init_verbose_at_a_parent_wires_the_parent_then_each_child() {
     let out = init(&copy.path, &home.path, &["--agents", "claude", "--verbose"]);
     assert_eq!(out.status.code(), Some(0));
     let stderr = drop_update_nudge(&mask(&String::from_utf8_lossy(&out.stderr), &copy.path));
-    // The skipped-global line is a recorded deviation (ledger 2026-09-16).
+    // The skipped-global line is a deliberate design choice.
     let stderr = stderr.replace(
         "skipped global hooks under ~ \u{b7} pass --global to write them\n",
         "",
@@ -95,7 +95,7 @@ fn test_p4_45_init_verbose_at_a_parent_wires_the_parent_then_each_child() {
 /// P4-45, P4-47: the compact default at a parent. One graph line (the
 /// parent build is the workspace build, so it has no node count), one line
 /// for the agent and two epilogue lines. The recorded run prints the same text,
-/// less the `+ 3 in ~/` tail (ledger 2026-09-16).
+/// less the `+ 3 in ~/` tail.
 #[test]
 fn test_p4_45_init_compact_at_a_parent_wires_the_parent_then_each_child() {
     let copy = parent("p4-45-compact");

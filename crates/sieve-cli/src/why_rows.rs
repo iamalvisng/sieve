@@ -1,4 +1,4 @@
-//! The query-time rows of `sieve why` (F6, slice 2): reason comments, pinning
+//! The query-time rows of `sieve why`: reason comments, pinning
 //! tests and the history of one symbol span. Every row attaches to the span
 //! by its location, by a syntax-tree comment node or by a resolved call
 //! edge. No row comes from a guess about prose. Every row shows its source

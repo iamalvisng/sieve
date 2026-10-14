@@ -99,7 +99,7 @@ const REQUEST_TIMEOUT: Duration = Duration::from_millis(15_000);
 const MAX_NODES: usize = 2000;
 
 /// A ceiling on one JSON-RPC message body's declared `Content-Length`
-/// (P2-23 F8). A value past this treats the stream as broken rather than
+/// (P2-23). A value past this treats the stream as broken rather than
 /// allocating whatever size a malformed or hostile server names.
 const MAX_MESSAGE_LEN: usize = 64 * 1024 * 1024;
 
@@ -188,7 +188,7 @@ struct WriteJob {
 
 /// Writes `Content-Length`-framed bodies to `stdin` as jobs arrive on
 /// `rx`, one at a time, until a job's write fails or `rx` disconnects
-/// (P2-23 F4). Runs on its own thread so a stuck server with a full pipe
+/// (P2-23). Runs on its own thread so a stuck server with a full pipe
 /// buffer blocks this thread, never the caller waiting on `job.ack`.
 fn write_messages(mut stdin: ChildStdin, rx: Receiver<WriteJob>) {
     while let Ok(job) = rx.recv() {
@@ -211,8 +211,8 @@ struct LspClient {
     writer_tx: mpsc::Sender<WriteJob>,
     rx: Receiver<serde_json::Value>,
     next_id: i64,
-    /// Set once a write times out or the writer thread is gone (P2-23
-    /// F4). Every later `send` degrades without trying to write again.
+    /// Set once a write times out or the writer thread is gone (P2-23).
+    /// Every later `send` degrades without trying to write again.
     dead: bool,
 }
 
@@ -253,7 +253,7 @@ impl LspClient {
     }
 
     /// Frames and writes `value`, off-thread, and waits up to
-    /// [`REQUEST_TIMEOUT`] for the write itself to finish (P2-23 F4). A
+    /// [`REQUEST_TIMEOUT`] for the write itself to finish (P2-23). A
     /// stuck server with a full pipe buffer times out this call rather
     /// than hanging it; a timed-out write marks the client dead, the same
     /// degrade a timed-out read already takes.
@@ -386,7 +386,7 @@ fn read_messages(stdout: impl Read, tx: mpsc::Sender<serde_json::Value>) {
         let Some(len) = content_length else { return };
         if len > MAX_MESSAGE_LEN {
             // A broken or hostile stream: stop reading rather than
-            // allocate an attacker-chosen size (P2-23 F8). Dropping `tx`
+            // allocate an attacker-chosen size (P2-23). Dropping `tx`
             // disconnects the client's receiver, the same degrade path a
             // framing error already takes.
             return;
@@ -470,8 +470,8 @@ fn name_pos(node: &Node, source: &str) -> Option<(u32, u32)> {
         }
         let text = lines[line_no - 1];
         if let Some(byte_idx) = text.find(node.name.as_str()) {
-            // LSP `character` counts UTF-16 code units, not chars (P2-23
-            // F7): an astral-plane character before the name is two units.
+            // LSP `character` counts UTF-16 code units, not chars (P2-23):
+            // an astral-plane character before the name is two units.
             let character = text[..byte_idx].encode_utf16().count() as u32;
             return Some((line_no as u32 - 1, character));
         }
@@ -523,7 +523,7 @@ pub fn enrich_with_lsp_report_and_extra_path(
     // Canonicalize once, up front. A server reports
     // callee URIs against the real path, so a symlinked checkout (macOS
     // `/tmp` -> `/private/tmp`, common in CI) would otherwise fail
-    // `uri_to_rel`'s in-repo test for every callee (P2-23 F1). Fall back to
+    // `uri_to_rel`'s in-repo test for every callee (P2-23). Fall back to
     // the given root when canonicalize fails; the rest of this run then
     // degrades as it did before this fix.
     let root: std::path::PathBuf =
@@ -819,7 +819,7 @@ mod tests {
         assert_eq!(pos, (0, 3));
     }
 
-    /// A fake child that never reads its stdin (P2-23 F4): a write past
+    /// A fake child that never reads its stdin (P2-23): a write past
     /// the OS pipe buffer must time out, not hang the test.
     #[test]
     fn test_p2_23_f4_a_write_to_a_stuck_child_times_out_and_marks_the_client_dead() {

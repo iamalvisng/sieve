@@ -1,4 +1,4 @@
-//! F6 slice 1: `sieve why`, `sieve why --check`, the sidecar and the
+//! the decision-hint rule slice 1: `sieve why`, `sieve why --check`, the sidecar and the
 //! post-read hint, on a small fixture project.
 
 mod support;
@@ -273,7 +273,7 @@ fn mask_shas(s: &str) -> String {
         .join(" ")
 }
 
-// RSX0: the test calls `build_repo` under `use super::*`, which the same-file
+// The test calls `build_repo` under `use super::*`, which the same-file
 // proof does not cover yet, so the call is Inferred and gives no test row.
 const ROWS_GOLDEN: &str = "build_repo  fn  src/lib.rs:1-9
 decision  docs/decisions/LEDGER.md:3  2026-10-01, build takes a lock

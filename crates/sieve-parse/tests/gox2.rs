@@ -1,4 +1,4 @@
-//! GOX2: the cross-file Go proof on `tests/fixtures/gox`. A proof gives
+//! The cross-file Go proof on `tests/fixtures/gox`. A proof gives
 //! Extracted. Each stop case gives no Extracted edge.
 
 use std::path::PathBuf;

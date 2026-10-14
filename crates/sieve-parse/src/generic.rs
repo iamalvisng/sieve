@@ -286,6 +286,12 @@ impl GenericExtractor {
             walk_extract(tree.root_node(), source, &mut sink);
         }
 
+        if lang_name == "c_sharp" {
+            let file = crate::cs_tree::CsFile::new(tree.root_node(), source, &sink.defs);
+            push_cs_calls(&file, tree.root_node(), path, source, &sink, &mut raw_edges);
+            raw_edges.push(file.file_edge(path));
+        }
+
         if lang_name == "c" || lang_name == "cpp" {
             extract_includes(tree.root_node(), path, source, &mut raw_edges);
         } else if lang_name == "rust" {
@@ -300,6 +306,48 @@ impl GenericExtractor {
         }
 
         (sink.nodes, raw_edges)
+    }
+}
+
+/// Turns each C# call site into a `calls` raw edge. A bare call without a
+/// proof record keeps the old name path. A member call or a `new` without
+/// a proof record makes no edge.
+fn push_cs_calls(
+    file: &crate::cs_tree::CsFile,
+    root: TsNode,
+    path: &str,
+    source: &str,
+    sink: &DefSink,
+    raw_edges: &mut Vec<RawEdge>,
+) {
+    for site in file.sites(root, source) {
+        if !site.bare && site.rec.is_none() {
+            continue;
+        }
+        let source_id = sink.enclosing(site.at).unwrap_or_else(|| path.to_string());
+        raw_edges.push(RawEdge {
+            source: source_id,
+            relation: Relation::Calls,
+            file: path.to_string(),
+            target_id: None,
+            specifier: None,
+            name: Some(site.name),
+            via_member: false,
+            recv_type: None,
+            arg_count: None,
+            kinds: Some(vec![Kind::Function, Kind::Method]),
+            implicit_self: false,
+            direct_export: false,
+            import_name: None,
+            default_export: false,
+            reexport: None,
+            ns_export: false,
+            rust: None,
+            py: None,
+            go: None,
+            java: None,
+            cs: site.rec,
+        });
     }
 }
 
@@ -478,7 +526,7 @@ fn tags_extract(
         } else {
             None
         };
-        // RMX1: an unproven `self.f()` makes no edge.
+        // An unproven `self.f()` makes no edge.
         if lang_name == "rust"
             && rust.is_none()
             && crate::rust_proof::is_method_name(root, at, name.len())
@@ -510,6 +558,7 @@ fn tags_extract(
             py: None,
             go: None,
             java: None,
+            cs: None,
         });
     }
     for (name, at) in refs {
@@ -550,6 +599,7 @@ fn tags_extract(
             py: None,
             go: None,
             java: None,
+            cs: None,
         });
     }
 }
@@ -745,6 +795,7 @@ fn visit_includes(node: TsNode, path: &str, source: &str, raw_edges: &mut Vec<Ra
                             py: None,
                             go: None,
                             java: None,
+                            cs: None,
                         });
                     }
                 }
@@ -795,6 +846,7 @@ fn visit_uses(node: TsNode, path: &str, source: &str, raw_edges: &mut Vec<RawEdg
                     py: None,
                     go: None,
                     java: None,
+                    cs: None,
                 });
             }
         }

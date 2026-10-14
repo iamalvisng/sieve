@@ -255,7 +255,7 @@ fn setup_fake_server(label: &str) -> FakeServerSetup {
     let bin_dir = root.join("bin");
     fs::create_dir_all(&bin_dir).expect("creates the fake server's bin dir");
     // A real language server reports the real (canonicalized) path. The fixture
-    // matches that so the F1 fix (which canonicalizes `root` before comparing)
+    // matches that so the fix (which canonicalizes `root` before comparing)
     // also matches on an unremarkable temp dir with no extra symlink of its
     // own.
     let canonical_file_path = fs::canonicalize(&file_path).expect("canonicalizes a.py's path");
@@ -333,7 +333,7 @@ fn test_p2_23_f1_a_symlinked_root_still_gets_lsp_edges() {
 
     // A symlink to the real fixture root, elsewhere in the temp parent.
     // The fake server's canned callee URIs always name the real
-    // (`setup.root`) path. Passing the symlink as `root` pins the F1 fix:
+    // (`setup.root`) path. Passing the symlink as `root` pins that fix:
     // without `canonicalize`, `uri_to_rel` would compare those real-path
     // URIs against the un-resolved symlink path, textually mismatch, and
     // drop every in-repo callee as external.

@@ -1,5 +1,5 @@
-//! The package index of a repo's Go files (GOX2, design `go-xfile.md` rules
-//! GO1, GO3, GO4 and the cross-file part of GO5). The resolver builds it
+//! The package index of a repo's Go files (the cross-file
+//! Go proof). The resolver builds it
 //! from the file records and asks it to prove each `GoCall`. A proof means
 //! exactly 1 binding. Any doubt gives `None`, and the edge stays Inferred.
 
@@ -76,7 +76,7 @@ impl GoIndex {
         ix
     }
 
-    /// Reports whether the files of `dir` form clear packages (GO1): no
+    /// Reports whether the files of `dir` form clear packages: no
     /// parse error and at most 1 non-test package clause.
     fn dir_ok(&self, dir: &str) -> bool {
         !self.broken.contains(dir) && self.clauses.get(dir).is_none_or(|c| c.len() <= 1)
@@ -124,7 +124,7 @@ impl GoIndex {
         found
     }
 
-    /// The directory that the import `spec` of the file `caller` names (GO3).
+    /// The directory that the import `spec` of the file `caller` names.
     fn import_dir(&self, caller: &str, spec: &str) -> Option<String> {
         let mut best: Option<&GoModule> = None;
         for m in &self.modules {
@@ -188,7 +188,7 @@ impl GoIndex {
     }
 
     /// The package that the file-scope name `x` of `caller` names, when
-    /// exactly 1 import spec has the local name `x` (GO4). The local name is
+    /// exactly 1 import spec has the local name `x`. The local name is
     /// the alias, else the package clause of the target dir.
     fn qual_pkg(&self, caller: &str, x: &str) -> Option<Pkg> {
         let rec = self.files.get(caller)?;
@@ -264,7 +264,7 @@ impl GoIndex {
             Some(q) => self.qual_pkg(caller, q)?,
         };
         let files = self.visible(caller, mine, &tpkg);
-        // B5: a package-level `new` hides the builtin in the whole package.
+        // A package-level `new` hides the builtin in the whole package.
         if from == GoTyFrom::New && self.new_is_bound(caller, mine) {
             return None;
         }

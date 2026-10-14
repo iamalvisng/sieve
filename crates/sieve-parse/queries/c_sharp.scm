@@ -15,6 +15,6 @@
 
 (property_declaration name: (identifier) @name) @definition.variable
 
-(invocation_expression function: (identifier) @name) @reference.call
+; Calls come from `cs_proof.rs`, which proves each call or leaves it Inferred.
 
 

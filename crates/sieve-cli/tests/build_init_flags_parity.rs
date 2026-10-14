@@ -4,7 +4,7 @@
 //!
 //! Every `init` and `uninstall` run sets `HOME` to a temp dir, and the
 //! test asserts that dir is not the real home. Sieve writes under `HOME`
-//! only with `--global` (ledger 2026-09-16), and no test here passes it,
+//! only with `--global` (a deliberate design choice), and no test here passes it,
 //! so each init case asserts Sieve wrote nothing under `HOME`.
 
 mod support;

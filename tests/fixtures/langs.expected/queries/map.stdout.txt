@@ -1,9 +1,9 @@
-map · 39 files · 237 symbols · 160 links · go, java, kotlin, php, python, r, swift, typescript
+map · 39 files · 237 symbols · 164 links · go, java, kotlin, php, python, r, swift, typescript
 
 kotlin/             3 files · 27 symbols   hubs: FamAWidget (App.kt, 1←), Greeter (App.kt, 1←), helper (Calls.kt, 1←)
 php/                3 files · 26 symbols   hubs: helper (Closures.php, 3←), mk (Closures.php, 2←), Base (Closures.php, 1←)
 rust/               3 files · 26 symbols   hubs: new (rich.rs, 2←), shallow (rich.rs, 1←), square (rich.rs, 1←)
-csharp/             2 files · 18 symbols   hubs: Helper (Rich.cs, 1←)
+csharp/             2 files · 18 symbols   hubs: App (App.cs, 1←), Area (Rich.cs, 1←), Circle (Rich.cs, 1←)
 scala/              2 files · 16 symbols   hubs: area (Rich.scala, 2←), Greeter (App.scala, 1←), helper (Rich.scala, 1←)
 cpp/                2 files · 14 symbols   hubs: famB_run (app.cpp, 1←), get (rich.cpp, 1←), greet (app.cpp, 1←)
 dart/               2 files · 13 symbols   hubs: describe (rich.dart, 1←), speak (rich.dart, 1←)
@@ -24,11 +24,11 @@ helper  fn  php/Closures.php:31-33  · 3 links in
 area  fn  scala/Rich.scala:6-6  · 2 links in
 mk  method  php/Closures.php:10-12  · 2 links in
 new  fn  rust/rich.rs:18-20  · 2 links in
+App  class  csharp/App.cs:9-24  · 1 link in
 App  class  java/App.java:15-42  · 1 link in
 App  class  swift/App.swift:14-24  · 1 link in
 apply  fn  c/rich.c:24-26  · 1 link in
+Area  method  csharp/Rich.cs:21-23  · 1 link in
 Base  class  php/Closures.php:9-13  · 1 link in
-describe  fn  dart/rich.dart:29-31  · 1 link in
-FamAWidget  class  kotlin/App.kt:31-31  · 1 link in
-famB_run  fn  cpp/app.cpp:30-31  · 1 link in
-[sieve] saved ≈ 2,249 tokens
+Circle  class  csharp/Rich.cs:14-33  · 1 link in
+[sieve] saved ≈ 2,241 tokens

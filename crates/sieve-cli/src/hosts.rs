@@ -778,7 +778,7 @@ fn text_lines(text: &str) -> impl Iterator<Item = (usize, &str)> {
 
 /// Builds `.cursor/hooks.json`'s content: three Cursor hook events, each
 /// running `sieve hook <sub>` directly (Sieve resolves its own binary by
-/// `PATH`, so no local shim file is needed — see the ledger entry of
+/// `PATH`, so no local shim file is needed — see the decision of
 /// 2026-09-12, "Sieve writes no .cjs shim").
 pub fn cursor_hooks_json() -> String {
     let doc = OJson::obj(vec![
@@ -884,7 +884,31 @@ fn file_has_old_timeout(path: &Path) -> bool {
 /// `repo` and `global` pick which files to read. Each old file comes with
 /// the command that fixes it.
 pub fn setup_notes_in(home: &Path, project_dir: &Path, repo: bool, global: bool) -> Vec<SetupNote> {
-    let mut files: Vec<(PathBuf, &str)> = Vec::new();
+    let old = old_timeout_files(home, project_dir, repo, global);
+    if old.is_empty() {
+        return Vec::new();
+    }
+    let list: Vec<String> = old
+        .iter()
+        .map(|(path, cmd)| format!("{} (run `{cmd}`)", path.display()))
+        .collect();
+    vec![SetupNote {
+        text: format!(
+            "Sieve hook timeouts are from an older install (milliseconds). Old files: {}",
+            list.join(", ")
+        ),
+        global: old.iter().any(|(_, cmd)| *cmd != "sieve init"),
+    }]
+}
+
+/// The host files with an old timeout, each with the command that fixes it.
+pub fn old_timeout_files(
+    home: &Path,
+    project_dir: &Path,
+    repo: bool,
+    global: bool,
+) -> Vec<(PathBuf, &'static str)> {
+    let mut files: Vec<(PathBuf, &'static str)> = Vec::new();
     if repo {
         files.push((
             project_dir.join(".claude").join("settings.json"),
@@ -901,24 +925,10 @@ pub fn setup_notes_in(home: &Path, project_dir: &Path, repo: bool, global: bool)
             "sieve init --global --agents agents",
         ));
     }
-    let old: Vec<(PathBuf, &str)> = files
+    files
         .into_iter()
         .filter(|(path, _)| file_has_old_timeout(path))
-        .collect();
-    if old.is_empty() {
-        return Vec::new();
-    }
-    let list: Vec<String> = old
-        .iter()
-        .map(|(path, cmd)| format!("{} (run `{cmd}`)", path.display()))
-        .collect();
-    vec![SetupNote {
-        text: format!(
-            "Sieve hook timeouts are from an older install (milliseconds). Old files: {}",
-            list.join(", ")
-        ),
-        global: old.iter().any(|(_, cmd)| *cmd != "sieve init"),
-    }]
+        .collect()
 }
 
 /// Like [`setup_notes_in`], with `HOME` from the environment and both
@@ -993,7 +1003,7 @@ fn hook_command_is_ours(command: &str) -> bool {
 
 /// Returns `true` when a `permissions.allow` entry is one of Sieve's own
 /// invocation forms:
-/// `^Bash\((?:sieve|npx sieve|sieve-dev|node dist\/cli\.js)(?::|\))`.
+/// `^Bash\((?:sieve|npx sieve|sieve-dev)(?::|\))`.
 /// The prefix match drops an older form such as `Bash(sieve)`. A user
 /// entry such as `Bash(sieve-mytool:*)` stays.
 fn allow_entry_is_ours(entry: &str) -> bool {
@@ -1002,7 +1012,6 @@ fn allow_entry_is_ours(entry: &str) -> bool {
         format!("Bash({name}"),
         format!("Bash(npx {name}"),
         format!("Bash({name}-dev"),
-        "Bash(node dist/cli.js".to_string(),
     ];
     heads.iter().any(|head| {
         entry
@@ -1011,15 +1020,14 @@ fn allow_entry_is_ours(entry: &str) -> bool {
     })
 }
 
-/// The four `permissions.allow` entries `sieve init` always appends,
+/// The three `permissions.allow` entries `sieve init` always appends,
 /// branded for the active product.
-fn allow_entries() -> [String; 4] {
+fn allow_entries() -> [String; 3] {
     let name = product().name;
     [
         format!("Bash({name}:*)"),
         format!("Bash(npx {name}:*)"),
         format!("Bash({name}-dev:*)"),
-        "Bash(node dist/cli.js:*)".to_string(),
     ]
 }
 
@@ -1070,7 +1078,7 @@ fn claude_hook_block(matcher: Option<&str>, sub: &str, timeout: i64) -> OJson {
 /// other, unmanaged event (a foreign hook this merge never touches)
 /// survives untouched.
 ///
-/// F3, "remembered reads", and F1, "narrow a large Read", add a `PreToolUse`
+/// "remembered reads", and narrow-read, "narrow a large Read", add a `PreToolUse`
 /// block and the `post-read` blocks.
 fn merged_hooks_ojson(existing_hooks: Option<&OJson>) -> OJson {
     let mut hooks = OMap::from_existing(existing_hooks);
@@ -1781,6 +1789,18 @@ pub fn epilogue(counts: Option<(usize, usize)>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Asserts that a scratch HOME is not the real HOME of the test process.
+    fn assert_not_real_home(scratch: &std::path::Path) {
+        if let Some(real) = std::env::var_os("HOME") {
+            let real = std::path::PathBuf::from(real);
+            assert!(
+                scratch != real && !scratch.starts_with(&real),
+                "the scratch HOME must never be the real HOME"
+            );
+        }
+    }
+
     use std::io::Write as _;
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -1836,13 +1856,13 @@ mod tests {
             "Bash(npx sieve)",
             "Bash(npx sieve:*)",
             "Bash(sieve-dev:*)",
-            "Bash(node dist/cli.js:*)",
             "Bash(sieve:build)",
         ] {
             assert!(allow_entry_is_ours(own), "must drop {own}");
         }
         for foreign in [
             "Bash(sieve-mytool:*)",
+            "Bash(node dist/cli.js:*)",
             "Bash(ls:*)",
             "Bash(other:*)",
             "Bash(mysieve:*)",
@@ -1868,7 +1888,7 @@ mod tests {
         let dir = TempDir::new("setup-notes");
         let home = dir.path.join("home");
         let project = dir.path.join("proj");
-        assert_ne!(home, Path::new("/Users/iamalvisng"));
+        assert_not_real_home(&home);
         let user = home.join(".claude").join("settings.json");
         let ours = names::hook_command("post-edit");
         let notes = |repo, global| setup_notes_in(&home, &project, repo, global);

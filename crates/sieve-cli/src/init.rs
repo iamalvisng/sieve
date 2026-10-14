@@ -216,11 +216,19 @@ fn wire_target(
     // `--global`, so the caller prints one summary line, not one per site.
     let mut skipped_global = false;
 
-    // The writes below fix an old timeout, so warn before they run.
-    // `--no-hooks` writes no hooks. `--no-global` skips the files under `HOME`.
-    let check_hooks = !args.no_hooks;
-    for note in hosts::setup_notes_with(root, check_hooks, check_hooks && !args.no_global) {
-        say!(out, "⚠ {}", note.text);
+    // Read the old timeouts before the writes run. A file this run rewrites
+    // gets a report line after the write. Any other old file gets a warning.
+    let (old_warning, rewrote) = old_timeout_report(
+        &home_dir()?,
+        root,
+        !args.no_hooks,
+        args.no_global,
+        args.global,
+        selected.contains(&"claude"),
+        selected.contains(&"agents"),
+    );
+    if let Some(warning) = old_warning {
+        say!(out, "⚠ {warning}");
     }
 
     let retracted = retract_unselected(root, selected, args.global, args.verbose);
@@ -246,7 +254,7 @@ fn wire_target(
             merge_claude_settings(&settings_path, no_statusline).map_err(|e| e.to_string())?;
         warnings.append(&mut settings_warnings);
 
-        // No product writes a `.cjs` shim (ledger 2026-09-12): the hook and
+        // No product writes a `.cjs` shim (by design): the hook and
         // statusline commands resolve the binary by `PATH`.
 
         let skill_path = root
@@ -489,7 +497,56 @@ fn wire_target(
         let built = build_graph_if_missing(root, context_dir, args.no_build)?;
         say_build(out, built);
     }
+    for path in rewrote {
+        let line = format!(
+            "✓ Rewrote old millisecond hook timeouts in {} (now seconds).",
+            path.display()
+        );
+        if out.verbose {
+            out.say(line);
+        } else {
+            out.notes.push(line);
+        }
+    }
     Ok(retracted)
+}
+
+/// Splits the old-timeout files by what this run does. `hooks` is `false`
+/// under `--no-hooks`. `no_global` skips the files under `HOME`. `global`
+/// is `true` when the run writes under `HOME`.
+/// Gives the warning for the files this run leaves, and the files it
+/// rewrites.
+fn old_timeout_report(
+    home: &Path,
+    root: &Path,
+    hooks: bool,
+    no_global: bool,
+    global: bool,
+    claude: bool,
+    agents: bool,
+) -> (Option<String>, Vec<PathBuf>) {
+    let mut left: Vec<String> = Vec::new();
+    let mut rewrote: Vec<PathBuf> = Vec::new();
+    for (path, cmd) in hosts::old_timeout_files(home, root, hooks, hooks && !no_global) {
+        let covered = hooks
+            && match cmd {
+                "sieve init" => claude,
+                "sieve init --global" => global && !no_global && claude,
+                _ => global && !no_global && agents,
+            };
+        if covered {
+            rewrote.push(path);
+        } else {
+            left.push(format!("{} (run `{cmd}`)", path.display()));
+        }
+    }
+    let warning = (!left.is_empty()).then(|| {
+        format!(
+            "Sieve hook timeouts are from an older install (milliseconds). Old files: {}",
+            left.join(", ")
+        )
+    });
+    (warning, rewrote)
 }
 
 /// The verbose report line of the graph step.
@@ -828,9 +885,9 @@ struct PlanWrite {
 /// The files `init` writes for the selected hosts, in the
 /// order: Claude Code first, then the registry hosts. Only files
 /// Sieve really writes are listed. No product writes a `.cjs` shim or a
-/// wiring stamp (ledger 2026-09-12), and Sieve writes no Codex or opencode
+/// wiring stamp (by design), and Sieve writes no Codex or opencode
 /// MCP entry, so those rows are absent. Sieve writes under `HOME` only with
-/// `--global` (ledger 2026-09-16), so the global rows need that flag.
+/// `--global` (a deliberate design choice), so the global rows need that flag.
 /// `--no-mcp` and `--no-hooks` drop the rows the real run skips.
 fn plan_writes(
     root: &Path,
@@ -899,7 +956,7 @@ fn plan_writes(
         };
         out.push(w(root.join(&host.rel_path), false, what));
         // `--no-mcp` skips every host MCP file but Claude's `.mcp.json`, and
-        // a file under `HOME` needs `--global` (ledger 2026-09-16).
+        // a file under `HOME` needs `--global` (a deliberate design choice).
         let mcp_targets = json_mcp_targets();
         let wanted = mcp_targets
             .iter()
@@ -1708,6 +1765,18 @@ fn non_interactive_help(detected: &[String]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Asserts that a scratch HOME is not the real HOME of the test process.
+    fn assert_not_real_home(scratch: &std::path::Path) {
+        if let Some(real) = std::env::var_os("HOME") {
+            let real = std::path::PathBuf::from(real);
+            assert!(
+                scratch != real && !scratch.starts_with(&real),
+                "the scratch HOME must never be the real HOME"
+            );
+        }
+    }
+
     use std::fs;
 
     /// A scratch dir under the OS temp root that removes itself on drop.
@@ -1754,6 +1823,49 @@ mod tests {
             detect_hosts(&home.0, &repo.0, false),
             vec!["claude", "agents", "cursor", "gemini", "kiro"]
         );
+    }
+
+    fn write_old_hooks(path: &Path) {
+        fs::create_dir_all(path.parent().expect("parent")).expect("mkdir");
+        let cmd = crate::names::hook_command("post-edit");
+        let text = format!(
+            r#"{{"hooks":{{"PostToolUse":[{{"matcher":"Edit","hooks":[{{"type":"command","command":{cmd:?},"timeout":5000}}]}}]}}}}"#
+        );
+        fs::write(path, text).expect("write");
+    }
+
+    #[test]
+    fn old_timeout_report_names_a_covered_file_after_the_write() {
+        let home = Scratch::new("old-cov-home");
+        let repo = Scratch::new("old-cov-repo");
+        assert_not_real_home(&home.0);
+        let file = repo.0.join(".claude").join("settings.json");
+        write_old_hooks(&file);
+        let (warning, rewrote) =
+            old_timeout_report(&home.0, &repo.0, true, false, false, true, false);
+        assert_eq!(warning, None);
+        assert_eq!(rewrote, vec![file]);
+    }
+
+    #[test]
+    fn old_timeout_report_warns_for_an_uncovered_file() {
+        let home = Scratch::new("old-unc-home");
+        let repo = Scratch::new("old-unc-repo");
+        assert_not_real_home(&home.0);
+        write_old_hooks(&home.0.join(".claude").join("settings.json"));
+        write_old_hooks(&home.0.join(".codex").join("hooks.json"));
+        // Plain `sieve init`: neither global file is covered.
+        let (warning, rewrote) =
+            old_timeout_report(&home.0, &repo.0, true, false, false, true, true);
+        let warning = warning.expect("warning");
+        assert!(rewrote.is_empty());
+        assert!(warning.contains("`sieve init --global`"));
+        assert!(warning.contains("`sieve init --global --agents agents`"));
+        // `--global` without the agents host leaves the Codex file.
+        let (warning, rewrote) =
+            old_timeout_report(&home.0, &repo.0, true, false, true, true, false);
+        assert_eq!(rewrote.len(), 1);
+        assert!(warning.expect("warning").contains("hooks.json"));
     }
 
     #[test]

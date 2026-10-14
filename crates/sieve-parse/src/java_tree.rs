@@ -1,9 +1,9 @@
-//! The type facts of one Java file (JVX, design `java-xfile.md`). The facts
+//! The type facts of one Java file (the Java call proof). The facts
 //! feed the call proof in `java_proof.rs` and the index in `java_index.rs`.
 //! A type that sits in the member chain of a top-level type is a "clean"
 //! type and gets a `JavaType`. An anonymous class, an enum constant body and
 //! a local class get a `JavaBody`: they never hold a proof, but their
-//! method names can override a target (JV10, fix B4).
+//! method names can override a target.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -240,6 +240,7 @@ impl JavaFile {
             py: None,
             go: None,
             java: Some(JavaRec::File(Box::new(self.rec.clone()))),
+            cs: None,
         }
     }
 

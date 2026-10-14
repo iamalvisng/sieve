@@ -1,7 +1,6 @@
 //! Product strings for `sieve init`, `sieve uninstall`, the hook, and the
-//! statusline commands. A rename touches only this file (the `hosts-hooks.md`
-//! note section 3, the ledger entry of 2026-09-12, "Sieve writes no .cjs
-//! shim").
+//! statusline commands. A rename touches only this file (Sieve writes no .cjs
+//! shim).
 
 /// The binary name every written command line invokes. Sieve resolves
 /// this name by `PATH`, the way Sieve resolves the `sieve` binary for the

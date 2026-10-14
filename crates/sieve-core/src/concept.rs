@@ -431,7 +431,7 @@ mod tests {
         assert_eq!(slugs, vec!["alpha", "Bravo"]);
     }
 
-    /// F4: a non-string `slug` still counts as present, because the reader
+    /// A non-string `slug` still counts as present, because the reader
     /// coerces it with `String(fm.slug)`, and `String(0)` is `"0"`, a
     /// non-empty string.
     #[test]
@@ -446,7 +446,7 @@ mod tests {
         assert_eq!(nodes[0].slug, "0");
     }
 
-    /// F5: an explicit folded block scalar (`>-`) parses without error and
+    /// An explicit folded block scalar (`>-`) parses without error and
     /// leaves the fields Sieve reads untouched.
     #[test]
     fn parse_reads_an_explicit_folded_block_description() {
@@ -465,7 +465,7 @@ mod tests {
         assert_eq!(node.body, "body\n");
     }
 
-    /// F5: a single-quoted YAML scalar escapes an embedded quote by
+    /// A single-quoted YAML scalar escapes an embedded quote by
     /// doubling it (`'it''s'` decodes to `it's`).
     #[test]
     fn parse_decodes_a_single_quoted_escaped_apostrophe() {
@@ -474,7 +474,7 @@ mod tests {
         assert_eq!(node.name, "it's widget");
     }
 
-    /// F5: an empty `links: []` sequence parses as zero links, not as a
+    /// An empty `links: []` sequence parses as zero links, not as a
     /// missing key.
     #[test]
     fn parse_reads_an_explicit_empty_links_list() {
@@ -483,7 +483,7 @@ mod tests {
         assert!(node.links.is_empty());
     }
 
-    /// F5: the frontmatter split takes the first closing `---` fence; a
+    /// The frontmatter split takes the first closing `---` fence; a
     /// later `---` line inside the body stays in the body untouched.
     #[test]
     fn split_frontmatter_keeps_a_later_dashes_line_in_the_body() {

@@ -755,7 +755,7 @@ mod tests {
         assert!(failures.is_empty(), "{}", failures.join("\n\n"));
     }
 
-    /// DEVIATION (ledger 2026-09-30, "the regress crate runs the grep user
+    /// DEVIATION ("the regress crate runs the grep user
     /// pattern"): with `-i`, `regress` folds `ſ` (U+017F) to `s` and `ı`
     /// (U+0131) to `i`. V8 without the `u` flag folds neither. This test
     /// states the current behaviour; it does not claim a match with V8.
@@ -774,7 +774,7 @@ mod tests {
         assert!(kelvin.find("\u{212A}").is_none());
     }
 
-    /// DEVIATION (ledger 2026-09-30, "the regress crate runs the grep user
+    /// DEVIATION ("the regress crate runs the grep user
     /// pattern"): `.` matches an astral character as one character. V8
     /// without the `u` flag sees two UTF-16 units, so `^.$` fails there.
     /// This test states the current behaviour; it does not claim parity.
