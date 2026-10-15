@@ -139,14 +139,22 @@ fn prepare_case(id: &str) -> (TempDir, Vec<String>) {
     (temp, argv)
 }
 
-/// Replaces the `last 30d ago` tail of a `who to tag` line with
-/// `last <AGE>`: the owner case pins its author date, so the text report
-/// ages with the clock while the page's `last` day does not.
+/// Masks the age in a pinned-date line.
+/// A `, last 30d ago` tail becomes `, last <AGE>`.
+/// A `(3 commits, 2mo ago)` tail becomes `(3 commits, <AGE> ago)`.
+/// The cases pin the author date, so the age moves with the clock.
 fn mask_age(s: &str) -> String {
     s.lines()
-        .map(|line| match line.find(", last ") {
-            Some(at) => format!("{}, last <AGE>", &line[..at]),
-            None => line.to_string(),
+        .map(|line| {
+            if let Some(at) = line.find(", last ") {
+                return format!("{}, last <AGE>", &line[..at]);
+            }
+            match (line.rfind(" commits, "), line.strip_suffix(" ago)")) {
+                (Some(at), Some(head)) => {
+                    format!("{} commits, <AGE> ago)", &head[..at])
+                }
+                _ => line.to_string(),
+            }
         })
         .map(|line| format!("{line}\n"))
         .collect()
