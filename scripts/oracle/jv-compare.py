@@ -10,8 +10,8 @@ line of its class node, because the oracle maps a constructor to its class. A so
 node with no span uses the whole file. An unmatched edge whose source file is not
 under a given source root (default src/main/java and src/test/java) counts as
 unverified (javac never saw the file). An edge in a build or target dir counts as
-skipped-dir. B6: a matched edge whose row has ovr (an in-repo subtype overrides the
-target) counts as wrong. B7: an unmatched edge in a compiled file is wrong, and it is
+skipped-dir. A matched edge whose row has ovr (an in-repo subtype overrides the
+target) counts as wrong. An unmatched edge in a compiled file is wrong, and it is
 counted apart when the oracle has an oor (out of repo) or impl (no tree) row for the same
 name in the span. Prints: Extracted Java edges, matched, wrong (first 20 with file:line),
 unverified, skipped-dir, a count per call shape, edges to an interface or abstract
@@ -103,7 +103,7 @@ def main():
         elif hit and not ovr:
             nmatch += 1; shapes[(sh, "matched")] += 1
             if isabs: absn["matched"] += 1
-        elif hit:  # B6: a subtype overrides the target
+        elif hit:  # A subtype overrides the target
             wrong.append((s["path"], ln, e["source"], e["target"], sh + " ovr")); shapes[(sh, "wrong")] += 1
             cause["overridden"] += 1
             if isabs: absn["wrong"] += 1

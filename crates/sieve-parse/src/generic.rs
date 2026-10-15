@@ -270,7 +270,7 @@ impl GenericExtractor {
             return (Vec::new(), Vec::new());
         };
 
-        let mut sink = DefSink::new(path, source);
+        let mut sink = DefSink::new(path, source, lang_name == "c_sharp");
         let mut raw_edges = Vec::new();
         if let Some(query) = &entry.query {
             tags_extract(
@@ -347,6 +347,7 @@ fn push_cs_calls(
             go: None,
             java: None,
             cs: site.rec,
+            kt: None,
         });
     }
 }
@@ -361,10 +362,12 @@ struct DefSink<'a> {
     span_seen: HashSet<usize>,
     nodes: Vec<Node>,
     defs: Vec<(String, usize, usize)>,
+    /// True for C#. The grammar puts a leading `#if` line inside the node.
+    skip_directives: bool,
 }
 
 impl<'a> DefSink<'a> {
-    fn new(path: &'a str, source: &'a str) -> Self {
+    fn new(path: &'a str, source: &'a str, skip_directives: bool) -> Self {
         let mut minted = HashSet::new();
         minted.insert(path.to_string());
         Self {
@@ -374,7 +377,25 @@ impl<'a> DefSink<'a> {
             span_seen: HashSet::new(),
             nodes: Vec::new(),
             defs: Vec::new(),
+            skip_directives,
         }
+    }
+
+    /// The byte where a definition starts. For C#, it skips the leading
+    /// preprocessor directive lines, as Roslyn does.
+    fn start_of(&self, whole: TsNode) -> usize {
+        let mut at = whole.start_byte();
+        if !self.skip_directives {
+            return at;
+        }
+        while let Some(rest) = self.source.get(at..whole.end_byte()) {
+            let line_end = rest.find('\n').map_or(rest.len(), |i| i + 1);
+            if !rest[..line_end].trim_start().starts_with('#') || line_end == rest.len() {
+                break;
+            }
+            at += line_end;
+        }
+        at
     }
 
     /// Mints one definition node from a whole-definition tree node
@@ -388,7 +409,8 @@ impl<'a> DefSink<'a> {
         }
         self.span_seen.insert(whole.start_byte());
         let id = crate::extract::mint_id(format!("{}#{name}", self.path), &mut self.minted);
-        let start_row = whole.start_position().row as u32 + 1;
+        let start = self.start_of(whole);
+        let start_row = self.source[..start].matches('\n').count() as u32 + 1;
         let end_row = whole.end_position().row as u32 + 1;
         let line = self
             .source
@@ -396,10 +418,7 @@ impl<'a> DefSink<'a> {
             .nth(start_row as usize - 1)
             .unwrap_or("");
         let signature = clean_signature(line);
-        let body = self
-            .source
-            .get(whole.start_byte()..whole.end_byte())
-            .unwrap_or("");
+        let body = self.source.get(start..whole.end_byte()).unwrap_or("");
         self.nodes.push(Node {
             id: id.clone(),
             name: name.to_string(),
@@ -559,6 +578,7 @@ fn tags_extract(
             go: None,
             java: None,
             cs: None,
+            kt: None,
         });
     }
     for (name, at) in refs {
@@ -600,6 +620,7 @@ fn tags_extract(
             go: None,
             java: None,
             cs: None,
+            kt: None,
         });
     }
 }
@@ -796,6 +817,7 @@ fn visit_includes(node: TsNode, path: &str, source: &str, raw_edges: &mut Vec<Ra
                             go: None,
                             java: None,
                             cs: None,
+                            kt: None,
                         });
                     }
                 }
@@ -847,6 +869,7 @@ fn visit_uses(node: TsNode, path: &str, source: &str, raw_edges: &mut Vec<RawEdg
                     go: None,
                     java: None,
                     cs: None,
+                    kt: None,
                 });
             }
         }
@@ -901,6 +924,44 @@ mod tests {
             let query = Query::new(&language, &strip_predicates(scm));
             assert!(query.is_ok(), "{name}: {:?}", query.err());
         }
+    }
+
+    /// Returns the span of the named C# node.
+    fn cs_span(src: &str, name: &str) -> String {
+        let mut ext = GenericExtractor::new().expect("extractor builds");
+        let (nodes, _edges) = ext.extract_file("A.cs", src, "c_sharp");
+        let node = nodes.iter().find(|n| n.name == name).expect("node minted");
+        node.span.clone()
+    }
+
+    /// A C# type starts at its attribute line, not at a leading `#if`.
+    #[test]
+    fn a_cs_type_after_a_conditional_attribute_starts_at_the_attribute() {
+        let src = "#if X\n[Serializable]\n#endif\npublic class A\n{\n}\n";
+        assert_eq!(cs_span(src, "A"), "L2-L6");
+        let src = "struct S {}\n#if X\n[Obsolete]\n#endif\npublic interface I\n{\n}\n";
+        assert_eq!(cs_span(src, "I"), "L3-L7");
+    }
+
+    /// A C# type with a `#if` right before the declaration starts at the declaration.
+    #[test]
+    fn a_cs_type_after_a_directive_starts_at_the_declaration() {
+        let src = "#if X\npublic enum E\n{\n A\n}\n#endif\n";
+        assert_eq!(cs_span(src, "E"), "L2-L5");
+    }
+
+    /// A C# method after a directive starts at the method line.
+    #[test]
+    fn a_cs_method_after_a_directive_starts_at_the_method() {
+        let src = "class C\n{\n#if X\n    public void M()\n    {\n    }\n#endif\n}\n";
+        assert_eq!(cs_span(src, "M"), "L4-L6");
+    }
+
+    /// A C# type without a directive keeps its span.
+    #[test]
+    fn a_cs_type_without_a_directive_keeps_its_span() {
+        let src = "[Serializable]\npublic class A\n{\n}\n";
+        assert_eq!(cs_span(src, "A"), "L1-L4");
     }
 
     /// P2-05: a C function with a multi-line body mints a span that

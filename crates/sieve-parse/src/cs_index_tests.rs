@@ -59,6 +59,11 @@ impl Run {
 }
 
 fn run(files: &[(&str, &str)]) -> Run {
+    run_proj(files, &[])
+}
+
+/// Runs the files with the given `(path, text)` project manifests.
+fn run_proj(files: &[(&str, &str)], manifests: &[(&str, &str)]) -> Run {
     let mut parser = Parser::new();
     parser
         .set_language(&tree_sitter_c_sharp::LANGUAGE.into())
@@ -84,6 +89,11 @@ fn run(files: &[(&str, &str)]) -> Run {
             raws.push(e);
         }
     }
+    let manifests: Vec<(String, String)> = manifests
+        .iter()
+        .map(|(p, t)| (p.to_string(), t.to_string()))
+        .collect();
+    crate::cs_tree::stamp_projects(&manifests, false, &mut raws);
     let ix = CsIndex::build(&raws);
     let mut out: Vec<_> = raws
         .iter()
@@ -877,4 +887,297 @@ fn a_partial_base_class_stops_member_calls() {
     assert_eq!(one(&stat, "B"), None);
     let this = "partial class P { }\nclass U : P { void G() { } void F() { this.G(); } }";
     assert_eq!(one(this, "G"), None);
+}
+
+const PLAIN: &str = "<Project Sdk=\"Microsoft.NET.Sdk\"/>";
+
+/// Reports whether `new Foo()` in `p/c.cs` binds through the
+/// `global using A;` of `p/g.cs`, with the given manifests.
+fn global_binds_with(g: &str, manifests: &[(&str, &str)]) -> bool {
+    let files = [
+        ("lib/a.cs", "namespace A { class Foo {} }"),
+        ("p/g.cs", g),
+        ("p/c.cs", "class U { void F() { new Foo(); } }"),
+    ];
+    run_proj(&files, manifests).get("p/c.cs", "Foo").is_some()
+}
+
+fn global_binds(manifests: &[(&str, &str)]) -> bool {
+    global_binds_with("global using A;", manifests)
+}
+
+const TWO: [(&str, &str); 2] = [("lib/L.csproj", PLAIN), ("p/P.csproj", PLAIN)];
+
+#[test]
+fn a_global_using_of_the_same_project_binds_a_type() {
+    assert!(global_binds(&TWO));
+}
+
+#[test]
+fn a_global_using_of_another_project_neither_binds_nor_blocks() {
+    let files = [
+        (
+            "lib/a.cs",
+            "namespace A { class Foo {} }\nnamespace B { class Foo {} }",
+        ),
+        ("q/g.cs", "global using B;"),
+        ("r/d.cs", "using A;\nclass V { void F() { new Foo(); } }"),
+    ];
+    let manifests = [
+        ("lib/L.csproj", PLAIN),
+        ("q/Q.csproj", PLAIN),
+        ("r/R.csproj", PLAIN),
+    ];
+    assert!(run_proj(&files, &manifests).get("r/d.cs", "Foo").is_some());
+    let files = [
+        ("lib/a.cs", "namespace A { class Foo {} }"),
+        ("q/g.cs", "global using A;"),
+        ("r/d.cs", "class V { void F() { new Foo(); } }"),
+    ];
+    assert_eq!(run_proj(&files, &manifests).get("r/d.cs", "Foo"), None);
+}
+
+#[test]
+fn a_file_with_no_project_never_shares_a_global_using() {
+    let files = [
+        ("lib/a.cs", "namespace A { class Foo {} }"),
+        ("p/g.cs", "global using A;"),
+        ("x.cs", "class U { void F() { new Foo(); } }"),
+        ("p/c.cs", "class W { void F() { new Foo(); } }"),
+    ];
+    let r = run_proj(&files, &TWO);
+    assert_eq!(r.get("x.cs", "Foo"), None);
+    assert!(r.get("p/c.cs", "Foo").is_some());
+}
+
+#[test]
+fn a_global_using_in_an_if_region_or_a_broken_file_stops() {
+    assert!(!global_binds_with(
+        "#if DEBUG\nglobal using A;\n#endif",
+        &TWO
+    ));
+    assert!(!global_binds_with(
+        "global using A;\nclass Z { void M( }",
+        &TWO
+    ));
+}
+
+#[test]
+fn a_project_whose_file_set_can_change_keeps_the_old_stop() {
+    let compile = "<Project><ItemGroup><Compile Remove=\"x.cs\"/></ItemGroup></Project>";
+    for text in [
+        compile,
+        "<Project><EnableDefaultCompileItems>false</EnableDefaultCompileItems></Project>",
+        "<Project><EnableDefaultItems>false</EnableDefaultItems></Project>",
+        "<Project><DefaultItemExcludes>x</DefaultItemExcludes></Project>",
+    ] {
+        assert!(
+            !global_binds(&[("lib/L.csproj", PLAIN), ("p/P.csproj", text)]),
+            "{text}"
+        );
+    }
+    // A shared file above the project counts too.
+    let mut shared = TWO.to_vec();
+    shared.push(("Directory.Build.props", compile));
+    assert!(!global_binds(&shared));
+}
+
+#[test]
+fn a_nested_project_or_two_projects_in_one_directory_keep_the_old_stop() {
+    let mut nested = TWO.to_vec();
+    nested.push(("p/sub/S.csproj", PLAIN));
+    assert!(!global_binds(&nested));
+    let mut above = TWO.to_vec();
+    above.push(("Top.csproj", PLAIN));
+    assert!(!global_binds(&above));
+    let mut twin = TWO.to_vec();
+    twin.push(("p/Q.csproj", PLAIN));
+    assert!(!global_binds(&twin));
+}
+
+#[test]
+fn a_linked_compile_item_anywhere_keeps_the_old_stop_but_an_update_does_not() {
+    let link = "<Project><Compile Include=\"..\\x\\a.cs\" Link=\"a.cs\"/></Project>";
+    let update = "<Project><Compile Update=\"..\\x\\a.cs\"/></Project>";
+    let var = "<Project><Compile Include=\"$(Root)/a.cs\"/></Project>";
+    for (text, binds) in [(link, false), (var, false), (update, true)] {
+        let manifests = [
+            ("lib/L.csproj", PLAIN),
+            ("p/P.csproj", PLAIN),
+            ("z/Z.csproj", text),
+        ];
+        assert_eq!(global_binds(&manifests), binds, "{text}");
+    }
+}
+
+fn imports(target: &str) -> String {
+    format!("<Project><Import Project=\"{target}\"/></Project>")
+}
+
+#[test]
+fn a_followed_local_import_with_clean_text_keeps_the_project_exact() {
+    let p = imports("..\\shared\\x.props");
+    let m = [
+        ("lib/L.csproj", PLAIN),
+        ("p/P.csproj", p.as_str()),
+        ("shared/x.props", "<Project><PropertyGroup/></Project>"),
+    ];
+    assert!(global_binds(&m));
+    let d = imports("$(MSBuildThisFileDirectory)Directory.Version.props");
+    let m = [
+        ("lib/L.csproj", PLAIN),
+        ("p/P.csproj", PLAIN),
+        ("Directory.Build.props", d.as_str()),
+        ("Directory.Version.props", "<Project/>"),
+    ];
+    assert!(global_binds(&m));
+}
+
+#[test]
+fn an_import_that_cannot_be_followed_keeps_the_old_stop() {
+    let clean = "<Project/>";
+    let with_compile = "<Project><Compile Remove=\"a.cs\"/></Project>";
+    let loop_a = imports("b.props");
+    let loop_b = imports("a.props");
+    let cases: Vec<Vec<(&str, String)>> = vec![
+        // The imported file holds a Compile item.
+        vec![
+            ("p/P.csproj", imports("x.props")),
+            ("p/x.props", with_compile.to_string()),
+        ],
+        // The import value holds another property.
+        vec![
+            ("p/P.csproj", imports("$(Other)/x.props")),
+            ("p/x.props", clean.to_string()),
+        ],
+        // The imported file is missing.
+        vec![("p/P.csproj", imports("none.props"))],
+        // The imports form a cycle.
+        vec![
+            ("p/P.csproj", imports("a.props")),
+            ("p/a.props", loop_a),
+            ("p/b.props", loop_b),
+        ],
+    ];
+    for case in cases {
+        let mut m = vec![("lib/L.csproj", PLAIN.to_string())];
+        m.extend(case);
+        let refs: Vec<(&str, &str)> = m.iter().map(|(a, b)| (*a, b.as_str())).collect();
+        assert!(!global_binds(&refs), "{m:?}");
+    }
+}
+
+#[test]
+fn a_using_item_leaves_the_project_exact() {
+    let using = "<Project Sdk=\"Microsoft.NET.Sdk\"><Using Include=\"X\"/></Project>";
+    assert!(global_binds(&[
+        ("lib/L.csproj", PLAIN),
+        ("p/P.csproj", using)
+    ]));
+}
+
+fn bound_with(extra: &[(&str, &str)]) -> bool {
+    let mut m = vec![("lib/L.csproj", PLAIN)];
+    m.extend_from_slice(extra);
+    global_binds(&m)
+}
+
+#[test]
+fn a_conditional_import_is_followed_and_checked() {
+    let p = "<Project><Import Project=\"x.props\" Condition=\"Exists('x.props')\"/></Project>";
+    assert!(bound_with(&[
+        ("p/P.csproj", p),
+        ("p/x.props", "<Project/>")
+    ]));
+    let bad = "<Project><Compile Remove=\"a.cs\"/></Project>";
+    assert!(!bound_with(&[("p/P.csproj", p), ("p/x.props", bad)]));
+}
+
+#[test]
+fn an_import_with_a_path_outside_the_repo_or_a_odd_form_keeps_the_old_stop() {
+    let ok = "<Project/>";
+    for p in [
+        "<Project><Import Project=\"/abs/x.props\"/></Project>",
+        "<Project><Import Project=\"..\\..\\x.props\"/></Project>",
+        "<Project><Import Project='x.props'/></Project>",
+    ] {
+        assert!(
+            !bound_with(&[("p/P.csproj", p), ("p/x.props", ok), ("x.props", ok)]),
+            "{p}"
+        );
+    }
+}
+
+#[test]
+fn an_import_chain_deeper_than_four_files_keeps_the_old_stop() {
+    let chain = |n: usize| -> Vec<(String, String)> {
+        let mut m = vec![("p/P.csproj".to_string(), imports("f1.props"))];
+        for i in 1..=n {
+            let text = if i < n {
+                imports(&format!("f{}.props", i + 1))
+            } else {
+                "<Project/>".to_string()
+            };
+            m.push((format!("p/f{i}.props"), text));
+        }
+        m
+    };
+    let run = |n: usize| {
+        let m = chain(n);
+        let refs: Vec<(&str, &str)> = m.iter().map(|(a, b)| (a.as_str(), b.as_str())).collect();
+        bound_with(&refs)
+    };
+    assert!(run(4));
+    assert!(!run(5));
+}
+
+#[test]
+fn a_tab_between_import_and_project_is_followed() {
+    let p = "<Project><Import\tProject=\"x.props\"/></Project>";
+    assert!(bound_with(&[
+        ("p/P.csproj", p),
+        ("p/x.props", "<Project/>")
+    ]));
+}
+
+#[test]
+fn a_using_item_with_an_alias_or_static_attribute_keeps_the_old_stop() {
+    for tag in [
+        "<Using Include=\"X.Y\" Alias=\"Z\"/>",
+        "<Using Include=\"X.Y\" Static=\"true\"/>",
+    ] {
+        let p = format!("<Project>{tag}</Project>");
+        assert!(!bound_with(&[("p/P.csproj", p.as_str())]), "{tag}");
+        let q = imports("x.props");
+        let x = format!("<Project>{tag}</Project>");
+        assert!(
+            !bound_with(&[("p/P.csproj", q.as_str()), ("p/x.props", x.as_str())]),
+            "{tag}"
+        );
+    }
+    let plain = "<Project><Using Include=\"X.Y\"/></Project>";
+    assert!(bound_with(&[("p/P.csproj", plain)]));
+}
+
+#[test]
+fn a_global_using_in_a_default_excluded_folder_keeps_the_old_stop() {
+    for g in ["p/obj/g.cs", "p/bin/g.cs", "p/.hid/g.cs"] {
+        let files = [
+            ("lib/a.cs", "namespace A { class Foo {} }"),
+            (g, "global using A;"),
+            ("p/c.cs", "class U { void F() { new Foo(); } }"),
+        ];
+        assert_eq!(run_proj(&files, &TWO).get("p/c.cs", "Foo"), None, "{g}");
+    }
+}
+
+#[test]
+fn a_linked_compile_value_in_other_forms_keeps_the_old_stop() {
+    for v in ["C:\\x\\a.cs", "@(Other)", "%(Dir)a.cs", "\\x\\a.cs"] {
+        let z = format!("<Project><Compile Include=\"{v}\"/></Project>");
+        assert!(
+            !bound_with(&[("p/P.csproj", PLAIN), ("z/Z.csproj", z.as_str())]),
+            "{v}"
+        );
+    }
 }

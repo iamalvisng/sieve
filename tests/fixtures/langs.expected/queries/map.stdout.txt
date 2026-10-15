@@ -1,6 +1,6 @@
-map · 39 files · 237 symbols · 164 links · go, java, kotlin, php, python, r, swift, typescript
+map · 39 files · 237 symbols · 165 links · go, java, kotlin, php, python, r, swift, typescript
 
-kotlin/             3 files · 27 symbols   hubs: FamAWidget (App.kt, 1←), Greeter (App.kt, 1←), helper (Calls.kt, 1←)
+kotlin/             3 files · 27 symbols   hubs: Box (Calls.kt, 1←), FamAWidget (App.kt, 1←), Greeter (App.kt, 1←)
 php/                3 files · 26 symbols   hubs: helper (Closures.php, 3←), mk (Closures.php, 2←), Base (Closures.php, 1←)
 rust/               3 files · 26 symbols   hubs: new (rich.rs, 2←), shallow (rich.rs, 1←), square (rich.rs, 1←)
 csharp/             2 files · 18 symbols   hubs: App (App.cs, 1←), Area (Rich.cs, 1←), Circle (Rich.cs, 1←)
@@ -30,5 +30,5 @@ App  class  swift/App.swift:14-24  · 1 link in
 apply  fn  c/rich.c:24-26  · 1 link in
 Area  method  csharp/Rich.cs:21-23  · 1 link in
 Base  class  php/Closures.php:9-13  · 1 link in
-Circle  class  csharp/Rich.cs:14-33  · 1 link in
-[sieve] saved ≈ 2,241 tokens
+Box  class  kotlin/Calls.kt:1-11  · 1 link in
+[sieve] saved ≈ 2,242 tokens

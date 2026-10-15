@@ -91,7 +91,7 @@ impl fmt::Display for Refused {
         write!(
             f,
             "build refused: the projected peak memory is {} MB and the ceiling is {} MB \
-             — build a smaller part with --only-dir, split the workspace (P2-39), \
+             — build a smaller part with --only-dir, split the workspace, \
              or set {CEILING_ENV}",
             self.projected / MB,
             self.ceiling / MB

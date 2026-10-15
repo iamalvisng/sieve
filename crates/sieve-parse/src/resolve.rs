@@ -8,10 +8,11 @@ use sieve_core::lang::lang_for_path;
 use sieve_core::{Confidence, Edge, Kind, Node, Relation};
 
 use crate::cs_index::CsIndex;
-use crate::extract::{CsRec, CsShape, GoRec, JavaRec, PyRec, RawEdge, ReExport, RustRec};
+use crate::extract::{CsRec, CsShape, GoRec, JavaRec, KtRec, PyRec, RawEdge, ReExport, RustRec};
 use crate::generic::generic_lang_of;
 use crate::go_index::GoIndex;
 use crate::java_index::JavaIndex;
+use crate::kt_index::KtIndex;
 use crate::py_tree::{Outcome as PyOutcome, PyIndex};
 use crate::rust_tree::{Outcome, RustIndex, RustPackage};
 
@@ -75,6 +76,8 @@ struct Indexes<'a> {
     java: JavaIndex,
     /// The C# type index, for exact C# call links.
     cs: CsIndex,
+    /// The Kotlin file index, for exact Kotlin call links.
+    kt: KtIndex,
     /// Ids of the definitions a `contains` raw edge marks as a direct
     /// named export (TS and JS).
     direct_exports: HashSet<&'a str>,
@@ -125,6 +128,7 @@ pub fn resolve_edges_with_context(
     idx.go = GoIndex::build(raw, go_modules);
     idx.java = JavaIndex::build(raw);
     idx.cs = CsIndex::build(raw);
+    idx.kt = KtIndex::build(raw);
 
     let mut out: Vec<Edge> = Vec::new();
     let mut seen: HashSet<(String, &'static str, String)> = HashSet::new();
@@ -314,6 +318,7 @@ fn build_indexes<'a>(nodes: &'a [Node], raw: &'a [RawEdge]) -> Indexes<'a> {
         go: GoIndex::default(),
         java: JavaIndex::default(),
         cs: CsIndex::default(),
+        kt: KtIndex::default(),
     }
 }
 
@@ -534,15 +539,28 @@ fn resolve_calls(raw: &RawEdge, idx: &Indexes) -> Option<Edge> {
             return None;
         }
     }
+    if let Some(KtRec::Cross(call)) = &raw.kt {
+        if let Some(target) = idx.kt.resolve(&raw.file, call, name) {
+            if idx.node_ids.contains(target.as_str()) {
+                return Some(Edge {
+                    source: raw.source.clone(),
+                    target,
+                    relation: Relation::Calls,
+                    confidence: Confidence::Extracted,
+                });
+            }
+        }
+    }
     if raw.via_member {
         let recv_type = raw.recv_type.as_deref()?;
         let (target, mut confidence) =
             resolve_typed_member(&raw.file, recv_type, name, raw.arg_count, idx)?;
         // Only the proof gives Extracted for a `.py`,
-        // `.go`, `.java` or `.cs` call.
+        // `.go`, `.java`, `.kt` or `.cs` call.
         if is_python_file(&raw.file)
             || is_go_file(&raw.file)
             || is_java_file(&raw.file)
+            || is_kotlin_file(&raw.file)
             || is_csharp_file(&raw.file)
         {
             confidence = Confidence::Inferred;
@@ -585,11 +603,12 @@ fn resolve_calls(raw: &RawEdge, idx: &Indexes) -> Option<Edge> {
     let kinds = raw.kinds.clone().unwrap_or_else(|| bare_kinds(&raw.file));
     if let Some((target, mut confidence)) = resolve_name(&raw.file, name, &kinds, idx) {
         // Only the proof gives Extracted for a `.rs`,
-        // `.java` or `.cs` call.
+        // `.java`, `.kt` or `.cs` call.
         if raw.file.ends_with(".rs")
             || is_python_file(&raw.file)
             || is_go_file(&raw.file)
             || is_java_file(&raw.file)
+            || is_kotlin_file(&raw.file)
             || is_csharp_file(&raw.file)
         {
             confidence = Confidence::Inferred;
@@ -1167,6 +1186,11 @@ fn is_java_file(path: &str) -> bool {
     lang_for_path(Path::new(path)).is_some_and(|l| l.grammar == "java")
 }
 
+/// Reports whether `path`'s grammar is Kotlin.
+fn is_kotlin_file(path: &str) -> bool {
+    lang_for_path(Path::new(path)).is_some_and(|l| l.grammar == "kotlin")
+}
+
 /// Reports whether `path`'s grammar is PHP.
 fn is_php_file(path: &str) -> bool {
     lang_for_path(Path::new(path)).is_some_and(|l| l.grammar == "php")
@@ -1502,6 +1526,7 @@ mod tests {
             go: None,
             java: None,
             cs: None,
+            kt: None,
         }
     }
 
@@ -1569,6 +1594,7 @@ mod tests {
             go: None,
             java: None,
             cs: None,
+            kt: None,
         }];
         assert!(resolve_edges(&nodes, &raw).is_empty());
     }
@@ -1604,6 +1630,7 @@ mod tests {
             go: None,
             java: None,
             cs: None,
+            kt: None,
         }];
         assert!(resolve_edges(&nodes, &raw).is_empty());
     }
@@ -1633,6 +1660,7 @@ mod tests {
             go: None,
             java: None,
             cs: None,
+            kt: None,
         }];
         for i in (0..3).rev() {
             raw.push(RawEdge {
@@ -1657,6 +1685,7 @@ mod tests {
                 go: None,
                 java: None,
                 cs: None,
+                kt: None,
             });
         }
         for i in 1..=3 {
@@ -1698,6 +1727,7 @@ mod tests {
             go: None,
             java: None,
             cs: None,
+            kt: None,
         });
         nodes.push(node("a.ts#T4", "T4", Kind::Class, "a.ts", None));
         raw[0].recv_type = Some("T4".to_string());
@@ -1733,6 +1763,7 @@ mod tests {
             go: None,
             java: None,
             cs: None,
+            kt: None,
         }];
         assert!(resolve_edges(&nodes, &raw).is_empty());
     }
@@ -1746,15 +1777,11 @@ mod tests {
     }
 
     #[test]
-    fn kotlin_and_csharp_ties_are_not_extracted_and_unique_stays_extracted() {
+    fn kotlin_and_csharp_ties_are_not_extracted_and_unique_stays_inferred() {
         for file in ["a.kt", "a.kts", "a.cs", "A.KT", "A.CS"] {
-            // Only the C# proof gives Extracted, so a unique typed
-            // member call stays Inferred.
-            let want = if file.to_lowercase().ends_with(".cs") {
-                Confidence::Inferred
-            } else {
-                Confidence::Extracted
-            };
+            // Only the Kotlin and C# proofs give Extracted, so a unique
+            // typed member call stays Inferred.
+            let want = Confidence::Inferred;
             let two = vec![
                 node(&format!("{file}#T.m"), "m", Kind::Method, file, Some("T")),
                 node(&format!("{file}#T.m~2"), "m", Kind::Method, file, Some("T")),
@@ -1846,6 +1873,7 @@ mod tests {
             go: None,
             java: None,
             cs: None,
+            kt: None,
         }];
         let edges = resolve_edges(&nodes, &raw);
         assert_eq!(edges.len(), 1);
@@ -1916,6 +1944,7 @@ mod tests {
             go: None,
             java: None,
             cs: None,
+            kt: None,
         }];
         let idx = build_indexes(&nodes, &raw);
         let hit = resolve_trait_member("a.php", "App", "label", &idx);
@@ -1947,6 +1976,7 @@ mod tests {
             go: None,
             java: None,
             cs: None,
+            kt: None,
         }
     }
 

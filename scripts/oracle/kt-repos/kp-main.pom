@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<!-- Classpath pom for the Kotlin oracle. It lists the repo's declared dependencies, nothing else.
+     Kotlin stdlib comes from kotlinc 2.4.21, not from this pom. Resolve with ../kt-cp.sh. -->
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>sieve.oracle</groupId><artifactId>kp-main</artifactId><version>0</version>
+  <dependencies>
+    <dependency><groupId>org.jetbrains.kotlin</groupId><artifactId>kotlin-reflect</artifactId><version>2.4.21</version></dependency>
+  </dependencies>
+</project>

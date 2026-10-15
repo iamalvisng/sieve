@@ -351,13 +351,13 @@ fn answer_read(
     let shown = NARROWED_LINES.min(total);
     let note = if bash {
         &format!(
-            "[sieve] F1: a hook replaced your command. You got {shown} of {total} lines. \
+            "[sieve] Sieve replaced your command. You got {shown} of {total} lines. \
              For more, run `sed -n '{},200p' {path}`, or Read with offset and limit.",
             shown + 1
         )
     } else {
         &format!(
-            "[sieve] F1 narrowed this Read to {shown} of {total} lines of {rel}. Read a span \
+            "[sieve] Sieve narrowed this Read to {shown} of {total} lines of {rel}. Read a span \
              with offset and limit, or run `sieve ask \"<name>\" --source` for a symbol."
         )
     };
@@ -846,7 +846,7 @@ mod tests {
         assert!(text.contains("beta  fn"), "{text}");
         assert_eq!(
             last_line(&text),
-            "[sieve] F1 narrowed this Read to 5 of 5 lines of src/lib.rs. Read a span with \
+            "[sieve] Sieve narrowed this Read to 5 of 5 lines of src/lib.rs. Read a span with \
              offset and limit, or run `sieve ask \"<name>\" --source` for a symbol."
         );
     }
@@ -900,7 +900,7 @@ mod tests {
         assert!(note.contains("sed -n '6,200p'"), "{note}");
         assert!(note.contains(&path), "{note}");
         assert!(note.contains("5 of 5 lines"), "{note}");
-        assert!(note.contains("hook replaced your command"), "{note}");
+        assert!(note.contains("Sieve replaced your command"), "{note}");
         // The note names two routes: `sed -n` and the Read tool.
         assert!(note.contains("or Read with offset and limit"), "{note}");
         let read = answer(&d.0, &ctx, &intent).expect("read answer");

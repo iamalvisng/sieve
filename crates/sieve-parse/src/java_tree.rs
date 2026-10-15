@@ -241,6 +241,7 @@ impl JavaFile {
             go: None,
             java: Some(JavaRec::File(Box::new(self.rec.clone()))),
             cs: None,
+            kt: None,
         }
     }
 

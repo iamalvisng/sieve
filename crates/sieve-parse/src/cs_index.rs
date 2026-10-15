@@ -342,6 +342,9 @@ pub struct CsIndex {
     nss: HashSet<String>,
     /// Every `global using` of the repo, with the file that holds it.
     globals: Vec<(usize, CsUsing)>,
+    /// The directories of the projects whose `global using` set is not
+    /// known: a directive inside an `#if` region or in a broken file.
+    unknown_globals: HashSet<String>,
     /// The names of the in-repo extension methods.
     ext_names: HashSet<String>,
     /// A file with a parse error holds an extension method signature, so
@@ -432,6 +435,24 @@ fn levels(ns: &str) -> Vec<String> {
     out
 }
 
+/// Reports whether the file `path` sits under a `bin`, an `obj` or a dot
+/// folder inside its project. MSBuild leaves such a file out of the
+/// project by default.
+fn default_excluded(path: &str, rec: &CsFileRec) -> bool {
+    let Some(p) = rec.proj.as_ref() else {
+        return false;
+    };
+    let rel = path
+        .strip_prefix(p.dir.as_str())
+        .unwrap_or(path)
+        .trim_start_matches('/');
+    let mut segs: Vec<&str> = rel.split('/').collect();
+    segs.pop();
+    segs.iter().any(|s| {
+        s.eq_ignore_ascii_case("bin") || s.eq_ignore_ascii_case("obj") || s.starts_with('.')
+    })
+}
+
 impl CsIndex {
     /// Reads the file records of `raw`.
     pub fn build(raw: &[RawEdge]) -> Self {
@@ -469,7 +490,7 @@ impl CsIndex {
         let files = std::mem::take(&mut self.files);
         let mut groups: Vec<(String, Vec<Ty>)> = Vec::new();
         let mut group_of: HashMap<String, Vec<usize>> = HashMap::new();
-        for (fi, (_, rec)) in files.iter().enumerate() {
+        for (fi, (path, rec)) in files.iter().enumerate() {
             for (ti, t) in rec.types.iter().enumerate() {
                 let mut names = vec![t.name.as_str()];
                 let mut cur = t.outer;
@@ -510,6 +531,10 @@ impl CsIndex {
                 }
             }
             for u in rec.usings.iter().filter(|u| u.global) {
+                if u.cond || rec.broken || default_excluded(path, rec) {
+                    let dir = rec.proj.as_ref().map(|p| p.dir.clone());
+                    self.unknown_globals.extend(dir);
+                }
                 self.globals.push((fi, u.clone()));
             }
         }
@@ -980,10 +1005,17 @@ impl CsIndex {
         // Step 3: the `using` directives of the file, then the global ones.
         let mut own: Vec<usize> = Vec::new();
         let mut global: Vec<usize> = Vec::new();
+        let scope = self.global_scope(fi);
         let mine = rec.usings.iter().filter(|u| !u.global).map(|u| (fi, u));
         let all = self.globals.iter().map(|(f, u)| (*f, u));
         for (f, u) in mine.chain(all) {
             if u.alias.is_some() || u.stat {
+                continue;
+            }
+            // With an exact project, only its own globals count.
+            if scope.is_some_and(|dir| {
+                f != fi && self.files[f].1.proj.as_ref().map(|p| p.dir.as_str()) != Some(dir)
+            }) {
                 continue;
             }
             let key = format!("{}.{n}", u.path);
@@ -998,6 +1030,21 @@ impl CsIndex {
         own.dedup();
         global.sort_unstable();
         global.dedup();
+        if scope.is_some() {
+            // The file `using` lines and the project globals form one level.
+            own.extend(global);
+            own.sort_unstable();
+            own.dedup();
+            match own.as_slice() {
+                [one] => return self.checked(*one),
+                [] => {}
+                _ => return Res::Stop,
+            }
+            return match FROZEN_CLASSES.iter().find(|c| c.0 == n) {
+                Some(c) => Res::Frozen(c.0),
+                None => Res::Missing,
+            };
+        }
         match (own.as_slice(), global.as_slice()) {
             ([one], g) if g.iter().all(|x| x == one) => return self.checked(*one),
             ([], []) => {}
@@ -1009,6 +1056,13 @@ impl CsIndex {
             Some(c) => Res::Frozen(c.0),
             None => Res::Missing,
         }
+    }
+
+    /// The directory of the project of the file `fi` when the project
+    /// holds exactly its own files and its `global using` set is known.
+    fn global_scope(&self, fi: usize) -> Option<&str> {
+        let p = self.files[fi].1.proj.as_ref()?;
+        (p.exact && !self.unknown_globals.contains(&p.dir)).then_some(p.dir.as_str())
     }
 
     /// A found type that the proof cannot read gives `Stop`.

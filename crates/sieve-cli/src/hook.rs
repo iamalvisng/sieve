@@ -3189,7 +3189,7 @@ mod tests {
             "the note holds the skeleton: {note}"
         );
         assert!(
-            note.contains("F1 narrowed this Read"),
+            note.contains("Sieve narrowed this Read"),
             "the note names the narrowing: {note}"
         );
         assert_eq!(
@@ -3486,7 +3486,7 @@ mod tests {
             note.contains("f0  fn"),
             "the note holds the skeleton: {note}"
         );
-        assert!(note.contains("hook replaced your command"), "{note}");
+        assert!(note.contains("Sieve replaced your command"), "{note}");
         assert_eq!(
             handle_post_bash(&input, &dir.path),
             None,

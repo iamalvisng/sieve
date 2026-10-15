@@ -114,6 +114,7 @@ pub fn push_file_record(
         go: None,
         java: None,
         cs: None,
+        kt: None,
     });
 }
 

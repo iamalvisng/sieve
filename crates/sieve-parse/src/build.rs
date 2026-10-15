@@ -138,8 +138,7 @@ pub fn build_graph(root: &Path, context_dir: &Path) -> std::io::Result<Graph> {
     let go_modules = discover_go_modules(root, &files)?;
     let rust_packages = discover_rust_packages(root, &files);
     let (mut graph, mut raw_edges) = build_graph_with_raw(root, context_dir)?;
-    let hidden = has_hidden_cs_manifest(root, &files);
-    crate::cs_tree::stamp_projects(&discover_cs_manifests(root, &files), hidden, &mut raw_edges);
+    stamp_cs_projects(root, &files, &mut raw_edges);
     graph.edges = resolve_edges_with_context(&graph.nodes, &raw_edges, &go_modules, &rust_packages);
     graph.meta.edge_count = graph.edges.len();
     Ok(graph)
@@ -317,7 +316,20 @@ fn discover_rust_packages(root: &Path, files: &[PathBuf]) -> Vec<RustPackage> {
     packages(&manifests, &rels)
 }
 
-/// Reads every `.csproj`, `Directory.Build.props` and `Directory.Build.targets`
+/// Stamps the C# project facts on the raw edges. A repo with no `.cs` file
+/// does none of this work.
+fn stamp_cs_projects(root: &Path, files: &[PathBuf], raw: &mut [RawEdge]) {
+    if !files
+        .iter()
+        .any(|f| f.extension().is_some_and(|e| e == "cs"))
+    {
+        return;
+    }
+    let hidden = has_hidden_cs_manifest(root, files);
+    crate::cs_tree::stamp_projects(&discover_cs_manifests(root, files), hidden, raw);
+}
+
+/// Reads every `.csproj`, `.props` and `.targets`
 /// file under `files` as `(path, text)`, for the C# project facts. A file that
 /// this cannot read is skipped.
 fn discover_cs_manifests(root: &Path, files: &[PathBuf]) -> Vec<(String, String)> {
@@ -325,9 +337,9 @@ fn discover_cs_manifests(root: &Path, files: &[PathBuf]) -> Vec<(String, String)
         .iter()
         .filter(|rel| {
             let name = rel.file_name().and_then(|n| n.to_str()).unwrap_or("");
-            name.ends_with(".csproj")
-                || name == "Directory.Build.props"
-                || name == "Directory.Build.targets"
+            [".csproj", ".props", ".targets"]
+                .iter()
+                .any(|ext| name.ends_with(ext))
         })
         .filter_map(|rel| {
             let bytes = fs::read(root.join(rel)).ok()?;
@@ -869,8 +881,7 @@ pub fn build_graph_cached_with(
 
     let go_modules = discover_go_modules(root, &files)?;
     let rust_packages = discover_rust_packages(root, &files);
-    let hidden = has_hidden_cs_manifest(root, &files);
-    crate::cs_tree::stamp_projects(&discover_cs_manifests(root, &files), hidden, &mut raw_edges);
+    stamp_cs_projects(root, &files, &mut raw_edges);
     let mut graph = assemble(root, &files, nodes, &raw_edges, languages);
     timer.lap("modules and assemble");
     graph.edges = resolve_edges_with_context(&graph.nodes, &raw_edges, &go_modules, &rust_packages);

@@ -2,7 +2,7 @@
   "meta": {
     "version": 1,
     "nodeCount": 276,
-    "edgeCount": 164,
+    "edgeCount": 165,
     "languages": [
       "c",
       "c_sharp",
@@ -4414,6 +4414,12 @@
       "confidence": "extracted"
     },
     {
+      "source": "kotlin/Calls.kt#Box.make",
+      "target": "kotlin/Calls.kt#Box",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
       "source": "kotlin/Calls.kt#Box.reopen",
       "target": "kotlin/Calls.kt#Box.open",
       "relation": "calls",
@@ -4423,7 +4429,7 @@
       "source": "kotlin/Calls.kt#each",
       "target": "kotlin/Calls.kt#helper",
       "relation": "calls",
-      "confidence": "extracted"
+      "confidence": "inferred"
     },
     {
       "source": "kotlin/Enums.kt",

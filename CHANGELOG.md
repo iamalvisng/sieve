@@ -5,6 +5,27 @@ All notable changes to this project are in this file.
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.7] - 2026-10-15
+
+This release adds exact call links for Kotlin, and C# calls that reach a type through a `global using`.
+
+### Added
+
+- C# calls resolve a type through a `global using` of the same project.
+- Exact Kotlin call links. Sieve marks a Kotlin call Extracted only when it proves one target. The proof covers bare calls, `this.f()` calls and constructor calls, across files through imports and packages. Calls on a receiver such as `x.f()` stay Inferred. Sieve checks overrides across the in-repo subtypes. A call to an interface, abstract or `expect` target stays Inferred.
+- The oracle scripts `scripts/oracle/KtCalls.kt`, `scripts/oracle/kt-calls.sh` and `scripts/oracle/kt-compare.py` check Kotlin links against the Kotlin compiler (kotlinc 2.4.21, K2). Results, Extracted / matched / wrong / unverified: mockito-kotlin v6.4.0 120 / 120 / 0 / 0, kotlinpoet 2.4.0 412 / 388 / 0 / 24, hoplite v3.0.3 195 / 195 / 0 / 0.
+
+### Fixed
+
+- A C# type or method after a leading `#if` line now starts at its first code line.
+- Kotlin parsing uses a newer grammar. A class with a primary constructor on the next line now parses, and its members keep the class as owner.
+
+### Changed
+
+- Hook and intercept notes name Sieve in plain words.
+- Sieve no longer links a Kotlin call by its name alone. Wrong Extracted links before and after: mockito-kotlin 4 to 0, kotlinpoet 6 to 0, hoplite 5 to 0.
+- `CACHE_VERSION` changes. The first build after the upgrade re-parses every file.
+
 ## [0.1.6] - 2026-10-14
 
 This release adds exact call links for C#, and fixes two setup issues in `sieve init` and `sieve uninstall`.

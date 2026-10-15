@@ -171,6 +171,7 @@ impl PyScopes {
             go: None,
             java: None,
             cs: None,
+            kt: None,
         }
     }
 

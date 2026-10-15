@@ -98,6 +98,11 @@ pub struct RawEdge {
     /// their cache bytes stay the same.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cs: Option<CsRec>,
+    /// A Kotlin `calls` edge, or a Kotlin file's facts on an `imports`
+    /// record: the data of the Kotlin call proof. `None` for every other
+    /// raw edge, so their cache bytes stay the same.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kt: Option<KtRec>,
 }
 
 /// What the C# pass records on a raw edge.
@@ -253,6 +258,9 @@ pub struct CsUsing {
     pub stat: bool,
     /// The directive is `global using`.
     pub global: bool,
+    /// The directive sits inside an `#if` region.
+    #[serde(default)]
+    pub cond: bool,
 }
 
 /// The facts of one C# file.
@@ -294,6 +302,10 @@ pub struct CsProj {
     /// cannot see: a `<Using>` item, an `Sdk` other than the plain one, or
     /// interceptors.
     pub risky: bool,
+    /// The files of the project are exactly the `.cs` files below its
+    /// directory: no linked file, no removed file, no nested project.
+    #[serde(default)]
+    pub exact: bool,
 }
 
 /// What the Java pass records on a raw edge.
@@ -452,6 +464,243 @@ pub struct JavaFileRec {
     pub types: Vec<JavaType>,
     /// Each anonymous, enum constant and local class body.
     pub bodies: Vec<JavaBody>,
+}
+
+/// What the Kotlin pass records on a raw edge.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum KtRec {
+    /// A call the Kotlin index must prove.
+    Cross(KtCall),
+    /// The facts of one Kotlin file. They ride on an `imports` raw edge that
+    /// the resolver never turns into a graph edge.
+    File(Box<KtFileRec>),
+}
+
+/// The receiver shape of a Kotlin call.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum KtShape {
+    /// A call `f()` with no receiver.
+    Bare,
+    /// A call `this.f()`.
+    This,
+    /// A call `super.f()`.
+    Super,
+    /// A call `x.f()` where `x` is one identifier. `KtCall::recv` holds `x`.
+    Name,
+    /// Any other receiver. No raw edge has this shape yet.
+    Other,
+}
+
+/// One scope around a Kotlin call, from the call outward.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum KtScope {
+    /// A function, an extension property or a constructor. `ext` is the
+    /// simple name of the extension receiver type, or `?` when the written
+    /// receiver type has no simple name.
+    Fun { name: String, ext: Option<String> },
+    /// A class, an interface or an enum. `line` matches `KtType::line`.
+    Class { name: String, line: u32 },
+    /// An object. `line` matches `KtType::line`.
+    Object { name: String, line: u32 },
+    /// A companion object. `line` matches `KtType::line`.
+    Companion { name: String, line: u32 },
+    /// An anonymous object, an enum entry body or a local class. `idx` is
+    /// the position in `KtFileRec::bodies`.
+    Body { idx: u32 },
+    /// A lambda. `call` is the name of the call that gets the lambda, empty
+    /// if the lambda is no argument. `recv` is true if that call has a
+    /// receiver. `bound` is true if a local binder has the name of that
+    /// call.
+    Lambda {
+        call: String,
+        recv: bool,
+        #[serde(default)]
+        bound: bool,
+    },
+}
+
+/// One Kotlin call that the index proves.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KtCall {
+    /// The receiver shape of the call.
+    pub shape: KtShape,
+    /// The called name.
+    pub name: String,
+    /// The value arguments, plus 1 for a trailing lambda.
+    pub arity: u32,
+    /// The call has a named argument or a spread argument.
+    pub loose: bool,
+    /// The scopes around the call, innermost first.
+    pub ctx: Vec<KtScope>,
+    /// The receiver text of a `Name` call.
+    pub recv: Option<String>,
+    /// Why no proof may start: a binder with the called name is in scope,
+    /// or the receiver has a label. `None` if nothing stops the call.
+    pub stop: Option<String>,
+    /// The line of the call, counted from 1.
+    #[serde(default)]
+    pub line: u32,
+}
+
+/// The kind of a Kotlin type declaration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum KtKind {
+    /// A class.
+    Class,
+    /// An interface, a `fun interface` included.
+    Interface,
+    /// An object declaration.
+    Object,
+    /// A companion object.
+    Companion,
+    /// An enum class.
+    Enum,
+}
+
+/// An import of a Kotlin file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KtImport {
+    /// The dotted path, without the `*` of a star import.
+    pub path: String,
+    /// The import ends in `.*`.
+    pub star: bool,
+    /// The name after `as`.
+    pub alias: Option<String>,
+}
+
+/// A function or a method of a Kotlin file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KtFun {
+    /// The function name.
+    pub name: String,
+    /// The node id. The extractor fills it; it stays empty if the name and
+    /// the start line match 0 or 2 nodes.
+    pub id: String,
+    /// The line where the declaration starts, from 1.
+    pub line: u32,
+    /// Each modifier word, such as `open`, `override` or `private`.
+    pub mods: Vec<String>,
+    /// The simple name of the extension receiver type (`?` if it has none).
+    pub ext_recv: Option<String>,
+    /// The count of parameters.
+    pub n: u32,
+    /// The count of parameters that have a default value.
+    pub d: u32,
+    /// A parameter is `vararg`.
+    pub vararg: bool,
+}
+
+/// A property of a Kotlin file or type, a constructor `val` included.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KtProp {
+    /// The property name.
+    pub name: String,
+    /// The line where the declaration starts, from 1.
+    pub line: u32,
+    /// Each modifier word.
+    pub mods: Vec<String>,
+    /// The simple name of the written type, `None` if the property has none.
+    pub ty: Option<String>,
+    /// The simple name of the extension receiver type (`?` if it has none).
+    pub ext_recv: Option<String>,
+}
+
+/// A type declaration of a Kotlin file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KtType {
+    /// The type name.
+    pub name: String,
+    /// The node id, filled as for `KtFun::id`.
+    pub id: String,
+    /// The line where the declaration starts, from 1.
+    pub line: u32,
+    /// The kind of the declaration.
+    pub kind: KtKind,
+    /// The name of the type that holds this type.
+    pub outer: Option<String>,
+    /// The name of the companion object of this type.
+    pub companion: Option<String>,
+    /// Each modifier word, `enum` included for an enum.
+    pub mods: Vec<String>,
+    /// The annotations on the type, by simple name.
+    pub annots: Vec<String>,
+    /// The written supertypes by simple name (`?` for a type with no simple
+    /// name). A `by` supertype is in this list too.
+    pub bases: Vec<String>,
+    /// The supertypes that the type implements with `by`.
+    pub by_bases: Vec<String>,
+    /// The names of the type parameters.
+    pub tparams: Vec<String>,
+    /// The typed properties, constructor `val` parameters included.
+    pub props: Vec<KtProp>,
+    /// The functions in the body of the type.
+    pub methods: Vec<KtFun>,
+    /// The type sits inside an anonymous object, a local class or an enum
+    /// entry body.
+    #[serde(default)]
+    pub local: bool,
+}
+
+/// A typealias of a Kotlin file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KtAlias {
+    /// The alias name.
+    pub name: String,
+    /// The line where the alias starts, from 1.
+    pub line: u32,
+}
+
+/// The kind of a Kotlin type body that has no name in the graph.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum KtBodyKind {
+    /// An anonymous object, `object : T { .. }`.
+    Anon,
+    /// The body of an enum entry.
+    Entry,
+    /// A class or an object that a function body declares.
+    Local,
+}
+
+/// An anonymous object, an enum entry body or a local class.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KtBody {
+    pub kind: KtBodyKind,
+    /// The name of the entry or the local class, empty for an object.
+    pub name: String,
+    pub line: u32,
+    /// The written supertypes by simple name. An enum entry has its enum.
+    pub bases: Vec<String>,
+    /// The names that the body declares with `override`.
+    pub overrides: Vec<String>,
+}
+
+/// The facts of one Kotlin file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KtFileRec {
+    /// The package name, empty for the default package.
+    pub pkg: String,
+    /// The tree is not exact: an error node, a `context(` line or a
+    /// declaration header that has no declaration node.
+    pub broken: bool,
+    /// The file is a `.kts` script.
+    pub script: bool,
+    /// The file imports an `org.gradle` name.
+    pub gradle: bool,
+    /// Each import.
+    pub imports: Vec<KtImport>,
+    /// Each type declaration, nested types included.
+    pub types: Vec<KtType>,
+    /// Each top-level function.
+    pub funs: Vec<KtFun>,
+    /// Each top-level property.
+    pub props: Vec<KtProp>,
+    /// Each typealias.
+    pub aliases: Vec<KtAlias>,
+    /// Each anonymous object, enum entry body and local class.
+    pub bodies: Vec<KtBody>,
+    /// A broken file only: each name in the text after `fun`, `class`,
+    /// `object`, `interface`, `val` and `var`.
+    pub lost: Vec<String>,
 }
 
 /// What the Go pass records on a raw edge.
@@ -797,6 +1046,8 @@ impl Extractor {
                 .then(|| crate::go_tree::GoFile::new(tree.root_node(), source)),
             java: (lang == "java")
                 .then(|| crate::java_tree::JavaFile::new(tree.root_node(), source)),
+            kt: (lang == "kotlin")
+                .then(|| crate::kt_tree::KtFile::new(tree.root_node(), source, path)),
         };
         let mut sink = Sink {
             minted: &mut minted,
@@ -832,9 +1083,13 @@ impl Extractor {
         if let Some(j) = &file.java {
             edges.push(j.file_edge(path));
         }
+        if let Some(k) = &file.kt {
+            edges.push(k.file_edge(path));
+        }
         resolve_py_defs(&out, &mut edges);
         resolve_go_defs(&out, &mut edges);
         resolve_java_defs(&out, &mut edges);
+        resolve_kt_defs(&out, &mut edges);
         (out, edges)
     }
 }
@@ -896,6 +1151,49 @@ fn resolve_go_defs(nodes: &[Node], edges: &mut [RawEdge]) {
     }
 }
 
+/// Maps (is a function, name, start line) to the id of the one node with
+/// that name and start line. A pair that matches 2 nodes maps to `None`.
+/// `is_fun` tells which kinds count as functions. Types are classes,
+/// interfaces, enums and structs.
+fn def_ids(
+    nodes: &[Node],
+    is_fun: fn(Kind) -> bool,
+) -> HashMap<(bool, String, u32), Option<String>> {
+    let mut ids: HashMap<(bool, String, u32), Option<String>> = HashMap::new();
+    for n in nodes {
+        let fun = is_fun(n.kind);
+        let is_type = matches!(
+            n.kind,
+            Kind::Class | Kind::Interface | Kind::Enum | Kind::Struct
+        );
+        let line = n
+            .span
+            .strip_prefix('L')
+            .and_then(|r| r.split('-').next())
+            .and_then(|l| l.parse::<u32>().ok());
+        let (Some(line), true) = (line, fun || is_type) else {
+            continue;
+        };
+        ids.entry((fun, n.name.trim_matches('`').to_string(), line))
+            .and_modify(|v| *v = None)
+            .or_insert_with(|| Some(n.id.clone()));
+    }
+    ids
+}
+
+/// The id in `ids` for a name and line, or an empty string.
+fn def_id(
+    ids: &HashMap<(bool, String, u32), Option<String>>,
+    is_fun: bool,
+    name: &str,
+    line: u32,
+) -> String {
+    ids.get(&(is_fun, name.to_string(), line))
+        .cloned()
+        .flatten()
+        .unwrap_or_default()
+}
+
 /// Fills the node id of each type and method in a `JavaRec::File`. The node
 /// with the same name and start line gives the id. A name and line that
 /// match 0 or 2 nodes give an empty id, and no proof reaches it.
@@ -906,39 +1204,38 @@ fn resolve_java_defs(nodes: &[Node], edges: &mut [RawEdge]) {
     {
         return;
     }
-    let mut ids: HashMap<(bool, String, u32), Option<String>> = HashMap::new();
-    for n in nodes {
-        let is_method = n.kind == Kind::Method;
-        let is_type = matches!(
-            n.kind,
-            Kind::Class | Kind::Interface | Kind::Enum | Kind::Struct
-        );
-        let line = n
-            .span
-            .strip_prefix('L')
-            .and_then(|r| r.split('-').next())
-            .and_then(|l| l.parse::<u32>().ok());
-        let (Some(line), true) = (line, is_method || is_type) else {
-            continue;
-        };
-        ids.entry((is_method, n.name.clone(), line))
-            .and_modify(|v| *v = None)
-            .or_insert_with(|| Some(n.id.clone()));
-    }
+    let ids = def_ids(nodes, |k| k == Kind::Method);
     for edge in edges.iter_mut() {
         let Some(JavaRec::File(rec)) = &mut edge.java else {
             continue;
         };
-        let get = |is_method: bool, name: &str, line: u32| -> String {
-            ids.get(&(is_method, name.to_string(), line))
-                .cloned()
-                .flatten()
-                .unwrap_or_default()
-        };
         for t in &mut rec.types {
-            t.id = get(false, &t.name, t.line);
+            t.id = def_id(&ids, false, &t.name, t.line);
             for m in &mut t.methods {
-                m.id = get(true, &m.name, m.line);
+                m.id = def_id(&ids, true, &m.name, m.line);
+            }
+        }
+    }
+}
+
+/// Fills the node id of each type, top-level function and method in a
+/// `KtRec::File`, as `resolve_java_defs` does.
+fn resolve_kt_defs(nodes: &[Node], edges: &mut [RawEdge]) {
+    if !edges.iter().any(|e| matches!(e.kt, Some(KtRec::File(_)))) {
+        return;
+    }
+    let ids = def_ids(nodes, |k| matches!(k, Kind::Function | Kind::Method));
+    for edge in edges.iter_mut() {
+        let Some(KtRec::File(rec)) = &mut edge.kt else {
+            continue;
+        };
+        for f in &mut rec.funs {
+            f.id = def_id(&ids, true, &f.name, f.line);
+        }
+        for t in &mut rec.types {
+            t.id = def_id(&ids, false, &t.name, t.line);
+            for m in &mut t.methods {
+                m.id = def_id(&ids, true, &m.name, m.line);
             }
         }
     }
@@ -956,6 +1253,8 @@ struct FileCtx<'a> {
     go: Option<crate::go_tree::GoFile>,
     /// The type facts for Java call proofs.
     java: Option<crate::java_tree::JavaFile>,
+    /// The file facts and scope data for Kotlin call proofs.
+    kt: Option<crate::kt_tree::KtFile>,
 }
 
 /// The mutable collectors a walk writes into: minted ids, symbol nodes,
@@ -1033,6 +1332,7 @@ fn walk(node: TsNode, ctx: &Ctx, file: &FileCtx, sink: &mut Sink) {
                 go: None,
                 java: None,
                 cs: None,
+                kt: None,
             });
         }
         return;
@@ -1076,6 +1376,7 @@ fn walk(node: TsNode, ctx: &Ctx, file: &FileCtx, sink: &mut Sink) {
                     go: None,
                     java: None,
                     cs: None,
+                    kt: None,
                 });
             } else {
                 let (specifier, import_name, ns_export) =
@@ -1083,6 +1384,10 @@ fn walk(node: TsNode, ctx: &Ctx, file: &FileCtx, sink: &mut Sink) {
                         Some((specifier, import_name, ns)) => (Some(specifier), import_name, ns),
                         None => (None, None, false),
                     };
+                let kt = file
+                    .kt
+                    .as_ref()
+                    .and_then(|k| k.call_rec(node, &name, receiver.as_deref(), source));
                 let recv_type = if via_member && lang == "go" && receiver == ctx.go_receiver_var {
                     ctx.enclosing_class.clone()
                 } else if lang == "r" && receiver.as_deref() == Some("super") {
@@ -1138,6 +1443,7 @@ fn walk(node: TsNode, ctx: &Ctx, file: &FileCtx, sink: &mut Sink) {
                     go,
                     java,
                     cs: None,
+                    kt,
                 });
             }
         }
@@ -1290,6 +1596,7 @@ fn export_record(path: &str, specifier: Option<String>, reexport: ReExport) -> R
         go: None,
         java: None,
         cs: None,
+        kt: None,
     }
 }
 
@@ -1539,6 +1846,7 @@ fn emit_definition(node: TsNode, desc: Desc, ctx: &Ctx, file: &FileCtx, sink: &m
         go: None,
         java: None,
         cs: None,
+        kt: None,
     });
     if heritage_gate(ctx.lang, kind) {
         emit_heritage_edges(node, &id, path, source, ctx.lang, sink.edges);
@@ -1935,6 +2243,7 @@ fn emit_heritage_edges(
             go: None,
             java: None,
             cs: None,
+            kt: None,
         });
     };
     let mut push = |relation: Relation, base: TsNode| {
@@ -2741,6 +3050,7 @@ fn maybe_emit_reference(
         go: None,
         java: None,
         cs: None,
+        kt: None,
     });
 }
 
@@ -3125,6 +3435,13 @@ fn describe_kotlin<'a>(
                 kotlin_header_end(node, &["class_body"]),
             ))
         }
+        // A one-line `object O { ... }` parses as an infix call: an
+        // `object_literal` with no body, the name, then a lambda. That shape
+        // is never valid Kotlin as an expression, so read it as an object.
+        "infix_expression" => {
+            let (name, header_end) = kotlin_one_line_object(node, source)?;
+            Some(desc(name, Kind::Class, header_end))
+        }
         "function_declaration" => {
             let name = name_of("simple_identifier")?;
             let kind = if enclosing_kind.is_some_and(|k| KOTLIN_TYPE_KINDS.contains(&k)) {
@@ -3165,6 +3482,33 @@ fn describe_kotlin<'a>(
         "companion_object" => None,
         _ => None,
     }
+}
+
+/// Reads a one-line object that the grammar parsed as an `infix_expression`.
+/// The node must hold exactly an `object_literal` without a body or a
+/// delegation specifier, a `simple_identifier`, and a `lambda_literal`.
+/// Returns the object name and the byte where its header ends.
+fn kotlin_one_line_object(node: TsNode, source: &str) -> Option<(String, usize)> {
+    let mut cursor = node.walk();
+    let kids: Vec<TsNode> = node.named_children(&mut cursor).collect();
+    let [literal, ident, lambda] = kids.as_slice() else {
+        return None;
+    };
+    if literal.kind() != "object_literal"
+        || ident.kind() != "simple_identifier"
+        || lambda.kind() != "lambda_literal"
+    {
+        return None;
+    }
+    let mut lit_cursor = literal.walk();
+    let has_body = literal
+        .named_children(&mut lit_cursor)
+        .any(|c| matches!(c.kind(), "class_body" | "delegation_specifier"));
+    if has_body {
+        return None;
+    }
+    let name = ident.utf8_text(source.as_bytes()).ok()?.to_string();
+    Some((name, lambda.start_byte()))
 }
 
 /// Returns `node`'s first direct NAMED child of kind `kind`.
@@ -4331,6 +4675,83 @@ mod tests {
         assert_eq!(greet.kind, Kind::Method);
         assert_eq!(greet.owner.as_deref(), Some("App"));
         assert_eq!(greet.signature.as_deref(), Some("fun greet(): String"));
+    }
+
+    #[test]
+    fn describe_kotlin_keeps_a_class_whose_primary_constructor_starts_a_new_line() {
+        let mut extractor = Extractor::new().expect("build extractor");
+        let source = "class A\nconstructor(val x: Int) : B() {\n  fun f() {}\n}\n";
+        let (nodes, _edges) = extractor.extract_file("a.kt", source, "kotlin");
+        let class = nodes.iter().find(|n| n.name == "A").expect("class A");
+        assert_eq!(class.kind, Kind::Class);
+        let f = nodes.iter().find(|n| n.name == "f").expect("f");
+        assert_eq!(f.owner.as_deref(), Some("A"));
+    }
+
+    fn kotlin_one_line_object_nodes(source: &str) -> Vec<(String, Kind, Option<String>)> {
+        let mut extractor = Extractor::new().expect("build extractor");
+        let (nodes, _edges) = extractor.extract_file("A.kt", source, "kotlin");
+        nodes
+            .into_iter()
+            .map(|n| (n.name, n.kind, n.owner))
+            .collect()
+    }
+
+    #[test]
+    fn describe_kotlin_reads_a_one_line_object_as_an_object_with_owned_members() {
+        for src in [
+            "object O { fun f() {} }\n",
+            "data object O { fun f() {} }\n",
+        ] {
+            let nodes = kotlin_one_line_object_nodes(src);
+            assert!(nodes.contains(&("O".into(), Kind::Class, None)), "{src}");
+            assert!(
+                nodes.contains(&("f".into(), Kind::Method, Some("O".into()))),
+                "{src}"
+            );
+        }
+    }
+
+    #[test]
+    fn describe_kotlin_gives_a_member_of_a_one_line_object_as_call_source() {
+        let mut extractor = Extractor::new().expect("build extractor");
+        let src = "object O { fun f() {}\n fun g() { f() } }\n";
+        let (nodes, edges) = extractor.extract_file("A.kt", src, "kotlin");
+        let g = nodes.iter().find(|n| n.name == "g").expect("g");
+        assert_eq!(g.owner.as_deref(), Some("O"));
+        let call = edges
+            .iter()
+            .find(|e| e.relation == Relation::Calls && e.name.as_deref() == Some("f"))
+            .expect("call to f");
+        assert_eq!(call.source, g.id);
+    }
+
+    #[test]
+    fn describe_kotlin_does_not_read_an_object_literal_then_an_infix_call_as_an_object() {
+        for src in ["object : T {} foo { }\n", "val o = object {} then { }\n"] {
+            let nodes = kotlin_one_line_object_nodes(src);
+            for name in ["foo", "then"] {
+                assert!(
+                    !nodes
+                        .iter()
+                        .any(|(n, kind, _)| n == name && *kind == Kind::Class),
+                    "{src}: {nodes:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn describe_kotlin_keeps_a_multi_line_object_shape() {
+        let nodes = kotlin_one_line_object_nodes("object O {\n  fun f() {}\n}\n");
+        assert!(nodes.contains(&("O".into(), Kind::Class, None)));
+        assert!(nodes.contains(&("f".into(), Kind::Method, Some("O".into()))));
+    }
+
+    #[test]
+    fn describe_kotlin_does_not_read_a_real_infix_call_as_an_object() {
+        let nodes = kotlin_one_line_object_nodes("val a = 1 to 2\nval y = x shl 2\n");
+        assert!(nodes.iter().all(|(_, kind, _)| *kind != Kind::Class));
     }
 
     #[test]

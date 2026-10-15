@@ -203,7 +203,7 @@ public class JvCalls {
             String src = rel(cu.getSourceFile());
             TreePath dp = trees.getPath(d);
             if (dp == null) {
-                // B7: no tree. impl = in repo (values(), record accessor); oor = JDK or jar.
+                // No tree. impl = in repo (values(), record accessor); oor = JDK or jar.
                 boolean inRepo = trees.getPath(d.getEnclosingElement()) != null
                         || (d.getEnclosingElement() != null && d.getEnclosingElement().getEnclosingElement() != null
                         && trees.getPath(d.getEnclosingElement().getEnclosingElement()) != null);

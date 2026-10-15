@@ -315,6 +315,8 @@ pub struct CsFile {
     pub(crate) scopes: RefCell<HashMap<usize, std::rc::Rc<crate::cs_proof::Scope>>>,
     /// The node id of a declaration, by start and end byte.
     ids: HashMap<(usize, usize), String>,
+    /// The count of `#if` regions around the node that the walk reads.
+    if_depth: u32,
 }
 
 impl CsFile {
@@ -342,6 +344,7 @@ impl CsFile {
                 .iter()
                 .map(|(id, s, e)| ((*s, *e), id.clone()))
                 .collect(),
+            if_depth: 0,
         };
         f.dynamic(root, source);
         f.unit(root, "", false, src);
@@ -465,6 +468,7 @@ impl CsFile {
             go: None,
             java: None,
             cs: Some(CsRec::File(Box::new(self.rec.clone()))),
+            kt: None,
         }
     }
 
@@ -488,7 +492,9 @@ impl CsFile {
                     }
                 }
                 "preproc_if" | "preproc_else" | "preproc_elif" => {
+                    self.if_depth += 1;
                     self.unit(ch, &ns, inner, src);
+                    self.if_depth -= 1;
                 }
                 k if TYPE_KINDS.contains(&k) => self.add_type(ch, None, &ns, src),
                 _ => {}
@@ -507,6 +513,7 @@ impl CsFile {
                 .map(|a| text(a, src).to_string()),
             stat: false,
             global: false,
+            cond: self.if_depth > 0,
         };
         let mut c = n.walk();
         for k in n.children(&mut c) {
@@ -807,10 +814,13 @@ fn namespace_name(n: TsNode, outer: &str, src: &[u8]) -> String {
 /// Reports whether the text of a project file can add usings or extension
 /// methods that the index cannot see.
 fn risky_manifest(text: &str) -> bool {
-    if text.contains("<Using ")
-        || text.contains("<Import")
-        || text.contains("InterceptorsNamespaces")
-    {
+    text.contains("<Using ") || text.contains("<Import") || odd_sdk_or_interceptors(text)
+}
+
+/// Reports whether the text names interceptors or an `Sdk` other than the
+/// plain one.
+fn odd_sdk_or_interceptors(text: &str) -> bool {
+    if text.contains("InterceptorsNamespaces") {
         return true;
     }
     let mut rest = text;
@@ -824,25 +834,155 @@ fn risky_manifest(text: &str) -> bool {
     text.contains("<Sdk ")
 }
 
+/// Reports whether the text of a manifest can change which files a
+/// project compiles.
+fn changes_file_set(text: &str) -> bool {
+    [
+        "EnableDefaultItems",
+        "DefaultItemExcludes",
+        "EnableDefaultCompileItems",
+        "<Compile",
+    ]
+    .iter()
+    .any(|k| text.contains(k))
+}
+
+/// Reports whether a `<Compile Include>` or `<Compile Remove>` item names
+/// a file outside the directory of its manifest. An `Update` item does not
+/// add or remove a file.
+fn links_outside(text: &str) -> bool {
+    let mut rest = text;
+    while let Some(at) = rest.find("<Compile") {
+        rest = &rest[at + 8..];
+        let tag = rest.split('>').next().unwrap_or("");
+        for attr in ["Include=", "Remove="] {
+            let mut t = tag;
+            while let Some(i) = t.find(attr) {
+                t = &t[i + attr.len()..];
+                let v = t.trim_start_matches(['"', '\'']);
+                let v = v.split(['"', '\'']).next().unwrap_or("");
+                let outside = ["..", "$(", "@(", "%(", ":"].iter().any(|k| v.contains(k));
+                if outside || v.starts_with(['/', '\\']) {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+/// The path that an import value `v` names, from the directory `dir` of the
+/// importing file. `None` when the value is not a plain local path.
+fn resolve_import(dir: &str, v: &str) -> Option<String> {
+    let v = v.strip_prefix("$(MSBuildThisFileDirectory)").unwrap_or(v);
+    if v.contains("$(") || v.contains('*') || v.starts_with(['/', '\\']) {
+        return None;
+    }
+    let mut parts: Vec<&str> = dir.split('/').filter(|d| !d.is_empty()).collect();
+    let slashed = v.replace('\\', "/");
+    for seg in slashed.split('/') {
+        match seg {
+            "" | "." => {}
+            ".." => {
+                parts.pop()?;
+            }
+            _ => parts.push(seg),
+        }
+    }
+    Some(parts.join("/"))
+}
+
+/// Reports whether a `<Using>` item of the text has an `Alias` or a
+/// `Static` attribute.
+fn has_alias_using(text: &str) -> bool {
+    text.split("<Using").skip(1).any(|r| {
+        let tag = r.split('>').next().unwrap_or("");
+        tag.contains("Alias") || tag.contains("Static")
+    })
+}
+
+/// Reports whether the manifest `path` and every local file that it imports
+/// leave the file set of a project as the default. Any import that is not a
+/// plain local path to a read file makes the answer no. A `<Using>` item
+/// does not change the answer, unless it has an `Alias` or a `Static`
+/// attribute: an alias hides a type from a using-namespace.
+// ponytail: each project reads its imports again, so a repo with many
+// projects repeats the reads. Memoize by path if such a repo shows the cost.
+fn files_stay_default(
+    path: &str,
+    all: &HashMap<&str, &str>,
+    depth: u32,
+    seen: &mut Vec<String>,
+) -> bool {
+    let Some(text) = all.get(path) else {
+        return false;
+    };
+    if depth > 4 || seen.iter().any(|s| s == path) {
+        return false;
+    }
+    if changes_file_set(text) || odd_sdk_or_interceptors(text) || has_alias_using(text) {
+        return false;
+    }
+    seen.push(path.to_string());
+    let dir = path.rsplit_once('/').map_or("", |(d, _)| d);
+    let mut rest = *text;
+    let mut ok = true;
+    while let Some(at) = rest.find("<Import") {
+        rest = &rest[at + 7..];
+        let tag = rest.split('>').next().unwrap_or("");
+        let value = tag
+            .split_once("Project=\"")
+            .and_then(|(_, r)| r.split('"').next());
+        ok = rest.starts_with(char::is_whitespace)
+            && !tag.contains("Sdk=")
+            && value
+                .and_then(|v| resolve_import(dir, v))
+                .is_some_and(|target| files_stay_default(&target, all, depth + 1, seen));
+        if !ok {
+            break;
+        }
+    }
+    seen.pop();
+    ok
+}
+
 /// Fills the project of each C# file record. `manifests`
 /// holds `(path, text)` of each `.csproj`, `Directory.Build.props` and
 /// `Directory.Build.targets` file. A file belongs to the project of the
 /// nearest `.csproj` directory above it. A `Directory.Build` file above the
-/// project that is risky makes the project risky. A file with no `.csproj`
+/// project that is risky makes the project risky. A directory with 2 or more
+/// `.csproj` files is risky. A file with no `.csproj`
 /// above it keeps no project. `hidden` is true when the repo has a project
 /// file that the walk skipped: then every file is risky.
+/// The `exact` flag of a project is true when the project holds exactly the
+/// `.cs` files below its directory.
 pub fn stamp_projects(manifests: &[(String, String)], hidden: bool, raw: &mut [RawEdge]) {
     let dir_of = |p: &str| p.rsplit_once('/').map_or("", |(d, _)| d).to_string();
-    let projects: Vec<(String, bool)> = manifests
+    // The directory, the risk and the file-set flag of each manifest.
+    let all: HashMap<&str, &str> = manifests
         .iter()
-        .filter(|(p, _)| p.ends_with(".csproj"))
-        .map(|(p, t)| (dir_of(p), risky_manifest(t)))
+        .map(|(p, t)| (p.as_str(), t.as_str()))
         .collect();
-    let shared: Vec<(String, bool)> = manifests
-        .iter()
-        .filter(|(p, _)| !p.ends_with(".csproj"))
-        .map(|(p, t)| (dir_of(p), risky_manifest(t)))
-        .collect();
+    let facts = |csproj: bool| -> Vec<(String, bool, bool)> {
+        manifests
+            .iter()
+            .filter(|(p, _)| {
+                let name = p.rsplit('/').next().unwrap_or("");
+                if csproj {
+                    name.ends_with(".csproj")
+                } else {
+                    name.starts_with("Directory.Build")
+                }
+            })
+            .map(|(p, t)| {
+                let stay = files_stay_default(p, &all, 0, &mut Vec::new());
+                (dir_of(p), risky_manifest(t), stay)
+            })
+            .collect()
+    };
+    let projects = facts(true);
+    let shared = facts(false);
+    let linked = manifests.iter().any(|(_, t)| links_outside(t));
     let above = |dir: &str, file: &str| {
         dir.is_empty() || file.strip_prefix(dir).is_some_and(|r| r.starts_with('/'))
     };
@@ -852,19 +992,28 @@ pub fn stamp_projects(manifests: &[(String, String)], hidden: bool, raw: &mut [R
         };
         let nearest = projects
             .iter()
-            .filter(|(d, _)| above(d, &e.file))
-            .max_by_key(|(d, _)| d.len());
+            .filter(|(d, _, _)| above(d, &e.file))
+            .max_by_key(|(d, _, _)| d.len());
         rec.proj = match nearest {
-            Some((dir, risky)) => {
-                let inherited = shared.iter().any(|(d, r)| *r && above(d, &e.file));
+            Some((dir, risky, stays)) => {
+                let inherited = shared.iter().any(|(d, r, _)| *r && above(d, &e.file));
+                let twins = projects.iter().filter(|(d, _, _)| d == dir).count() > 1;
+                let nested = projects
+                    .iter()
+                    .any(|(d, _, _)| d != dir && (above(d, dir) || above(dir, d)));
+                let shared_moves = shared.iter().any(|(d, _, s)| !*s && above(d, &e.file));
+                let risky = *risky || inherited || hidden || twins;
+                let exact = !hidden && !twins && *stays && !shared_moves;
                 Some(crate::extract::CsProj {
                     dir: dir.clone(),
-                    risky: *risky || inherited || hidden,
+                    risky,
+                    exact: exact && !linked && !nested,
                 })
             }
             None => hidden.then(|| crate::extract::CsProj {
                 dir: "<none>".to_string(),
                 risky: true,
+                exact: false,
             }),
         };
     }
@@ -1065,6 +1214,29 @@ mod tests {
         assert_eq!(f.rec.lost_types, ["A"]);
         assert!(f.rec.lost_overrides.is_empty());
         assert!(!f.rec.lost_ext && f.rec.lost_ext_names.is_empty());
+    }
+
+    #[test]
+    fn a_using_item_sets_risky_but_leaves_the_project_exact() {
+        let f = file("class A {}");
+        let mut e = f.file_edge("b/Y.cs");
+        e.file = "b/Y.cs".to_string();
+        let using = "<Project Sdk=\"Microsoft.NET.Sdk\"><Using Include=\"X\"/></Project>";
+        let manifests = vec![("b/B.csproj".to_string(), using.to_string())];
+        let mut raw = vec![e];
+        stamp_projects(&manifests, false, &mut raw);
+        let Some(CsRec::File(r)) = &raw[0].cs else {
+            panic!("no file record");
+        };
+        let p = r.proj.as_ref().map(|p| (p.risky, p.exact));
+        assert_eq!(p, Some((true, true)));
+    }
+
+    #[test]
+    fn a_using_inside_an_if_region_has_the_cond_flag() {
+        let f = file("global using A;\n#if X\nglobal using B;\n#else\nglobal using C;\n#endif\n");
+        let flags: Vec<bool> = f.rec.usings.iter().map(|u| u.cond).collect();
+        assert_eq!(flags, [false, true, true]);
     }
 
     #[test]

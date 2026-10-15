@@ -83,6 +83,9 @@ unverified when the oracle gives no single answer.
 | markdig | 1.4.0 | 912 | 0 | 22 | Roslyn, .NET SDK 10.0.401 |
 | serilog | v4.4.0 | 150 | 0 | 1 | Roslyn, .NET SDK 10.0.401 |
 | CsvHelper | 33.1.0 | 2,189 | 0 | 23 | Roslyn, .NET SDK 10.0.401 |
+| mockito-kotlin | v6.4.0 | 120 | 0 | 0 | kotlinc 2.4.21 (K2) |
+| kotlinpoet | 2.4.0 | 412 | 0 | 24 (file not compiled) | kotlinc 2.4.21 (K2) |
+| hoplite | v3.0.3 | 195 | 0 | 0 | kotlinc 2.4.21 (K2) |
 
 Before the fix, the same-file name rule gave wrong Extracted links:
 
@@ -98,9 +101,12 @@ Before the fix, the same-file name rule gave wrong Extracted links:
 | markdig 1.4.0 | 6 | 528 |
 | serilog v4.4.0 | 7 | 264 |
 | CsvHelper 33.1.0 | 1 | 188 |
+| mockito-kotlin v6.4.0 | 4 | 17 |
+| kotlinpoet 2.4.0 | 6 | 135 |
+| hoplite v3.0.3 | 5 | 48 |
 
 The oracle scripts are in `scripts/oracle/`. `rs-calls.py` and
-`rs-compare.py` check Rust. `py-calls.py` and `py-compare.py` check Python. `go-calls.py` and `go-compare.py` check Go. `JvCalls.java` and `jv-compare.py` check Java. `CsCalls` and `cs-compare.py` check C#.
+`rs-compare.py` check Rust. `py-calls.py` and `py-compare.py` check Python. `go-calls.py` and `go-compare.py` check Go. `JvCalls.java` and `jv-compare.py` check Java. `CsCalls` and `cs-compare.py` check C#. `KtCalls.kt`, `kt-calls.sh` and `kt-compare.py` check Kotlin.
 `ts-calls.mjs` and `compare.mjs` check TypeScript.
 
 ## Refresh after an edit

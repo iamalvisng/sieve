@@ -52,8 +52,8 @@ TypeScript and JavaScript. These cover named imports, aliased imports
 They also cover barrel re-exports: `export { x } from`, `export *`, default
 re-exports and `export * as ns`. ADR 0005 and ADR 0006 hold the rules.
 
-The exact-link tier now covers TypeScript, JavaScript, Rust, Python, Go, Java and C#.
-Sieve marks a Rust, Python, Go, Java or C# call Extracted only when it proves one target. See
+The exact-link tier now covers TypeScript, JavaScript, Rust, Python, Go, Java, C# and Kotlin.
+Sieve marks a Rust, Python, Go, Java, C# or Kotlin call Extracted only when it proves one target. See
 [Concepts](concepts.md#exact-links) and ADR 0007.
 
 For Rust, these calls stay Inferred or get no edge: a method call `x.f()`,
@@ -79,6 +79,12 @@ when a subtype can override the target.
 For C#, these calls stay Inferred or get no edge: a call to an interface target,
 an extension method call, a call to a type found only through a global using,
 `base.M()`, a static `Type.M()` call, and a call on a field receiver.
+A parse-error file adds text facts only.
+
+For Kotlin, these calls stay Inferred or get no edge: a call to an interface,
+abstract or `expect` target, a method call `x.f()`, a `Type.f()` call, `super.f()`,
+a call inside a lambda that the proof does not cover, a call on an anonymous
+object, a local function or class, and any call in a `.kts` file.
 A parse-error file adds text facts only.
 
 Sieve does not link these TypeScript and JavaScript cases as exact: non-relative package specifiers,

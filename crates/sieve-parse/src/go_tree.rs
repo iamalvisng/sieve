@@ -224,6 +224,7 @@ impl GoFile {
             }))),
             java: None,
             cs: None,
+            kt: None,
         }
     }
 
