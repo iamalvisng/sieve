@@ -2,7 +2,7 @@
 
 use super::{header_line, Marks};
 use crate::extract::{
-    Extractor, KtBodyKind, KtCall, KtFileRec, KtKind, KtRec, KtScope, KtShape, KtType,
+    Extractor, KtBodyKind, KtCall, KtFileRec, KtKind, KtRec, KtRty, KtScope, KtShape, KtType,
 };
 
 /// Extracts one Kotlin file. Returns its file facts and its call records.
@@ -247,7 +247,8 @@ fn kt_call_context_lists_the_scopes_from_the_inside_out() {
             },
             KtScope::Fun {
                 name: "c".into(),
-                ext: None
+                ext: None,
+                tparams: vec![]
             },
             KtScope::Companion {
                 name: "Companion".into(),
@@ -264,7 +265,8 @@ fn kt_call_context_lists_the_scopes_from_the_inside_out() {
         y.ctx[0],
         KtScope::Fun {
             name: "m".into(),
-            ext: Some("Foo".into())
+            ext: Some("Foo".into()),
+            tparams: vec![]
         }
     );
 }
@@ -378,9 +380,9 @@ fn kt_binder_a_binder_of_a_closed_scope_does_not_stop_a_call() {
 }
 
 #[test]
-fn kt_binder_does_not_stop_a_member_call() {
+fn kt_binder_stops_a_member_call_of_the_same_name() {
     let src = "fun g(f: Int) {\n    x.f()\n}\n";
-    assert_eq!(stop(src, "f"), None);
+    assert_eq!(stop(src, "f").as_deref(), Some("param"));
 }
 
 #[test]
@@ -657,4 +659,346 @@ fn kt_broken_a_valid_file_is_not_broken() {
     let rec = facts(src);
     assert!(!rec.broken);
     assert!(rec.lost.is_empty());
+}
+
+/// The `rty` of the call `x.f()` in a function body with the given lines.
+fn rty(body: &str) -> Option<KtRty> {
+    call(&format!("fun main() {{\n{body}\n}}\n"), "f").rty
+}
+
+fn stops(r: Option<KtRty>) -> String {
+    match r {
+        Some(KtRty::Stop(why)) => why,
+        other => format!("not a stop: {other:?}"),
+    }
+}
+
+#[test]
+fn test_kt_recv_rty_reads_a_typed_param() {
+    let c = call("fun g(x: Foo?, y: Bar) {\n    x.f()\n}\n", "f");
+    assert_eq!(
+        c.rty,
+        Some(KtRty::Param {
+            ty: "Foo".into(),
+            nullable: true
+        })
+    );
+}
+
+#[test]
+fn test_kt_recv_rty_is_none_without_a_binder() {
+    assert_eq!(rty("    x.f()"), None);
+}
+
+#[test]
+fn test_kt_recv_rty_vararg_param_stops() {
+    let c = call("fun g(vararg x: Foo) {\n    x.f()\n}\n", "f");
+    assert_eq!(stops(c.rty), "vararg");
+}
+
+#[test]
+fn test_kt_recv_rty_reads_a_typed_val_and_a_new() {
+    assert_eq!(
+        rty("    val x: Foo = make()\n    x.f()"),
+        Some(KtRty::Val {
+            ty: "Foo".into(),
+            nullable: false
+        })
+    );
+    assert_eq!(
+        rty("    val x = Foo<Int>(1)\n    x.f()"),
+        Some(KtRty::New { ty: "Foo".into() })
+    );
+}
+
+#[test]
+fn test_kt_recv_rty_new_needs_one_call_expression() {
+    for init in [
+        "Foo().also { }",
+        "Foo() ?: other",
+        "Foo()!!",
+        "foo()",
+        "a.Foo()",
+    ] {
+        let r = rty(&format!("    val x = {init}\n    x.f()"));
+        assert_eq!(stops(r), "untyped", "{init}");
+    }
+}
+
+#[test]
+fn test_kt_recv_rty_unusable_types_stop() {
+    assert_eq!(
+        stops(rty("    val x: (Int) -> Int = g\n    x.f()")),
+        "local_type"
+    );
+    assert_eq!(stops(rty("    val x: a.Foo = g\n    x.f()")), "local_type");
+    let c = call("fun g(x: a.Foo) {\n    x.f()\n}\n", "f");
+    assert_eq!(stops(c.rty), "param_type");
+    let c = call("fun g(x: () -> Unit) {\n    x.f()\n}\n", "f");
+    assert_eq!(stops(c.rty), "param_type");
+}
+
+#[test]
+fn test_kt_recv_rty_other_binders_stop() {
+    assert_eq!(stops(rty("    var x: Foo = g()\n    x.f()")), "var");
+    assert_eq!(
+        stops(rty("    for (x in xs) {\n        x.f()\n    }")),
+        "for"
+    );
+    assert_eq!(stops(rty("    val (x, y) = p()\n    x.f()")), "destructure");
+    assert_eq!(
+        stops(rty(
+            "    try { g() } catch (x: Exception) {\n        x.f()\n    }"
+        )),
+        "catch"
+    );
+    assert_eq!(
+        stops(rty("    xs.map { x ->\n        x.f()\n    }")),
+        "lambda_param"
+    );
+    assert_eq!(stops(rty("    xs.map {\n        it.f()\n    }")), "it");
+    assert_eq!(
+        stops(rty(
+            "    when (val x = g()) {\n        else -> x.f()\n    }"
+        )),
+        "when"
+    );
+    assert_eq!(stops(rty("    fun x() = 1\n    x.f()")), "local_fun");
+    assert_eq!(
+        stops(rty("    val x by lazy { Foo() }\n    x.f()")),
+        "untyped"
+    );
+}
+
+#[test]
+fn test_kt_recv_rty_binder_after_the_call_stops() {
+    let r = rty("    x.f()\n    val x: Foo = g()");
+    assert_eq!(stops(r), "binder_after_call");
+}
+
+#[test]
+fn test_kt_recv_rty_two_binders_stop() {
+    let r = rty("    val x: Foo = g()\n    xs.map { x ->\n        x.f()\n    }");
+    assert_eq!(stops(r), "two_binders");
+    let r = call("fun g(x: Foo) {\n    val x: Foo = h()\n    x.f()\n}\n", "f").rty;
+    assert_eq!(stops(r), "two_binders");
+}
+
+#[test]
+fn test_kt_recv_cast_scans_the_outermost_declaration() {
+    let f = |body: &str| call(&format!("fun g(x: Foo) {{\n    x.f()\n{body}\n}}\n"), "f").cast;
+    assert!(f("    if (x is Bar) {}"));
+    assert!(f("    if (x !is Bar) {}"));
+    assert!(f("    val y = x as Bar"));
+    assert!(f("    val y = x as? Bar"));
+    assert!(f(
+        "    when (x) {\n        is Bar -> 1\n        else -> 2\n    }"
+    ));
+    assert!(!f("    when (x) {\n        else -> 2\n    }"));
+    assert!(!f("    if (y is Bar) {}"));
+    // The scan covers the outer declaration, not only the inner function.
+    let src = "class K {\n    fun a(x: Foo) {\n        x.f()\n    }\n    fun b(x: Any) {\n        x as Bar\n    }\n}\n";
+    assert!(call(src, "f").cast);
+    // A bare call never sets the flag.
+    assert!(!call("fun g(x: Foo) {\n    f()\n    x as Bar\n}\n", "f").cast);
+}
+
+#[test]
+fn test_kt_recv_fun_scope_lists_its_type_params() {
+    let c = call("fun <T, U> g() {\n    f()\n}\n", "f");
+    assert_eq!(
+        c.ctx[0],
+        KtScope::Fun {
+            name: "g".into(),
+            ext: None,
+            tparams: vec!["T".into(), "U".into()]
+        }
+    );
+}
+
+#[test]
+fn test_kt_recv_enum_entries_are_listed() {
+    let rec =
+        facts("enum class E {\n    A, B { override fun m() {} };\n    fun m() {}\n}\nclass C\n");
+    assert_eq!(
+        ty(&rec, "E").entries,
+        vec!["A".to_string(), "B".to_string()]
+    );
+    assert!(ty(&rec, "C").entries.is_empty());
+}
+
+#[test]
+fn test_kt_recv_super_with_a_type_or_a_label_stops() {
+    let src = "class A : B() {\n    override fun f() {\n        super<B>.f()\n    }\n}\n";
+    let c = call(src, "f");
+    assert!(c.stop.is_some() && c.shape == KtShape::Super);
+    let src = "class A : B() {\n    override fun f() {\n        super@A.f()\n    }\n}\n";
+    let c = call(src, "f");
+    assert!(c.stop.is_some() && c.shape == KtShape::Super);
+}
+
+#[test]
+fn test_kt_recv_binder_stop_runs_for_a_member_call() {
+    let c = call("fun g(x: Foo) {\n    fun f() {}\n    x.f()\n}\n", "f");
+    assert!(c.stop.is_some());
+    assert!(call("fun g(x: Foo) {\n    x.f()\n}\n", "f").stop.is_none());
+}
+
+#[test]
+fn test_kt_recv_body_records_all_its_function_names() {
+    let src = "fun mk() {\n    val o = object : B() {\n        override fun a() {}\n        fun b() {}\n        val c = 1\n    }\n}\n";
+    let rec = facts(src);
+    assert_eq!(rec.bodies[0].overrides, vec!["a".to_string()]);
+    assert_eq!(rec.bodies[0].funs, vec!["a".to_string(), "b".to_string()]);
+}
+
+#[test]
+fn test_kt_recv_rty_ctor_param_seen_from_a_method_is_no_binder() {
+    let src = "open class Base { val x: Bar = Bar() }\nclass K(x: Foo) : Base() {\n    fun g() {\n        x.f()\n    }\n}\n";
+    assert_eq!(call(src, "f").rty, None);
+}
+
+#[test]
+fn test_kt_recv_rty_ctor_param_outside_a_nested_class_is_no_binder() {
+    let src = "class Outer(val x: Foo) {\n    class Nested {\n        fun g() {\n            x.f()\n        }\n    }\n}\n";
+    assert_eq!(call(src, "f").rty, None);
+}
+
+#[test]
+fn test_kt_recv_rty_binder_outside_an_anonymous_object_stops() {
+    let src = "fun m() {\n    val x: A = a()\n    object : Base() {\n        fun g() {\n            x.f()\n        }\n    }\n}\n";
+    assert_eq!(stops(call(src, "f").rty), "class_boundary");
+    let src = "fun m(x: A) {\n    class L : Base() {\n        fun g() {\n            x.f()\n        }\n    }\n}\n";
+    assert_eq!(stops(call(src, "f").rty), "class_boundary");
+}
+
+#[test]
+fn test_kt_recv_rty_ctor_param_in_a_property_initializer_is_a_binder() {
+    let src = "class K(x: Foo) {\n    val a = x.f()\n}\n";
+    assert_eq!(
+        call(src, "f").rty,
+        Some(KtRty::Param {
+            ty: "Foo".into(),
+            nullable: false
+        })
+    );
+    let src = "class K(x: Foo) {\n    init {\n        x.f()\n    }\n}\n";
+    assert!(matches!(call(src, "f").rty, Some(KtRty::Param { .. })));
+}
+
+#[test]
+fn test_kt_link_the_line_of_a_name_call_is_the_line_of_the_name() {
+    let src = "fun g(x: Foo) {\n    x\n        .f()\n}\n";
+    assert_eq!(call(src, "f").line, 3);
+}
+
+#[test]
+fn test_kt_link_the_line_of_this_and_super_calls_is_the_line_of_the_name() {
+    let src = "class K {\n    fun g() {\n        this\n            .f()\n    }\n}\n";
+    assert_eq!(call(src, "f").line, 4);
+    let src = "class K : B() {\n    fun g() {\n        super\n            .f()\n    }\n}\n";
+    assert_eq!(call(src, "f").line, 4);
+}
+
+#[test]
+fn test_kt_link_f2_a_binder_named_like_the_new_type_gives_stop() {
+    let src = "fun g() {\n    fun T() = U()\n    val x = T()\n    x.f()\n}\n";
+    assert_eq!(stops(call(src, "f").rty), "new_shadowed");
+}
+
+#[test]
+fn test_kt_recv_rty_ctor_val_is_a_property_and_stops() {
+    let src = "class K(val x: Foo) {\n    val a = x.f()\n}\n";
+    assert_eq!(stops(call(src, "f").rty), "ctor_prop");
+}
+
+#[test]
+fn test_kt_recv_cast_covers_a_ctor_default_and_a_property_initializer() {
+    let src = "class K(x: Any, val a: Int = if (x is D) x.f() else 0)\n";
+    assert!(call(src, "f").cast);
+    let src = "val p = if (x is D) x.f() else 0\n";
+    assert!(call(src, "f").cast);
+}
+
+#[test]
+fn test_kt_recv_cast_scan_skips_quote_marks_in_strings_and_comments() {
+    let src = "fun g(x: Foo) {\n    x.f()\n    val s = \"`\"\n    val c = '`'\n    // a ` here\n    if (x is Bar) {}\n}\n";
+    assert!(call(src, "f").cast);
+    // A cast word in a string or a comment is no test.
+    let src = "fun g(x: Foo) {\n    x.f()\n    val s = \"x is Bar\"\n    // x as Bar\n}\n";
+    assert!(!call(src, "f").cast);
+    // The code in a string template stays.
+    let src = "fun g(x: Foo) {\n    x.f()\n    val s = \"${x as Bar}\"\n}\n";
+    assert!(call(src, "f").cast);
+}
+
+#[test]
+fn test_kt_recv_cast_marks_x_before_the_keyword_only() {
+    let src = "fun g(x: Foo, y: Any) {\n    x.f()\n    if (y is x) {}\n}\n";
+    assert!(!call(src, "f").cast);
+    let src = "fun g(x: Foo) {\n    x.f()\n    val y = x as? Bar ?: return\n}\n";
+    assert!(call(src, "f").cast);
+    let src = "fun g(x: Foo) {\n    x.f()\n    if (x !is Bar) return\n}\n";
+    assert!(call(src, "f").cast);
+}
+
+#[test]
+fn test_kt_recv_cast_known_gap_parenthesized_and_bang_bang() {
+    // Known gap: the token scan misses `(x) as T` and `x!! is T`. The
+    // subtype walk of the dispatch proof covers the risk.
+    let src = "fun g(x: Foo) {\n    x.f()\n    val y = (x) as Bar\n}\n";
+    assert!(!call(src, "f").cast);
+    let src = "fun g(x: Foo?) {\n    x.f()\n    if (x!! is Bar) {}\n}\n";
+    assert!(!call(src, "f").cast);
+}
+
+#[test]
+fn test_kt_recv_rty_setter_param() {
+    let src =
+        "class K {\n    var p: Int = 0\n        set(x: Int) {\n            x.f()\n        }\n}\n";
+    assert!(matches!(call(src, "f").rty, Some(KtRty::Param { .. })));
+}
+
+#[test]
+fn test_kt_recv_rty_new_with_a_trailing_lambda_and_a_nullable_type_arg() {
+    assert_eq!(
+        rty("    val x = Foo { }\n    x.f()"),
+        Some(KtRty::New { ty: "Foo".into() })
+    );
+    assert_eq!(
+        rty("    val x: Foo<Int>? = g()\n    x.f()"),
+        Some(KtRty::Val {
+            ty: "Foo".into(),
+            nullable: true
+        })
+    );
+}
+
+#[test]
+fn test_kt_recv_rty_val_in_a_try_block_and_an_if_branch() {
+    assert!(matches!(
+        rty("    try {\n        val x: Foo = g()\n        x.f()\n    } catch (e: Exception) {}"),
+        Some(KtRty::Val { .. })
+    ));
+    assert!(matches!(
+        rty("    if (c) {\n        val x: Foo = g()\n        x.f()\n    }"),
+        Some(KtRty::Val { .. })
+    ));
+}
+
+#[test]
+fn test_kt_recv_rty_for_destructuring_stops() {
+    assert_eq!(
+        stops(rty("    for ((x, b) in xs) {\n        x.f()\n    }")),
+        "destructure"
+    );
+}
+
+#[test]
+fn test_kt_scope_two_calls_in_one_function_read_the_same_cached_scopes() {
+    let src = "fun <T> g(x: Foo) {\n    x.f()\n    x.h()\n}\n";
+    let (f, h) = (call(src, "f"), call(src, "h"));
+    assert_eq!(f.ctx, h.ctx);
+    assert_eq!(f.ctx.len(), 1);
+    assert!(f.cast == h.cast && !f.cast);
 }

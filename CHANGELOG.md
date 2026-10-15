@@ -5,6 +5,20 @@ All notable changes to this project are in this file.
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.8] - 2026-10-15
+
+This release adds exact Kotlin call links for `x.f()`, `Type.f()` and `super.f()` calls.
+
+### Added
+
+- Exact Kotlin links for a call on a typed value (`x.f()`), a call on an object or a companion (`Type.f()`) and `super.f()`. Sieve marks the call Extracted only when it proves one target.
+- Results on the Kotlin compiler check, Extracted / matched / wrong / unverified: mockito-kotlin v6.4.0 122 / 122 / 0 / 0, kotlinpoet 2.4.0 704 / 679 / 0 / 25, hoplite v3.0.3 385 / 385 / 0 / 0. On ktorm v4.2.1, a repo the rules never saw before the run: 238 / 238 / 0 / 0.
+
+### Changed
+
+- A Kotlin override check stops at any function with the same name in a subtype. This keeps a smart-cast call Inferred.
+- The first build after the upgrade re-parses every file.
+
 ## [0.1.7] - 2026-10-15
 
 This release adds exact call links for Kotlin, and C# calls that reach a type through a `global using`.

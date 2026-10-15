@@ -19,11 +19,16 @@ companion, then its class) may match instead. A Sieve `variable` source node (a 
 when the node span lies inside that innermost declaration. So a call in a local function or a nested type never judges an edge from the
 outer function.
 A matched edge whose target has an in-repo override (an "ovrfact" row names the target as a
-base) counts as wrong "overridden". An edge to an expect declaration counts as wrong "expect".
+base) counts as wrong "overridden". A `super` row never counts as overridden: a `super` call
+reaches the declaration it names. An edge to an expect declaration counts as wrong "expect".
 An unmatched edge in a compiled file is wrong, with the cause read from the oracle rows of
 the same name in the span (out of repo, extension, function value, local, operator, ...).
 An unmatched edge is unverified when its source file is not in the compile set, or when the
 oracle has an error row of that name (the compiler could not resolve the call).
+With KT_TRACE=<file> (the SIEVE_KT_TRACE file of the same build), each `ok` call of the trace
+is judged by itself: an oracle row at the same file and line, with the same name, must have a
+target span that holds the start line of the proven target. A miss in a compiled file is wrong.
+This shows a wrong call that a right (source, target) pair hides.
 Prints: Extracted Kotlin edges, matched, wrong (each with file:line), wrong by cause,
 unverified by cause, edges to an abstract or interface member in their own count, a count per
 call shape, and the oracle coverage per shape and per flag.
@@ -133,7 +138,7 @@ def main():
             elif r["name"] == tn:
                 other.append(r)
         isabs = any(r.get("abs") or r.get("iface") for r in hits)
-        ovr = any(r["dkey"] in overridden for r in hits)
+        ovr = any(r["dkey"] in overridden and r["shape"] != "super" for r in hits)
         exp = any(r.get("expect") for r in hits)
         if hits and not ovr and not exp:
             nmatch += 1; shapes[(sh, "matched")] += 1
@@ -183,6 +188,35 @@ def main():
     print("per call shape (matched, wrong, unverified):")
     for sh in sorted({k[0] for k in shapes}):
         print(f"  {sh}: {shapes[(sh,'matched')]}, {shapes[(sh,'wrong')]}, {shapes[(sh,'unverified')]}")
+    trace = os.environ.get("KT_TRACE")
+    if trace:
+        by_line = collections.defaultdict(list)
+        for r in rows:
+            by_line[(r["src"], r["line"])].append(r)
+        tc = collections.Counter()
+        for l in open(trace):
+            parts = l.rstrip("\n").split("\t")
+            if len(parts) != 5 or parts[4] != "ok":
+                continue
+            loc, name, tshape, tid = parts[0], parts[1], parts[2], parts[3]
+            path, _, ln = loc.rpartition(":")
+            t = node.get(tid)
+            ts = span(t) if t else None
+            if not t or not ts:
+                tc[(tshape, "target not in graph")] += 1
+                continue
+            same = [r for r in by_line.get((path, int(ln)), ()) if r["name"] == name.strip("`")]
+            if any(r["dst"] == t["path"] and r["dst_start"] <= ts[0] <= r["dst_end"] for r in same):
+                tc[(tshape, "matched")] += 1
+            elif path not in compiled or any(r.get("err") for r in same):
+                tc[(tshape, "unverified")] += 1
+            else:
+                tc[(tshape, "wrong")] += 1
+                print(f"  trace wrong {loc} {tshape} {name} -> {tid}")
+        print("trace calls (matched, wrong, unverified):")
+        for sh in sorted({k[0] for k in tc}):
+            extra = f", target not in graph {tc[(sh, 'target not in graph')]}" if tc[(sh, "target not in graph")] else ""
+            print(f"  {sh}: {tc[(sh, 'matched')]}, {tc[(sh, 'wrong')]}, {tc[(sh, 'unverified')]}{extra}")
     errrows = sum(1 for r in rows if r.get("err"))
     print(f"oracle rows: {len(rows)}; error rows: {errrows}; override facts: {len(facts)}; plugin errors: {plugin_err}; compile set files: {len(compiled)}")
     flags = ["ctor", "ext", "fnval", "local", "top", "abs", "iface", "ovd", "virt", "oor", "impl", "java", "op", "expect", "annot"]

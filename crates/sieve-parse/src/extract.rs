@@ -497,7 +497,13 @@ pub enum KtScope {
     /// A function, an extension property or a constructor. `ext` is the
     /// simple name of the extension receiver type, or `?` when the written
     /// receiver type has no simple name.
-    Fun { name: String, ext: Option<String> },
+    Fun {
+        name: String,
+        ext: Option<String>,
+        /// The names of the type parameters of the function.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        tparams: Vec<String>,
+    },
     /// A class, an interface or an enum. `line` matches `KtType::line`.
     Class { name: String, line: u32 },
     /// An object. `line` matches `KtType::line`.
@@ -517,6 +523,20 @@ pub enum KtScope {
         #[serde(default)]
         bound: bool,
     },
+}
+
+/// What the binder of the receiver `x` of a `x.f()` call says about the type
+/// of `x`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum KtRty {
+    /// A function, constructor or setter param with a written type.
+    Param { ty: String, nullable: bool },
+    /// A local `val x: T`.
+    Val { ty: String, nullable: bool },
+    /// A local `val x = T(..)`: the initializer is one call with no receiver.
+    New { ty: String },
+    /// Any other binder of `x`, or a doubt. The text is the reason.
+    Stop(String),
 }
 
 /// One Kotlin call that the index proves.
@@ -540,6 +560,14 @@ pub struct KtCall {
     /// The line of the call, counted from 1.
     #[serde(default)]
     pub line: u32,
+    /// For a `Name` call: what the binder of the receiver says about its
+    /// type. `None` if no binder has the name of the receiver.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rty: Option<KtRty>,
+    /// For a `Name` call: the receiver is a name in an `is`, `!is`, `as` or
+    /// `as?` test in the outermost enclosing declaration.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub cast: bool,
 }
 
 /// The kind of a Kotlin type declaration.
@@ -588,6 +616,9 @@ pub struct KtFun {
     pub d: u32,
     /// A parameter is `vararg`.
     pub vararg: bool,
+    /// The names of the type parameters of the function.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tparams: Vec<String>,
 }
 
 /// A property of a Kotlin file or type, a constructor `val` included.
@@ -603,6 +634,9 @@ pub struct KtProp {
     pub ty: Option<String>,
     /// The simple name of the extension receiver type (`?` if it has none).
     pub ext_recv: Option<String>,
+    /// The names of the type parameters of the property.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tparams: Vec<String>,
 }
 
 /// A type declaration of a Kotlin file.
@@ -639,6 +673,9 @@ pub struct KtType {
     /// entry body.
     #[serde(default)]
     pub local: bool,
+    /// The names of the enum entries, empty for a type that is no enum.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub entries: Vec<String>,
 }
 
 /// A typealias of a Kotlin file.
@@ -672,6 +709,9 @@ pub struct KtBody {
     pub bases: Vec<String>,
     /// The names that the body declares with `override`.
     pub overrides: Vec<String>,
+    /// The names of all functions that the body declares.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub funs: Vec<String>,
 }
 
 /// The facts of one Kotlin file.

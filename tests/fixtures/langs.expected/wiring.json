@@ -2,7 +2,7 @@
   "meta": {
     "version": 1,
     "nodeCount": 276,
-    "edgeCount": 165,
+    "edgeCount": 166,
     "languages": [
       "c",
       "c_sharp",
@@ -4422,6 +4422,12 @@
     {
       "source": "kotlin/Calls.kt#Box.reopen",
       "target": "kotlin/Calls.kt#Box.open",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "kotlin/Calls.kt#each",
+      "target": "kotlin/Calls.kt#Box.make",
       "relation": "calls",
       "confidence": "extracted"
     },

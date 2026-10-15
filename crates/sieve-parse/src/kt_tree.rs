@@ -14,7 +14,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use tree_sitter::Node as TsNode;
 
 use crate::extract::{
-    KtAlias, KtBody, KtBodyKind, KtCall, KtFileRec, KtFun, KtImport, KtKind, KtProp, KtRec,
+    KtAlias, KtBody, KtBodyKind, KtCall, KtFileRec, KtFun, KtImport, KtKind, KtProp, KtRec, KtRty,
     KtScope, KtShape, KtType, RawEdge,
 };
 use crate::go_tree::text;
@@ -61,6 +61,10 @@ pub(crate) struct KtFile {
     local_ids: HashSet<usize>,
     /// The binders of a scope node, by node id.
     binders: RefCell<HashMap<usize, Vec<Binder>>>,
+    /// The names in a cast test, by node id of the enclosing declaration.
+    casts: RefCell<HashMap<usize, HashSet<String>>>,
+    /// The scope of a node, by node id. Many calls share one ancestor.
+    scopes: RefCell<HashMap<usize, Option<KtScope>>>,
 }
 
 impl KtFile {
@@ -84,6 +88,8 @@ impl KtFile {
             bodies: HashMap::new(),
             local_ids: HashSet::new(),
             binders: RefCell::new(HashMap::new()),
+            casts: RefCell::new(HashMap::new()),
+            scopes: RefCell::new(HashMap::new()),
         };
         let mut c = root.walk();
         for ch in root.children(&mut c) {
@@ -150,16 +156,73 @@ impl KtFile {
         let recv = (shape == KtShape::Name).then(|| receiver.unwrap_or_default().to_string());
         let mut stop = label_stop(node, shape);
         let mut ctx = Vec::new();
+        // The binders named like the receiver: how many, and the innermost.
+        let (mut hits, mut inner) = (0, None);
+        // The topmost declaration that holds the call.
+        let mut outer = None;
+        // The class bodies the walk has left, and whether the first one was
+        // left from an init block or a property initializer.
+        let (mut crossed, mut init_ctx, mut fun_seen) = (0, false, false);
         let mut up = node.parent();
         while let Some(a) = up {
-            if stop.is_none() && shape == KtShape::Bare {
+            // `parent` walks down from the root, so call it once per node.
+            let next = a.parent();
+            if stop.is_none() {
                 stop = self.binder_stop(a, name, src);
             }
-            if let Some(s) = self.scope_of(a, src) {
+            if let Some(x) = recv.as_deref() {
+                let mut n = self.binder_hits(a, x, src);
+                // A constructor param is no binder past the body of its own
+                // class, except in an init block or a property initializer.
+                // A constructor `val` is then a property: the proof finds it.
+                let own = a.kind() == "class_declaration" && crossed == 1 && init_ctx;
+                if a.kind() == "class_declaration" && crossed > 0 && !own {
+                    n = 0;
+                }
+                hits += n;
+                if n > 0 && inner.is_none() {
+                    inner = Some((a, crossed == 0 || own));
+                }
+            }
+            if next.is_some() {
+                outer = Some(a);
+            }
+            if matches!(a.kind(), "class_body" | "enum_class_body")
+                || self.bodies.contains_key(&a.id())
+            {
+                crossed += 1;
+                if crossed == 1 {
+                    init_ctx = !fun_seen;
+                }
+            }
+            if matches!(
+                a.kind(),
+                "function_declaration" | "secondary_constructor" | "getter" | "setter"
+            ) {
+                fun_seen = true;
+            }
+            if let Some(s) = self.cached_scope(a, src) {
                 ctx.push(s);
             }
-            up = a.parent();
+            up = next;
         }
+        let rty = match (recv.as_deref(), inner) {
+            (Some(_), Some(_)) if hits > 1 => Some(KtRty::Stop("two_binders".to_string())),
+            (Some(_), Some((_, false))) => Some(KtRty::Stop("class_boundary".to_string())),
+            (Some(x), Some((a, true))) => Some(self.rty_of(a, x, node, src)),
+            _ => None,
+        };
+        // A binder named like the `New` type may shadow the constructor.
+        let rty = match rty {
+            Some(KtRty::New { ty }) if self.binder_in_chain(node, &ty, src) => {
+                Some(KtRty::Stop("new_shadowed".to_string()))
+            }
+            other => other,
+        };
+        let cast = match (recv.as_deref(), outer) {
+            (Some(x), Some(o)) => self.is_cast(o, x, src),
+            _ => false,
+        };
         Some(KtRec::Cross(KtCall {
             shape,
             name: name.to_string(),
@@ -168,7 +231,9 @@ impl KtFile {
             ctx,
             recv,
             stop,
-            line: row(node),
+            line: name_row(node),
+            rty,
+            cast,
         }))
     }
 
@@ -251,6 +316,7 @@ impl KtFile {
             props: Vec::new(),
             methods: Vec::new(),
             local,
+            entries: Vec::new(),
         });
         if local {
             self.local_ids.insert(n.id());
@@ -282,6 +348,10 @@ impl KtFile {
                 "property_declaration" => {
                     let p = props_of(m, src);
                     self.rec.types[at].props.extend(p);
+                }
+                "enum_entry" => {
+                    let e = name_of(m, src);
+                    self.rec.types[at].entries.extend(e);
                 }
                 "class_declaration" | "object_declaration" => {
                     self.add_type(m, Some(&name), local, src);
@@ -447,8 +517,21 @@ impl KtFile {
             name,
             line: row(at),
             bases,
-            overrides: body.map(|b| override_names(b, src)).unwrap_or_default(),
+            overrides: body.map(|b| member_names(b, src, true)).unwrap_or_default(),
+            funs: body
+                .map(|b| member_names(b, src, false))
+                .unwrap_or_default(),
         });
+    }
+
+    /// The scope of a node, read once per node.
+    fn cached_scope(&self, a: TsNode, src: &[u8]) -> Option<KtScope> {
+        if let Some(hit) = self.scopes.borrow().get(&a.id()) {
+            return hit.clone();
+        }
+        let scope = self.scope_of(a, src);
+        self.scopes.borrow_mut().insert(a.id(), scope.clone());
+        scope
     }
 
     /// The scope that a node adds around the calls below it.
@@ -464,18 +547,22 @@ impl KtFile {
                     .map(|n| ident(n, src))
                     .unwrap_or_default(),
                 ext: ext(),
+                tparams: type_params(a, src),
             }),
             "anonymous_function" => Some(KtScope::Fun {
                 name: String::new(),
                 ext: ext(),
+                tparams: Vec::new(),
             }),
             "secondary_constructor" => Some(KtScope::Fun {
                 name: "<init>".to_string(),
                 ext: None,
+                tparams: Vec::new(),
             }),
             "property_declaration" => Some(KtScope::Fun {
                 name: props_of(a, src)?.name,
                 ext: Some(written(child(a, "receiver_type")?, src)),
+                tparams: type_params(a, src),
             }),
             "class_declaration" => Some(KtScope::Class {
                 name: named(""),
@@ -505,19 +592,7 @@ impl KtFile {
 
     /// The reason word when the scope node `a` brings a binder `name`.
     fn binder_stop(&self, a: TsNode, name: &str, src: &[u8]) -> Option<String> {
-        if !matches!(
-            a.kind(),
-            "function_declaration"
-                | "anonymous_function"
-                | "secondary_constructor"
-                | "lambda_literal"
-                | "setter"
-                | "for_statement"
-                | "catch_block"
-                | "when_expression"
-                | "statements"
-                | "class_declaration"
-        ) {
+        if !is_scope_kind(a.kind()) {
             return None;
         }
         let mut cache = self.binders.borrow_mut();
@@ -526,6 +601,302 @@ impl KtFile {
             .find(|(n, _)| n == name)
             .map(|(_, reason)| (*reason).to_string())
     }
+
+    /// Whether a scope around the node `n` has a binder named `name`.
+    fn binder_in_chain(&self, n: TsNode, name: &str, src: &[u8]) -> bool {
+        let mut up = n.parent();
+        while let Some(a) = up {
+            if self.binder_stop(a, name, src).is_some() {
+                return true;
+            }
+            up = a.parent();
+        }
+        false
+    }
+
+    /// The count of binders named `name` that the scope node `a` brings.
+    fn binder_hits(&self, a: TsNode, name: &str, src: &[u8]) -> usize {
+        if !is_scope_kind(a.kind()) {
+            return 0;
+        }
+        let mut cache = self.binders.borrow_mut();
+        let list = cache.entry(a.id()).or_insert_with(|| binders_of(a, src));
+        list.iter().filter(|(n, _)| n == name).count()
+    }
+
+    /// What the one binder `x` of the scope node `a` says about the type of
+    /// `x` at the call node `call`.
+    fn rty_of(&self, a: TsNode, x: &str, call: TsNode, src: &[u8]) -> KtRty {
+        let stop = |why: &str| KtRty::Stop(why.to_string());
+        let reason = self.binder_stop(a, x, src).unwrap_or_default();
+        let named = |n: &TsNode| child(*n, "simple_identifier").is_some_and(|i| ident(i, src) == x);
+        match reason.as_str() {
+            "param" | "ctor_param" | "setter_param" => {
+                let list = match a.kind() {
+                    "class_declaration" => child(a, "primary_constructor"),
+                    "setter" => Some(a),
+                    _ => child(a, "function_value_parameters"),
+                };
+                let found = list.and_then(|l| {
+                    let mut c = l.walk();
+                    let f = l.children(&mut c).find(|p| {
+                        matches!(
+                            p.kind(),
+                            "parameter" | "class_parameter" | "parameter_with_optional_type"
+                        ) && named(p)
+                    });
+                    f
+                });
+                let Some(p) = found else {
+                    return stop("no_param");
+                };
+                // A constructor `val` or `var` is a property, not a binder.
+                if p.kind() == "class_parameter" && has_token(p, "binding_pattern_kind") {
+                    return stop("ctor_prop");
+                }
+                if has_vararg(p, src) {
+                    return stop("vararg");
+                }
+                match written_type(p, src) {
+                    Some(Some((ty, nullable))) => KtRty::Param { ty, nullable },
+                    _ => stop("param_type"),
+                }
+            }
+            "local" => {
+                let mut c = a.walk();
+                let decl = a
+                    .children(&mut c)
+                    .filter(|s| s.kind() == "property_declaration")
+                    .find(|s| child(*s, "variable_declaration").is_some_and(|v| named(&v)));
+                let Some(decl) = decl else {
+                    return stop("no_local");
+                };
+                if decl.end_byte() > call.start_byte() {
+                    return stop("binder_after_call");
+                }
+                let is_var =
+                    child(decl, "binding_pattern_kind").is_some_and(|k| has_token(k, "var"));
+                if is_var {
+                    return stop("var");
+                }
+                let Some(var) = child(decl, "variable_declaration") else {
+                    return stop("no_local");
+                };
+                match written_type(var, src) {
+                    Some(Some((ty, nullable))) => KtRty::Val { ty, nullable },
+                    Some(None) => stop("local_type"),
+                    None => match new_type(decl, src) {
+                        Some(ty) => KtRty::New { ty },
+                        None => stop("untyped"),
+                    },
+                }
+            }
+            other => stop(other),
+        }
+    }
+
+    /// Whether the name `x` is in a cast test in the declaration node `o`.
+    fn is_cast(&self, o: TsNode, x: &str, src: &[u8]) -> bool {
+        let mut cache = self.casts.borrow_mut();
+        let set = cache
+            .entry(o.id())
+            .or_insert_with(|| cast_names(&masked(o, src)));
+        set.contains(x)
+    }
+}
+
+/// Whether a node kind can bring binders.
+fn is_scope_kind(kind: &str) -> bool {
+    matches!(
+        kind,
+        "function_declaration"
+            | "anonymous_function"
+            | "secondary_constructor"
+            | "lambda_literal"
+            | "setter"
+            | "for_statement"
+            | "catch_block"
+            | "when_expression"
+            | "statements"
+            | "class_declaration"
+    )
+}
+
+/// Whether a parameter has the modifier `vararg`.
+fn has_vararg(p: TsNode, src: &[u8]) -> bool {
+    let has = |m: TsNode| {
+        matches!(m.kind(), "parameter_modifiers" | "modifiers")
+            && text(m, src).split_whitespace().any(|w| w == "vararg")
+    };
+    p.prev_sibling().is_some_and(has) || {
+        let mut c = p.walk();
+        let found = p.children(&mut c).any(has);
+        found
+    }
+}
+
+/// The written type of a declaration: `None` if it writes no type,
+/// `Some(None)` if the type has no simple name, else the name and the
+/// nullable flag.
+fn written_type(d: TsNode, src: &[u8]) -> Option<Option<(String, bool)>> {
+    let mut c = d.walk();
+    let t = d.children(&mut c).find(|k| {
+        matches!(
+            k.kind(),
+            "user_type"
+                | "nullable_type"
+                | "function_type"
+                | "parenthesized_type"
+                | "type_reference"
+                | "not_nullable_type"
+        )
+    })?;
+    Some(simple_type(t, src).map(|n| (n, is_nullable(t))))
+}
+
+/// Whether a written type ends in `?`.
+fn is_nullable(t: TsNode) -> bool {
+    match t.kind() {
+        "nullable_type" => true,
+        "parenthesized_type" | "type_reference" => t.named_child(0).is_some_and(is_nullable),
+        _ => false,
+    }
+}
+
+/// The type of `val x = T(..)`: the initializer must be exactly one call
+/// with no receiver and a callee with an uppercase first letter.
+fn new_type(decl: TsNode, src: &[u8]) -> Option<String> {
+    let mut c = decl.walk();
+    let mut rest = decl.children(&mut c).skip_while(|k| k.kind() != "=");
+    rest.next()?;
+    let init: Vec<TsNode> = rest.filter(|k| k.is_named()).collect();
+    let [call] = init.as_slice() else {
+        return None;
+    };
+    let callee = (call.kind() == "call_expression").then(|| call.named_child(0))??;
+    let name = (callee.kind() == "simple_identifier").then(|| ident(callee, src))?;
+    name.chars().next()?.is_uppercase().then_some(name)
+}
+
+/// The text of a node with each comment and string replaced by spaces. The
+/// code in a string template stays. A quote mark in a string or a comment
+/// then cannot hide a later token.
+fn masked(o: TsNode, src: &[u8]) -> String {
+    // The kind tests run on a flag table, not on the kind names: the walk
+    // visits every node of the declaration.
+    const STRING: u8 = 1;
+    const LEAF: u8 = 2;
+    const INTERP: u8 = 4;
+    static FLAGS: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
+    let lang = o.language();
+    let flags = FLAGS.get_or_init(|| {
+        (0..lang.node_kind_count() as u16)
+            .map(|id| {
+                let k = lang.node_kind_for_id(id).unwrap_or_default();
+                let mut f = 0;
+                if k.contains("string_literal") {
+                    f |= STRING;
+                }
+                if k.contains("comment") || k == "character_literal" {
+                    f |= LEAF;
+                }
+                if k.starts_with("interpolated") {
+                    f |= INTERP;
+                }
+                f
+            })
+            .collect()
+    });
+    let flag = |n: TsNode| flags.get(usize::from(n.kind_id())).copied().unwrap_or(0);
+    fn fill(buf: &mut [u8], base: usize, n: TsNode) {
+        buf[n.start_byte() - base..n.end_byte() - base].fill(b' ');
+    }
+    // One cursor serves the whole walk: a new cursor per node is slow.
+    fn walk(
+        c: &mut tree_sitter::TreeCursor,
+        flag: &dyn Fn(TsNode) -> u8,
+        buf: &mut [u8],
+        base: usize,
+        src: &[u8],
+    ) {
+        let n = c.node();
+        let f = flag(n);
+        let string = f & STRING != 0;
+        let leaf = f & LEAF != 0;
+        if string || leaf {
+            fill(buf, base, n);
+        }
+        if leaf || !c.goto_first_child() {
+            return;
+        }
+        loop {
+            let ch = c.node();
+            let interp = flag(ch) & INTERP != 0;
+            if string && interp {
+                let r = ch.start_byte() - base..ch.end_byte() - base;
+                buf[r.clone()].copy_from_slice(&src[ch.byte_range()]);
+            }
+            if !string || interp {
+                walk(c, flag, buf, base, src);
+            }
+            if !c.goto_next_sibling() {
+                break;
+            }
+        }
+        c.goto_parent();
+    }
+    let base = o.start_byte();
+    let mut buf = src[o.byte_range()].to_vec();
+    walk(&mut o.walk(), &flag, &mut buf, base, src);
+    String::from_utf8_lossy(&buf).into_owned()
+}
+
+/// The names that stand in a cast test in the text of one declaration. A
+/// test is `x is`, `x !is`, `x as`, `x as?`, or `when (x) { .. is .. }`.
+/// The scan reads tokens: `(x) as T` and `x!! is T` are a known gap. The
+/// subtype walk of the dispatch proof covers the risk.
+fn cast_names(text: &str) -> HashSet<String> {
+    let toks = tokens(text);
+    let mut out = HashSet::new();
+    let at = |i: usize| toks.get(i).map(|t| t.text);
+    let mut add = |i: usize| {
+        out.extend(toks.get(i).filter(|k| k.ident).map(|k| k.text.to_string()));
+    };
+    for (i, t) in toks.iter().enumerate() {
+        match t.text {
+            "is" => {
+                let before = if i > 0 && at(i - 1) == Some("!") {
+                    i.wrapping_sub(2)
+                } else {
+                    i.wrapping_sub(1)
+                };
+                add(before);
+            }
+            "as" => add(i.wrapping_sub(1)),
+            "when"
+                if at(i + 1) == Some("(") && at(i + 3) == Some(")") && at(i + 4) == Some("{") =>
+            {
+                let mut depth = 0;
+                let mut has_is = false;
+                for k in &toks[i + 4..] {
+                    match k.text {
+                        "{" => depth += 1,
+                        "}" => depth -= 1,
+                        "is" => has_is = true,
+                        _ => {}
+                    }
+                    if depth == 0 {
+                        break;
+                    }
+                }
+                if has_is {
+                    add(i + 2);
+                }
+            }
+            _ => {}
+        }
+    }
+    out
 }
 
 /// The names that a scope node binds, each with the reason word.
@@ -1032,6 +1403,19 @@ fn row(n: TsNode) -> u32 {
     n.start_position().row as u32 + 1
 }
 
+/// The line of the called name. In a chain `a\n.f()` this is the line of
+/// `f`, not the line where the call starts.
+fn name_row(call: TsNode) -> u32 {
+    let suffix = call
+        .child(0)
+        .filter(|c| c.kind() == "navigation_expression")
+        .and_then(|c| c.named_child(c.named_child_count().saturating_sub(1)))
+        .filter(|s| s.kind() == "navigation_suffix");
+    suffix
+        .and_then(|s| child(s, "simple_identifier"))
+        .map_or_else(|| row(call), row)
+}
+
 /// The first child of a node with the given kind.
 fn child<'a>(n: TsNode<'a>, kind: &str) -> Option<TsNode<'a>> {
     let mut c = n.walk();
@@ -1215,6 +1599,7 @@ fn fun_of(n: TsNode, src: &[u8]) -> Option<KtFun> {
         n: count,
         d: defaults,
         vararg,
+        tparams: type_params(n, src),
     })
 }
 
@@ -1231,6 +1616,7 @@ fn props_of(n: TsNode, src: &[u8]) -> Option<KtProp> {
         mods: modifiers(n, src).0,
         ty,
         ext_recv: child(n, "receiver_type").map(|r| written(r, src)),
+        tparams: type_params(n, src),
     })
 }
 
@@ -1249,13 +1635,16 @@ fn ctor_props(ctor: TsNode, src: &[u8]) -> Vec<KtProp> {
                 mods: modifiers(p, src).0,
                 ty,
                 ext_recv: None,
+                tparams: Vec::new(),
             })
         })
         .collect()
 }
 
-/// The names that the direct members of a body declare with `override`.
-fn override_names(body: TsNode, src: &[u8]) -> Vec<String> {
+/// The names that the direct members of a body declare. With
+/// `only_override`, the names that carry `override`. Without it, only the
+/// functions, with or without `override`.
+fn member_names(body: TsNode, src: &[u8], only_override: bool) -> Vec<String> {
     let list = match body.kind() {
         "lambda_literal" => child(body, "statements"),
         _ => Some(body),
@@ -1268,11 +1657,11 @@ fn override_names(body: TsNode, src: &[u8]) -> Vec<String> {
     for m in list.children(&mut c) {
         let name = match m.kind() {
             "function_declaration" => fun_of(m, src).map(|f| (f.mods, f.name)),
-            "property_declaration" => props_of(m, src).map(|p| (p.mods, p.name)),
+            "property_declaration" if only_override => props_of(m, src).map(|p| (p.mods, p.name)),
             _ => None,
         };
         if let Some((mods, name)) = name {
-            if mods.iter().any(|w| w == "override") && !out.contains(&name) {
+            if (!only_override || mods.iter().any(|w| w == "override")) && !out.contains(&name) {
                 out.push(name);
             }
         }

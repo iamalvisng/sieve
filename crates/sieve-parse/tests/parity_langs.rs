@@ -300,8 +300,9 @@ fn test_p2_14_kotlin_enum_signatures_end_at_the_enum_body() {
 
 /// P2-14, P2-15: a call through `this`, and a call inside a trailing
 /// lambda, resolve as the golden does. The lambda call belongs to the
-/// enclosing function. `each` has exactly one calls edge: the golden gives no
-/// edge for `forEach`, `run`, `Box.make` or `"hi".shout`.
+/// enclosing function. `each` has two calls edges: `helper` and, since the receiver proof,
+/// the proved `Box.make()`. The golden gives no edge for `forEach`, `run` or
+/// `"hi".shout`.
 #[test]
 fn test_p2_15_kotlin_this_and_trailing_lambda_calls_match_golden() {
     let built = built_graph();
@@ -318,7 +319,10 @@ fn test_p2_15_kotlin_this_and_trailing_lambda_calls_match_golden() {
         out
     };
     assert_eq!(calls_from("Box.reopen"), vec![format!("{f}#Box.open")]);
-    assert_eq!(calls_from("each"), vec![format!("{f}#helper")]);
+    assert_eq!(
+        calls_from("each"),
+        vec![format!("{f}#Box.make"), format!("{f}#helper")]
+    );
 }
 
 /// P2-05 (DV16): a Kotlin file gives the nodes and `contains` edges that

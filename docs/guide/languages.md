@@ -81,10 +81,15 @@ an extension method call, a call to a type found only through a global using,
 `base.M()`, a static `Type.M()` call, and a call on a field receiver.
 A parse-error file adds text facts only.
 
+Sieve links a Kotlin call `x.f()` on a typed value, a call `Type.f()` on an object or a companion,
+and `super.f()` as exact when it proves one target. On ktorm v4.2.1, a repo the rules never saw before the run,
+238 of 238 Extracted code links match the compiler and 0 are wrong.
+
 For Kotlin, these calls stay Inferred or get no edge: a call to an interface,
-abstract or `expect` target, a method call `x.f()`, a `Type.f()` call, `super.f()`,
-a call inside a lambda that the proof does not cover, a call on an anonymous
-object, a local function or class, and any call in a `.kts` file.
+abstract or `expect` target, a call on a call result (`a.b().f()`), a call where
+a class override and its base function are both in the chain, a call inside a lambda
+that the proof does not cover, a call on an anonymous object, a local function or class,
+and any call in a `.kts` file. A repo with generated sources can stop more calls.
 A parse-error file adds text facts only.
 
 Sieve does not link these TypeScript and JavaScript cases as exact: non-relative package specifiers,

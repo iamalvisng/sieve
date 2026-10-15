@@ -1,12 +1,13 @@
 //! The proof of one Kotlin call. A proof means exactly 1 declaration can be
 //! the target, with every source outside the repo closed. The proof covers a
-//! bare call `f()`, a constructor call `T(..)` and a call `this.f()`. Any
-//! doubt gives a stop reason, and the edge stays Inferred.
+//! bare call `f()`, a constructor call `T(..)`, a call `this.f()`, a call
+//! `x.f()`, a call `Type.f()` and a call `super.f()`.
+//! Any doubt gives a stop reason, and the edge stays Inferred.
 
 use std::collections::HashSet;
 use std::io::Write;
 
-use crate::extract::{KtCall, KtFileRec, KtFun, KtKind, KtScope, KtShape};
+use crate::extract::{KtCall, KtFileRec, KtFun, KtKind, KtRty, KtScope, KtShape};
 use crate::kt_index::{split_path, KtIndex, Res, Ty};
 use crate::kt_stdlib::{has, EXT_ANY, NO_RECV_BARE, TOP};
 
@@ -75,13 +76,13 @@ impl KtIndex {
         if call.name != name {
             return Err("name");
         }
-        match call.shape {
-            KtShape::Bare | KtShape::This => {}
-            _ => return Err("shape"),
+        if call.shape == KtShape::Other {
+            return Err("shape");
         }
         let bare = call.shape == KtShape::Bare;
         if call.stop.is_some() {
-            return Err(if bare { "binder" } else { "label" });
+            let label = matches!(call.stop.as_deref(), Some("label" | "super_typed"));
+            return Err(if label { "label" } else { "binder" });
         }
         if self.lost.contains(name) {
             return Err("lost_name");
@@ -98,11 +99,25 @@ impl KtIndex {
         self.check_imports(rec, name)?;
         let (recvs, from) = self.receivers(fi, call)?;
         let mut items: Vec<Item> = Vec::new();
-        if bare {
-            self.bare_items(fi, from, &recvs, name, &mut items)?;
-        } else {
-            self.this_items(fi, from, &recvs, name, &mut items)?;
+        match call.shape {
+            KtShape::Bare => self.bare_items(fi, from, &recvs, name, &mut items)?,
+            KtShape::This => self.this_items(fi, from, &recvs, name, &mut items)?,
+            KtShape::Name => return self.name_call(fi, from, &recvs, call, name),
+            _ => return self.super_call(fi, from, call, name),
         }
+        self.finish(fi, call, name, items, &[])
+    }
+
+    /// The target of the one item that the reach set holds. `skip` lists
+    /// the types whose members need no subtype walk.
+    fn finish(
+        &self,
+        fi: usize,
+        call: &KtCall,
+        name: &str,
+        items: Vec<Item>,
+        skip: &[Ty],
+    ) -> Result<String, Stop> {
         let mut uniq: Vec<Item> = Vec::new();
         for i in items {
             if !uniq.contains(&i) {
@@ -132,7 +147,7 @@ impl KtIndex {
                 arity(fun, call)?;
                 id_of(&fun.id)
             }
-            Item::Member(t, i) => self.member(t, i, call, name),
+            Item::Member(t, i) => self.member(t, i, call, name, skip),
         }
     }
 
@@ -275,6 +290,23 @@ impl KtIndex {
     /// The top-level functions and properties named `name` that the file
     /// sees. `ext_only` keeps the extensions.
     fn top_items(&self, fi: usize, name: &str, ext_only: bool, items: &mut Vec<Item>) {
+        for key in &self.places(fi, name) {
+            for (f, i) in self.top_funs.get(key).into_iter().flatten() {
+                if !ext_only || self.files[*f].1.funs[*i].ext_recv.is_some() {
+                    items.push(Item::Top(*f, *i));
+                }
+            }
+            for (f, i) in self.top_props.get(key).into_iter().flatten() {
+                if !ext_only || self.files[*f].1.props[*i].ext_recv.is_some() {
+                    items.push(Item::Prop);
+                }
+            }
+        }
+    }
+
+    /// The package and name keys where the file `fi` sees a top-level
+    /// declaration `name`.
+    fn places(&self, fi: usize, name: &str) -> Vec<(String, String)> {
         let rec = &self.files[fi].1;
         let mut places: Vec<(&str, &str)> = vec![(rec.pkg.as_str(), name)];
         for imp in &rec.imports {
@@ -286,19 +318,11 @@ impl KtIndex {
             }
         }
         let mut seen: HashSet<(&str, &str)> = HashSet::new();
-        for (p, n) in places.into_iter().filter(|p| seen.insert(*p)) {
-            let key = (p.to_string(), n.to_string());
-            for (f, i) in self.top_funs.get(&key).into_iter().flatten() {
-                if !ext_only || self.files[*f].1.funs[*i].ext_recv.is_some() {
-                    items.push(Item::Top(*f, *i));
-                }
-            }
-            for (f, i) in self.top_props.get(&key).into_iter().flatten() {
-                if !ext_only || self.files[*f].1.props[*i].ext_recv.is_some() {
-                    items.push(Item::Prop);
-                }
-            }
-        }
+        places
+            .into_iter()
+            .filter(|p| seen.insert(*p))
+            .map(|(p, n)| (p.to_string(), n.to_string()))
+            .collect()
     }
 
     /// The reach set of a bare call `f()`.
@@ -368,7 +392,14 @@ impl KtIndex {
     }
 
     /// The proof of a member function: dispatch must give 1 runtime target.
-    fn member(&self, t: Ty, i: usize, call: &KtCall, name: &str) -> Result<String, Stop> {
+    fn member(
+        &self,
+        t: Ty,
+        i: usize,
+        call: &KtCall,
+        name: &str,
+        skip: &[Ty],
+    ) -> Result<String, Stop> {
         let ty = self.ty(t);
         let m = &ty.methods[i];
         let any = |mods: &[String], set: &[&str]| mods.iter().any(|w| set.contains(&w.as_str()));
@@ -377,8 +408,10 @@ impl KtIndex {
             return Err("abstract");
         }
         arity(m, call)?;
+        // A member in `skip` is called on an exact receiver: no walk.
         let fixed = any(&m.mods, &["private", "final"])
-            || matches!(ty.kind, KtKind::Object | KtKind::Companion);
+            || matches!(ty.kind, KtKind::Object | KtKind::Companion)
+            || (m.ext_recv.is_none() && skip.contains(&t));
         if !fixed {
             if let Some(why) = self.subtype_stop(t, name) {
                 return Err(why);
@@ -386,6 +419,302 @@ impl KtIndex {
         }
         id_of(&m.id)
     }
+}
+
+/// A property that the name `x` may mean, with the scope of its declaration.
+struct PropAt {
+    file: usize,
+    from: Option<Ty>,
+    ty: Option<String>,
+    ext: bool,
+    private_other: bool,
+}
+
+impl KtIndex {
+    /// The call `x.f()` on a typed value.
+    fn name_call(
+        &self,
+        fi: usize,
+        from: Option<Ty>,
+        recvs: &[Recv],
+        call: &KtCall,
+        name: &str,
+    ) -> Result<String, Stop> {
+        let x = call.recv.as_deref().ok_or("no_recv")?;
+        self.check_imports(&self.files[fi].1, x)?;
+        let t = match &call.rty {
+            Some(KtRty::Stop(_)) => return Err("receiver_binder"),
+            Some(KtRty::Param { ty, .. } | KtRty::Val { ty, .. }) => {
+                if call.cast {
+                    return Err("cast");
+                }
+                self.value_type(fi, from, ty, tparam(call, ty))?
+            }
+            Some(KtRty::New { ty }) => {
+                if call.cast {
+                    return Err("cast");
+                }
+                self.new_type(fi, from, recvs, ty, tparam(call, ty))?
+            }
+            None => {
+                let props = self.props_named(fi, from, recvs, x)?;
+                match props.as_slice() {
+                    [] => return self.type_call(fi, from, recvs, call, name, x),
+                    [p] => {
+                        if call.cast {
+                            return Err("cast");
+                        }
+                        // A type or a library name `x` may beat the property.
+                        if has(TOP, x) {
+                            return Err("top_list");
+                        }
+                        if self.lost.contains(x) {
+                            return Err("lost_name");
+                        }
+                        if self.lookup(fi, from, x) != Res::Outside {
+                            return Err("type_named_x");
+                        }
+                        if p.ext {
+                            return Err("ext_property");
+                        }
+                        if p.private_other {
+                            return Err("private_other_file");
+                        }
+                        let ty = p.ty.as_deref().ok_or("untyped_property")?;
+                        self.value_type(p.file, p.from, ty, false)?
+                    }
+                    _ => return Err("two_properties"),
+                }
+            }
+        };
+        let c = self.chain_of(t, name)?;
+        let mut items = self.plain_members(&c, name);
+        self.ext_items(fi, from, recvs, name, &c, &mut items)?;
+        self.finish(fi, call, name, items, &[])
+    }
+
+    /// The type that the written name `ty` means in the scope `from` of the
+    /// file `fi`.
+    fn value_type(&self, fi: usize, from: Option<Ty>, ty: &str, tparam: bool) -> Result<Ty, Stop> {
+        if tparam {
+            return Err("type_param");
+        }
+        match self.lookup(fi, from, ty) {
+            Res::Repo(t) => Ok(t),
+            Res::Outside => Err("outside_type"),
+            Res::Unknown => Err("unknown_type"),
+        }
+    }
+
+    /// The type of `val x = T(..)`: the bare proof of `T(..)` must reach the
+    /// class node.
+    fn new_type(
+        &self,
+        fi: usize,
+        from: Option<Ty>,
+        recvs: &[Recv],
+        ty: &str,
+        tparam: bool,
+    ) -> Result<Ty, Stop> {
+        let t = self.value_type(fi, from, ty, tparam)?;
+        if self.java_names.contains(ty) || self.lost.contains(ty) || has(TOP, ty) {
+            return Err("new_not_proved");
+        }
+        self.check_imports(&self.files[fi].1, ty)?;
+        let mut items = Vec::new();
+        self.bare_items(fi, from, recvs, ty, &mut items)?;
+        if items != [Item::Type(t)] {
+            return Err("new_not_proved");
+        }
+        self.constructor(t)?;
+        Ok(t)
+    }
+
+    /// The properties `x` that the implicit receivers and the file reach.
+    fn props_named(
+        &self,
+        fi: usize,
+        from: Option<Ty>,
+        recvs: &[Recv],
+        x: &str,
+    ) -> Result<Vec<PropAt>, Stop> {
+        let mut tys: Vec<Ty> = Vec::new();
+        for r in recvs {
+            for t in self.reach_types(fi, from, r, x, true)? {
+                if !tys.contains(&t) {
+                    tys.push(t);
+                }
+            }
+        }
+        let mut out = Vec::new();
+        for t in tys {
+            for p in self.ty(t).props.iter().filter(|p| p.name == x) {
+                out.push(PropAt {
+                    file: t.0,
+                    from: Some(t),
+                    ty: p.ty.clone(),
+                    ext: p.ext_recv.is_some(),
+                    private_other: false,
+                });
+            }
+        }
+        for key in self.places(fi, x) {
+            for (f, i) in self.top_props.get(&key).into_iter().flatten() {
+                let p = &self.files[*f].1.props[*i];
+                out.push(PropAt {
+                    file: *f,
+                    from: None,
+                    ty: p.ty.clone(),
+                    ext: p.ext_recv.is_some(),
+                    private_other: *f != fi && p.mods.iter().any(|w| w == "private"),
+                });
+            }
+        }
+        Ok(out)
+    }
+
+    /// The members named `name` of the types, without the extensions.
+    fn plain_members(&self, tys: &[Ty], name: &str) -> Vec<Item> {
+        let mut items = Vec::new();
+        self.members_of(tys, name, false, &mut items);
+        items.retain(|i| match i {
+            Item::Member(t, n) => self.ty(*t).methods[*n].ext_recv.is_none(),
+            _ => true,
+        });
+        items
+    }
+
+    /// The extensions `name` that the call may reach: member extensions of
+    /// the implicit receivers and the top-level extensions of the file. An
+    /// extension on a type outside `chain` drops out.
+    fn ext_items(
+        &self,
+        fi: usize,
+        from: Option<Ty>,
+        recvs: &[Recv],
+        name: &str,
+        chain: &[Ty],
+        items: &mut Vec<Item>,
+    ) -> Result<(), Stop> {
+        let mut outer = Vec::new();
+        for r in recvs {
+            outer.extend(self.reach_types(fi, from, r, name, true)?);
+        }
+        let mut ext = Vec::new();
+        self.members_of(&outer, name, true, &mut ext);
+        self.top_items(fi, name, true, &mut ext);
+        items.extend(ext.into_iter().filter(|i| self.ext_applies(i, chain)));
+        Ok(())
+    }
+
+    /// Whether the extension may take a receiver of a type in `chain`. The
+    /// receiver name resolves in the file and type of the extension.
+    /// An unknown receiver stays in the set.
+    fn ext_applies(&self, item: &Item, chain: &[Ty]) -> bool {
+        let (file, from, recv) = match *item {
+            Item::Member(t, i) => (t.0, Some(t), self.ty(t).methods[i].ext_recv.as_deref()),
+            Item::Top(f, i) => (f, None, self.files[f].1.funs[i].ext_recv.as_deref()),
+            _ => return true,
+        };
+        let generic = match *item {
+            Item::Member(t, i) => &self.ty(t).methods[i].tparams,
+            Item::Top(f, i) => &self.files[f].1.funs[i].tparams,
+            _ => return true,
+        };
+        match recv {
+            None | Some("?") => true,
+            // A type parameter receiver takes any type.
+            Some(r) if generic.iter().any(|p| p == r) => true,
+            Some(r) => match self.lookup(file, from, r) {
+                Res::Repo(x) => chain.contains(&x),
+                _ => true,
+            },
+        }
+    }
+
+    /// The call `Type.f()`.
+    fn type_call(
+        &self,
+        fi: usize,
+        from: Option<Ty>,
+        recvs: &[Recv],
+        call: &KtCall,
+        name: &str,
+        x: &str,
+    ) -> Result<String, Stop> {
+        if tparam(call, x) {
+            return Err("type_param");
+        }
+        let mut cur = from;
+        while let Some(o) = cur {
+            if self.ty(o).entries.iter().any(|e| e == x) {
+                return Err("value_named_x");
+            }
+            cur = self.outer_of(o);
+        }
+        let t = match self.lookup(fi, from, x) {
+            Res::Repo(t) => t,
+            Res::Outside => return Err("outside_type"),
+            Res::Unknown => return Err("unknown_type"),
+        };
+        let ty = self.ty(t);
+        let mut items: Vec<Item> = self.nested(t, name).into_iter().map(Item::Type).collect();
+        // The receiver is exact: an object, or the companion of a class.
+        let mut exact = Vec::new();
+        if matches!(ty.kind, KtKind::Object | KtKind::Companion) {
+            exact = self.chain_of(t, name)?;
+        } else {
+            if ty.entries.iter().any(|e| e == name) {
+                return Err("enum_entry");
+            }
+            // The class chain must be known and free of implicit members.
+            self.chain_of(t, name)?;
+            if let Some(co) = self.companion_of(t) {
+                exact = self.chain_of(co, name)?;
+            }
+        }
+        items.extend(self.plain_members(&exact, name));
+        if !exact.is_empty() {
+            self.ext_items(fi, from, recvs, name, &exact, &mut items)?;
+        }
+        self.finish(fi, call, name, items, &exact)
+    }
+
+    /// The call `super.f()`. No subtype walk: a `super` call does not
+    /// dispatch.
+    fn super_call(
+        &self,
+        fi: usize,
+        from: Option<Ty>,
+        call: &KtCall,
+        name: &str,
+    ) -> Result<String, Stop> {
+        for s in &call.ctx {
+            match s {
+                KtScope::Fun { ext: Some(_), .. } => return Err("ext_super"),
+                KtScope::Class { .. } | KtScope::Object { .. } | KtScope::Companion { .. } => {
+                    break;
+                }
+                _ => {}
+            }
+        }
+        let t = from.ok_or("unknown_chain")?;
+        let sups: Vec<Ty> = self
+            .chain_of(t, name)?
+            .into_iter()
+            .filter(|x| *x != t)
+            .collect();
+        let items = self.plain_members(&sups, name);
+        self.finish(fi, call, name, items, &sups)
+    }
+}
+
+/// Whether a type parameter of an enclosing function has the name `n`.
+fn tparam(call: &KtCall, n: &str) -> bool {
+    call.ctx.iter().any(|s| match s {
+        KtScope::Fun { tparams, .. } => tparams.iter().any(|p| p == n),
+        _ => false,
+    })
 }
 
 /// The arity stops: a named or spread argument, `vararg`, a wrong count.

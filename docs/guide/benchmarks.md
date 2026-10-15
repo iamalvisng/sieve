@@ -83,9 +83,10 @@ unverified when the oracle gives no single answer.
 | markdig | 1.4.0 | 912 | 0 | 22 | Roslyn, .NET SDK 10.0.401 |
 | serilog | v4.4.0 | 150 | 0 | 1 | Roslyn, .NET SDK 10.0.401 |
 | CsvHelper | 33.1.0 | 2,189 | 0 | 23 | Roslyn, .NET SDK 10.0.401 |
-| mockito-kotlin | v6.4.0 | 120 | 0 | 0 | kotlinc 2.4.21 (K2) |
-| kotlinpoet | 2.4.0 | 412 | 0 | 24 (file not compiled) | kotlinc 2.4.21 (K2) |
-| hoplite | v3.0.3 | 195 | 0 | 0 | kotlinc 2.4.21 (K2) |
+| mockito-kotlin | v6.4.0 | 122 | 0 | 0 | kotlinc 2.4.21 (K2) |
+| kotlinpoet | 2.4.0 | 704 | 0 | 25 (file not compiled) | kotlinc 2.4.21 (K2) |
+| hoplite | v3.0.3 | 385 | 0 | 0 | kotlinc 2.4.21 (K2) |
+| ktorm | v4.2.1 | 238 | 0 | 0 | kotlinc 2.4.21 (K2) |
 
 Before the fix, the same-file name rule gave wrong Extracted links:
 

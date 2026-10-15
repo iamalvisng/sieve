@@ -362,7 +362,7 @@ impl KtIndex {
     }
 
     /// The types named `n` that sit directly in the type `t`.
-    fn nested(&self, t: Ty, n: &str) -> Vec<Ty> {
+    pub(crate) fn nested(&self, t: Ty, n: &str) -> Vec<Ty> {
         let name = &self.ty(t).name;
         let rec = &self.files[t.0].1;
         (0..rec.types.len())
@@ -554,18 +554,16 @@ impl KtIndex {
                 match *sub {
                     Sub::Ty(t) => {
                         let x = self.ty(t);
-                        let overrides = x
-                            .methods
-                            .iter()
-                            .any(|m| m.name == name && m.mods.iter().any(|w| w == "override"));
-                        if overrides {
+                        // A smart cast can pick a new overload: any `fun` of
+                        // this name stops, with or without `override`.
+                        if x.methods.iter().any(|m| m.name == name) {
                             return Some("override_in_subtype");
                         }
                         queue.push((x.name.clone(), Some(t)));
                     }
                     Sub::Body(fi, bi) => {
                         let b = &rec(fi).bodies[bi];
-                        if b.overrides.iter().any(|o| o == name) {
+                        if b.overrides.iter().chain(&b.funs).any(|o| o == name) {
                             return Some("override_in_subtype");
                         }
                         if b.kind == KtBodyKind::Local {

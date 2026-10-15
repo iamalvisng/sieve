@@ -505,12 +505,12 @@ fn a_java_type_of_the_name_stops() {
 }
 
 #[test]
-fn a_call_on_a_variable_or_super_has_no_proof() {
+fn a_call_on_a_local_var_has_no_proof() {
     let files = [(
         "a.kt",
-        "class A {\n    fun m() {}\n    fun g(x: A) {\n        x.m()\n    }\n}\n",
+        "class A {\n    fun m() {}\n    fun g() {\n        var x: A = A()\n        x.m()\n    }\n}\n",
     )];
-    assert_eq!(stop(&files, "m"), "shape");
+    assert_eq!(stop(&files, "m"), "receiver_binder");
 }
 
 #[test]
@@ -667,4 +667,534 @@ fn the_trace_file_gets_one_line_per_call() {
         text,
         "a.kt:3\tf\tbare\ta.kt#f\tok\na.kt:4\tnothing\tbare\t-\tno_candidate\n"
     );
+}
+
+#[test]
+fn test_kt_recv_a_subtype_fun_without_override_stops_the_walk() {
+    let files = [
+        (
+            "b.kt",
+            "open class B {\n    open fun f() {}\n    fun g() {\n        f()\n    }\n}\n",
+        ),
+        ("c.kt", "class C : B() {\n    fun f(x: Int) {}\n}\n"),
+    ];
+    assert_eq!(stop(&files, "f"), "override_in_subtype");
+    let anon = [(
+        "a.kt",
+        "open class B {\n    open fun f() {}\n    fun g() {\n        f()\n    }\n}\nfun mk() {\n    val o = object : B() {\n        fun f(x: Int) {}\n    }\n}\n",
+    )];
+    assert_eq!(stop(&anon, "f"), "override_in_subtype");
+}
+
+#[test]
+fn test_kt_recv_a_local_fun_binder_stops_a_this_call() {
+    let files = [(
+        "a.kt",
+        "class A {\n    fun m() {}\n    fun g() {\n        fun m() {}\n        this.m()\n    }\n}\n",
+    )];
+    assert_eq!(stop(&files, "m"), "binder");
+}
+
+const RECV_BASE: &str =
+    "open class B {\n    open fun f() {}\n    fun g() {\n        f()\n    }\n}\n";
+
+#[test]
+fn test_kt_recv_an_enum_entry_body_with_a_plain_fun_stops() {
+    let files = [
+        ("b.kt", RECV_BASE),
+        (
+            "e.kt",
+            "enum class E : B() {\n    X {\n        fun f(x: Int) {}\n    }\n}\n",
+        ),
+    ];
+    assert_eq!(stop(&files, "f"), "override_in_subtype");
+}
+
+#[test]
+fn test_kt_recv_a_local_class_with_a_plain_fun_stops() {
+    let files = [
+        ("b.kt", RECV_BASE),
+        (
+            "a.kt",
+            "fun mk() {\n    class L : B() {\n        fun f(x: Int) {}\n    }\n}\n",
+        ),
+    ];
+    assert_eq!(stop(&files, "f"), "override_in_subtype");
+}
+
+#[test]
+fn test_kt_recv_a_plain_fun_in_a_subtype_of_a_subtype_stops() {
+    let files = [
+        ("b.kt", RECV_BASE),
+        ("c.kt", "open class C : B()\n"),
+        ("d.kt", "class D : C() {\n    fun f(x: Int) {}\n}\n"),
+    ];
+    assert_eq!(stop(&files, "f"), "override_in_subtype");
+}
+
+const CLASS_A: &str = "class A {\n    fun m() {}\n}\n";
+
+/// The proof of `m` in the file `a.kt`: `CLASS_A` plus `rest`.
+fn with_a(rest: &str) -> Result<String, &'static str> {
+    let src = format!("{CLASS_A}{rest}");
+    prove(&[("a.kt", src.as_str())], "m")
+}
+
+fn a_stop(rest: &str) -> &'static str {
+    with_a(rest).err().unwrap_or("proved")
+}
+
+#[test]
+fn test_kt_link_kt12_a_typed_param_reaches_the_member() {
+    assert_eq!(
+        with_a("fun use(a: A) {\n    a.m()\n}\n"),
+        Ok("a.kt#A.m".to_string())
+    );
+}
+
+#[test]
+fn test_kt_link_kt12_a_typed_local_val_reaches_the_member() {
+    let src = "fun use() {\n    val a: A = make()\n    a.m()\n}\n";
+    assert_eq!(with_a(src), Ok("a.kt#A.m".to_string()));
+}
+
+#[test]
+fn test_kt_link_kt12_a_new_local_reaches_the_member() {
+    let src = "fun use() {\n    val a = A()\n    a.m()\n}\n";
+    assert_eq!(with_a(src), Ok("a.kt#A.m".to_string()));
+}
+
+#[test]
+fn test_kt_link_kt12_a_class_property_reaches_the_member() {
+    let src = "class B(val a: A) {\n    fun g() {\n        a.m()\n    }\n}\n";
+    assert_eq!(with_a(src), Ok("a.kt#A.m".to_string()));
+    let body = "class C {\n    private val a: A = A()\n    fun g() {\n        a.m()\n    }\n}\n";
+    assert_eq!(with_a(body), Ok("a.kt#A.m".to_string()));
+}
+
+#[test]
+fn test_kt_link_kt12_a_nullable_receiver_with_safe_call_reaches_the_member() {
+    let src = "fun use(a: A?) {\n    a?.m()\n}\n";
+    assert_eq!(with_a(src), Ok("a.kt#A.m".to_string()));
+}
+
+#[test]
+fn test_kt_link_kt12_an_extension_on_the_supertype_is_the_target() {
+    let files = [(
+        "a.kt",
+        "open class Base\nclass A : Base()\nclass Other\nfun Base.m() {}\nfun Other.m() {}\nfun use(a: A) {\n    a.m()\n}\n",
+    )];
+    assert_eq!(prove(&files, "m"), Ok("a.kt#m".to_string()));
+}
+
+#[test]
+fn test_kt_link_kt12_a_member_and_an_extension_make_two_candidates() {
+    let src = "fun A.m() {}\nfun use(a: A) {\n    a.m()\n}\n";
+    assert_eq!(a_stop(src), "two_candidates");
+}
+
+#[test]
+fn test_kt_link_kt12_an_open_member_with_an_override_stops() {
+    let files = [(
+        "a.kt",
+        "open class A {\n    open fun m() {}\n}\nclass B : A() {\n    override fun m() {}\n}\nfun use(a: A) {\n    a.m()\n}\n",
+    )];
+    assert_eq!(stop(&files, "m"), "override_in_subtype");
+}
+
+#[test]
+fn test_kt_link_kt12_an_interface_member_stops() {
+    let files = [(
+        "a.kt",
+        "interface I {\n    fun m()\n}\nfun use(i: I) {\n    i.m()\n}\n",
+    )];
+    assert_eq!(stop(&files, "m"), "abstract");
+}
+
+#[test]
+fn test_kt_link_kt12_a_cast_in_the_function_stops() {
+    let src = "class B\nfun use(a: A) {\n    if (a is B) {}\n    a.m()\n}\n";
+    assert_eq!(a_stop(src), "cast");
+}
+
+#[test]
+fn test_kt_link_kt12_a_local_var_and_an_untyped_val_stop() {
+    let var = "fun use() {\n    var a: A = make()\n    a.m()\n}\n";
+    assert_eq!(a_stop(var), "receiver_binder");
+    let untyped = "fun use() {\n    val a = make()\n    a.m()\n}\n";
+    assert_eq!(a_stop(untyped), "receiver_binder");
+}
+
+#[test]
+fn test_kt_link_kt12_a_type_param_and_an_outside_type_stop() {
+    let tp = "fun <A> use(a: A) {\n    a.m()\n}\n";
+    assert_eq!(a_stop(tp), "type_param");
+    let outside = "fun use(a: String) {\n    a.m()\n}\n";
+    assert_eq!(a_stop(outside), "outside_type");
+}
+
+#[test]
+fn test_kt_link_kt12_two_properties_named_x_stop() {
+    let src = "val a: A = A()\nclass B(val a: A) {\n    fun g() {\n        a.m()\n    }\n}\n";
+    assert_eq!(a_stop(src), "two_properties");
+}
+
+#[test]
+fn test_kt_link_kt12_a_vararg_param_stops() {
+    let src = "fun use(vararg a: A) {\n    a.m()\n}\n";
+    assert_eq!(a_stop(src), "receiver_binder");
+}
+
+#[test]
+fn test_kt_link_b3_a_local_callable_named_f_stops_every_shape() {
+    let local = "fun use(a: A) {\n    fun m() {}\n    a.m()\n}\n";
+    assert_eq!(a_stop(local), "binder");
+    let lambda = "fun use(a: A, m: A.() -> Unit) {\n    a.m()\n}\n";
+    assert_eq!(a_stop(lambda), "binder");
+}
+
+#[test]
+fn test_kt_link_b4_a_property_type_resolves_where_the_property_is_declared() {
+    let files = [(
+        "a.kt",
+        "open class Holder {\n    class Item {\n        fun m() {}\n    }\n    val item: Item = Item()\n}\nclass Sub : Holder() {\n    class Item {\n        fun m() {}\n    }\n    fun g() {\n        item.m()\n    }\n}\n",
+    )];
+    assert_eq!(prove(&files, "m"), Ok("a.kt#Holder.Item.m".to_string()));
+}
+
+#[test]
+fn test_kt_link_b4_an_extension_receiver_resolves_where_the_extension_is_declared() {
+    let files = [
+        (
+            "a.kt",
+            "package p\n\nimport q.m\n\nclass Item {\n    fun m() {}\n}\nfun use(i: Item) {\n    i.m()\n}\n",
+        ),
+        ("b.kt", "package q\n\nclass Item\nfun Item.m() {}\n"),
+    ];
+    assert_eq!(prove(&files, "m"), Ok("a.kt#Item.m".to_string()));
+}
+
+#[test]
+fn test_kt_link_b5_a_binder_after_the_call_stops() {
+    let src = "fun use() {\n    a.m()\n    val a: A = make()\n}\n";
+    assert_eq!(a_stop(src), "receiver_binder");
+}
+
+#[test]
+fn test_kt_link_b6_a_type_named_like_the_property_stops() {
+    let src = "class a\nval a: A = A()\nfun use() {\n    a.m()\n}\n";
+    assert_eq!(a_stop(src), "type_named_x");
+}
+
+#[test]
+fn test_kt_link_b6_a_library_name_or_a_lost_name_stops_the_property_path() {
+    let top = "val println: A = A()\nfun use() {\n    println.m()\n}\n";
+    assert_eq!(a_stop(top), "top_list");
+    let files = [
+        (
+            "a.kt",
+            "class A {\n    fun m() {}\n}\nval lostx: A = A()\nfun use() {\n    lostx.m()\n}\n",
+        ),
+        ("b.kt", "val lostx = 1\nfun ((( broken\n"),
+    ];
+    assert_eq!(stop(&files, "m"), "lost_name");
+}
+
+#[test]
+fn test_kt_link_kt13_an_object_member_is_exact() {
+    let files = [(
+        "a.kt",
+        "open class Base {\n    open fun m() {}\n}\nclass D : Base() {\n    override fun m() {}\n}\nobject O : Base()\nfun use() {\n    O.m()\n}\n",
+    )];
+    assert_eq!(prove(&files, "m"), Ok("a.kt#Base.m".to_string()));
+}
+
+#[test]
+fn test_kt_link_kt13_a_companion_member_is_the_target() {
+    let files = [(
+        "a.kt",
+        "class A {\n    companion object {\n        fun m() {}\n    }\n}\nfun use() {\n    A.m()\n}\n",
+    )];
+    let got = prove(&files, "m").expect("proved");
+    assert!(got.starts_with("a.kt#A.") && got.ends_with(".m"), "{got}");
+}
+
+#[test]
+fn test_kt_link_kt13_an_extension_on_the_companion_is_the_target() {
+    let files = [(
+        "a.kt",
+        "class A {\n    companion object\n}\nfun A.Companion.m() {}\nfun use() {\n    A.m()\n}\n",
+    )];
+    assert_eq!(prove(&files, "m"), Ok("a.kt#m".to_string()));
+}
+
+#[test]
+fn test_kt_link_b9_an_extension_with_a_qualified_receiver_still_counts() {
+    let files = [(
+        "a.kt",
+        "class A {\n    companion object {\n        fun m() {}\n    }\n}\nfun A.Companion.m() {}\nfun use() {\n    A.m()\n}\n",
+    )];
+    assert_eq!(stop(&files, "m"), "two_candidates");
+}
+
+#[test]
+fn test_kt_link_kt13_a_nested_class_constructor_gives_the_class_node() {
+    let files = [(
+        "a.kt",
+        "class Outer {\n    class Inner\n}\nfun use() {\n    Outer.Inner()\n}\n",
+    )];
+    assert_eq!(prove(&files, "Inner"), Ok("a.kt#Outer.Inner".to_string()));
+}
+
+#[test]
+fn test_kt_link_kt13_a_param_named_like_the_type_takes_the_value_path() {
+    let src = "class B {\n    fun m() {}\n}\nfun use(A: B) {\n    A.m()\n}\n";
+    assert_eq!(with_a(src), Ok("a.kt#B.m".to_string()));
+}
+
+#[test]
+fn test_kt_link_kt13_a_property_named_like_the_type_stops() {
+    let prop = "class C {\n    companion object {\n        fun m() {}\n    }\n}\nval C: A = A()\nfun use() {\n    C.m()\n}\n";
+    assert_eq!(a_stop(prop), "type_named_x");
+}
+
+#[test]
+fn test_kt_link_kt13_an_enum_implicit_member_and_an_entry_name_stop() {
+    let files = [(
+        "a.kt",
+        "enum class E { X }\nfun use() {\n    E.values()\n}\n",
+    )];
+    assert_eq!(stop(&files, "values"), "implicit_member");
+    let entry = [(
+        "a.kt",
+        "enum class E {\n    X;\n    fun g() {\n        X.m()\n    }\n}\n",
+    )];
+    assert_eq!(stop(&entry, "m"), "value_named_x");
+}
+
+#[test]
+fn test_kt_link_kt13_a_class_without_a_companion_has_no_candidate() {
+    assert_eq!(a_stop("fun use() {\n    A.m()\n}\n"), "no_candidate");
+}
+
+#[test]
+fn test_kt_link_kt14_a_super_call_reaches_an_open_member() {
+    let files = [(
+        "a.kt",
+        "open class B {\n    open fun m() {}\n}\nclass C : B() {\n    override fun m() {\n        super.m()\n    }\n}\n",
+    )];
+    assert_eq!(prove(&files, "m"), Ok("a.kt#B.m".to_string()));
+}
+
+#[test]
+fn test_kt_link_kt14_a_super_call_does_not_dispatch() {
+    let files = [(
+        "a.kt",
+        "open class B {\n    open fun m() {}\n}\nopen class C : B() {\n    override fun m() {\n        super.m()\n    }\n}\nclass D : C() {\n    override fun m() {}\n}\n",
+    )];
+    assert_eq!(prove(&files, "m"), Ok("a.kt#B.m".to_string()));
+}
+
+#[test]
+fn test_kt_link_kt14_an_interface_member_and_a_typed_super_stop() {
+    let iface = [(
+        "a.kt",
+        "interface I {\n    fun m() {}\n}\nclass C : I {\n    override fun m() {\n        super.m()\n    }\n}\n",
+    )];
+    assert_eq!(stop(&iface, "m"), "abstract");
+    let typed = [(
+        "a.kt",
+        "interface I {\n    fun m() {}\n}\nclass C : I {\n    override fun m() {\n        super<I>.m()\n    }\n}\n",
+    )];
+    assert_eq!(stop(&typed, "m"), "label");
+}
+
+#[test]
+fn test_kt_link_kt14_an_override_of_an_override_stops() {
+    let files = [(
+        "a.kt",
+        "open class A {\n    open fun m() {}\n}\nopen class B : A() {\n    override fun m() {}\n}\nclass C : B() {\n    override fun m() {\n        super.m()\n    }\n}\n",
+    )];
+    assert_eq!(stop(&files, "m"), "two_candidates");
+}
+
+#[test]
+fn test_kt_link_kt14_an_extension_function_around_the_call_stops() {
+    let files = [(
+        "a.kt",
+        "open class B {\n    open fun m() {}\n}\nfun B.g() {\n    super.m()\n}\n",
+    )];
+    assert_eq!(stop(&files, "m"), "ext_super");
+}
+
+#[test]
+fn test_kt_link_a_proved_name_call_is_extracted() {
+    let files = [(
+        "a.kt",
+        "class A {\n    fun m() {}\n}\nfun use(a: A) {\n    a.m()\n}\n",
+    )];
+    assert_eq!(
+        conf(&files, "a.kt#use", "a.kt#A.m"),
+        Some(Confidence::Extracted)
+    );
+}
+
+#[test]
+fn test_kt_link_f1_a_generic_extension_with_a_type_param_receiver_stays_in_the_set() {
+    let src = "class Item\nclass A {\n    fun f(n: Int) {}\n}\nfun <Item> Item.f(s: String) {}\nfun use(a: A) {\n    a.f(\"x\")\n}\n";
+    let files = [("a.kt", src)];
+    assert_eq!(stop(&files, "f"), "two_candidates");
+}
+
+#[test]
+fn test_kt_link_f1_a_generic_extension_can_be_the_only_candidate() {
+    let src = "class A\nfun <T> T.f() {}\nfun use(a: A) {\n    a.f()\n}\n";
+    assert_eq!(prove(&[("a.kt", src)], "f"), Ok("a.kt#f".to_string()));
+}
+
+#[test]
+fn test_kt_link_f2_a_local_fun_named_like_the_new_type_stops() {
+    let src = "class T {\n    fun m() {}\n}\nclass U {\n    fun m() {}\n}\nfun use() {\n    fun T() = U()\n    val x = T()\n    x.m()\n}\n";
+    assert_eq!(stop(&[("a.kt", src)], "m"), "receiver_binder");
+}
+
+#[test]
+fn test_kt_link_f6_an_unrelated_extension_drops_out() {
+    let src = "class Other\nfun Other.m() {}\nfun use(a: A) {\n    a.m()\n}\n";
+    assert_eq!(with_a(src), Ok("a.kt#A.m".to_string()));
+}
+
+#[test]
+fn test_kt_link_f6_a_typealias_receiver_stays_in_the_set() {
+    let src = "typealias Al = A\nfun Al.m() {}\nfun use(a: A) {\n    a.m()\n}\n";
+    assert_eq!(a_stop(src), "two_candidates");
+}
+
+#[test]
+fn test_kt_link_f6_an_aliased_import_receiver_stays_in_the_set() {
+    let files = [
+        (
+            "a.kt",
+            "package p\n\nimport q.Item as I\nimport q.Item\n\nfun I.m() {}\nfun use(i: Item) {\n    i.m()\n}\n",
+        ),
+        ("b.kt", "package q\n\nclass Item {\n    fun m() {}\n}\n"),
+    ];
+    assert_eq!(stop(&files, "m"), "two_candidates");
+}
+
+#[test]
+fn test_kt_link_f6_a_nullable_receiver_extension_applies() {
+    let src = "fun A?.m() {}\nfun use(a: A) {\n    a.m()\n}\n";
+    assert_eq!(a_stop(src), "two_candidates");
+    let only = "class B\nfun B?.m() {}\nfun use(b: B?) {\n    b?.m()\n}\n";
+    assert_eq!(prove(&[("a.kt", only)], "m"), Ok("a.kt#m".to_string()));
+}
+
+#[test]
+fn test_kt_link_f6_an_extension_property_named_x_stops() {
+    let src = "val A.x: A get() = this\nfun A.g() {\n    x.m()\n}\n";
+    assert_eq!(a_stop(src), "ext_property");
+}
+
+#[test]
+fn test_kt_link_f6_a_private_property_of_another_file_stops() {
+    let files = [
+        (
+            "a.kt",
+            "class A {\n    fun m() {}\n}\nfun use() {\n    pa.m()\n}\n",
+        ),
+        ("b.kt", "private val pa: A = A()\n"),
+    ];
+    assert_eq!(stop(&files, "m"), "private_other_file");
+}
+
+#[test]
+fn test_kt_link_f6_a_property_without_a_written_type_stops() {
+    let src = "val pa = A()\nfun use() {\n    pa.m()\n}\n";
+    assert_eq!(a_stop(src), "untyped_property");
+}
+
+#[test]
+fn test_kt_link_f6_a_type_param_named_like_the_type_stops_on_the_type_path() {
+    let src = "fun <A> use() {\n    A.m()\n}\n";
+    assert_eq!(a_stop(src), "type_param");
+}
+
+#[test]
+fn test_kt_link_f6_an_object_that_overrides_the_member_gives_two_candidates() {
+    let files = [(
+        "a.kt",
+        "open class Base {\n    open fun m() {}\n}\nobject O : Base() {\n    override fun m() {}\n}\nfun use() {\n    O.m()\n}\n",
+    )];
+    assert_eq!(stop(&files, "m"), "two_candidates");
+}
+
+#[test]
+fn test_kt_link_f6_an_abstract_class_member_stops() {
+    let files = [(
+        "a.kt",
+        "abstract class B {\n    abstract fun m()\n}\nfun use(b: B) {\n    b.m()\n}\n",
+    )];
+    assert_eq!(stop(&files, "m"), "abstract");
+}
+
+const OPEN_B: &str = "open class B {\n    open fun m() {}\n}\n";
+
+#[test]
+fn test_kt_link_f6_a_super_call_in_a_plain_lambda() {
+    let lambda = format!(
+        "{OPEN_B}class C : B() {{\n    override fun m() {{\n        check(true) {{ super.m() }}\n    }}\n}}\n"
+    );
+    assert_eq!(
+        prove(&[("a.kt", lambda.as_str())], "m"),
+        Ok("a.kt#B.m".to_string())
+    );
+}
+
+#[test]
+fn test_kt_link_f6_a_super_call_in_a_nested_class() {
+    let src = format!(
+        "{OPEN_B}class Outer : B() {{\n    class N : B() {{\n        fun g() {{\n            super.m()\n        }}\n    }}\n}}\n"
+    );
+    assert_eq!(
+        prove(&[("a.kt", src.as_str())], "m"),
+        Ok("a.kt#B.m".to_string())
+    );
+}
+
+#[test]
+fn test_kt_link_f6_a_super_call_in_an_inner_class() {
+    let src = format!(
+        "{OPEN_B}class Outer {{\n    inner class N : B() {{\n        fun g() {{\n            super.m()\n        }}\n    }}\n}}\n"
+    );
+    assert_eq!(
+        prove(&[("a.kt", src.as_str())], "m"),
+        Ok("a.kt#B.m".to_string())
+    );
+}
+
+#[test]
+fn test_kt_link_f6_a_super_call_in_an_object() {
+    let src = format!("{OPEN_B}object O : B() {{\n    fun g() {{\n        super.m()\n    }}\n}}\n");
+    assert_eq!(
+        prove(&[("a.kt", src.as_str())], "m"),
+        Ok("a.kt#B.m".to_string())
+    );
+}
+
+#[test]
+fn test_kt_link_f6_a_super_call_in_an_anonymous_object_stops() {
+    let src = format!(
+        "{OPEN_B}class C : B() {{\n    fun g() {{\n        val o = object : B() {{\n            fun h() {{\n                super.m()\n            }}\n        }}\n    }}\n}}\n"
+    );
+    assert_eq!(stop(&[("a.kt", src.as_str())], "m"), "anon_body");
+}
+
+#[test]
+fn test_kt_link_f6_a_super_call_unions_the_chains_of_two_supertypes() {
+    let files = [(
+        "a.kt",
+        "interface I {\n    fun m() {}\n}\nopen class B {\n    open fun m() {}\n}\nclass C : B(), I {\n    override fun m() {\n        super.m()\n    }\n}\n",
+    )];
+    assert_eq!(stop(&files, "m"), "two_candidates");
 }
