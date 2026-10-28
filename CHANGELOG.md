@@ -5,6 +5,14 @@ All notable changes to this project are in this file.
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.1] - 2026-10-28
+
+This release adds the 🎯 mark to the status line.
+
+### Changed
+
+- The status line shows 🎯 before the first savings figure: `sieve · 🎯 ~N this session · ~N today`.
+
 ## [0.2.0] - 2026-10-28
 
 This release gives the commands names that state their intent, adds an MCP rename tool, and indexes shell scripts.

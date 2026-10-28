@@ -755,12 +755,12 @@ fn render_sieve(v: &SieveView) -> String {
                         GREEN,
                         &if v.session > 0 {
                             format!(
-                                "~{} this session \u{b7} ~{} today",
+                                "\u{1f3af} ~{} this session \u{b7} ~{} today",
                                 format_short(v.session),
                                 format_short(v.today)
                             )
                         } else {
-                            format!("~{} today", format_short(v.today))
+                            format!("\u{1f3af} ~{} today", format_short(v.today))
                         }
                     ),
                 ),
@@ -851,7 +851,7 @@ mod tests {
         assert!(lines[0].contains('\u{2580}'), "{}", lines[0]);
         assert_eq!(
             cut(lines[0], w + 1),
-            "sieve \u{b7} ~1.5k this session \u{b7} ~61.7k today"
+            "sieve \u{b7} \u{1f3af} ~1.5k this session \u{b7} ~61.7k today"
         );
         assert_eq!(
             cut(lines[1], w + 1),
@@ -904,7 +904,7 @@ mod tests {
         assert!(!out.contains('\x1b'), "{out}");
         assert_eq!(
             out,
-            "sieve \u{b7} ~1.5k this session \u{b7} ~61.7k today\n\
+            "sieve \u{b7} \u{1f3af} ~1.5k this session \u{b7} ~61.7k today\n\
              752 symbols \u{b7} 2,017 links \u{b7} \u{2713} up to date\nctx 54%"
         );
     }
