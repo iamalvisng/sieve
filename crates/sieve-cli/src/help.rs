@@ -55,6 +55,9 @@ Commands:
                                     hotspots from the symbol graph ($0, no LLM)
   why [options] [symbol] [dir]      Show the decision entries that explain a
                                     symbol
+  rename [options] <symbol> <new-name>
+                                    Rename a symbol across files from proven
+                                    sites; dry run unless --write
   init [options] [dir]              Wire Sieve into the AI coding agents used
                                     with this repo (instruction files + MCP
                                     server; full hooks + statusline + MCP for

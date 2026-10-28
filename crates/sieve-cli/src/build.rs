@@ -461,6 +461,7 @@ fn build_repo(
         no_reuse: args.no_reuse,
         read_only: false,
         progress: live.then_some(show_progress as fn(usize, usize, &str)),
+        keep_raw: false,
     };
     let mut report =
         build_graph_cached_with(root, context_dir, &build_opts).map_err(|e| e.to_string())?;

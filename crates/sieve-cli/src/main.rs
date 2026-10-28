@@ -26,6 +26,7 @@ mod names;
 mod ojson;
 mod pane_mod;
 mod query;
+mod rename;
 mod route;
 mod skeleton;
 mod stats;
@@ -147,6 +148,8 @@ enum Command {
     BrainRefresh(internal::BrainRefreshArgs),
     /// Shows the decision doc entries that explain a symbol (Sieve only).
     Why(why::WhyArgs),
+    /// Renames a symbol across files from proven sites (Sieve only).
+    Rename(rename::RenameArgs),
     Daemon,
     Savings,
 }
@@ -188,7 +191,7 @@ const SUBCOMMAND_NAMES: &[&str] = &[
 
 /// True when Commander registers `arg` as a subcommand.
 fn is_subcommand(arg: &str) -> bool {
-    SUBCOMMAND_NAMES.contains(&arg) || arg == "why"
+    SUBCOMMAND_NAMES.contains(&arg) || arg == "why" || arg == "rename"
 }
 
 /// The top-level flags Commander's own `program` registers that take a
@@ -247,6 +250,7 @@ fn help_precedes_subcommand(args: &[String]) -> bool {
 /// commands, and the `upgrade`, `trail` and `claude-md`, which Sieve
 /// lacks by design (P1-52, P1-53).
 const HELP_KEEPS_CLAP: &[&str] = &[
+    "rename",
     "hook",
     "statusline",
     "daemon",
@@ -515,6 +519,7 @@ fn run(cli: Cli) -> Result<(), String> {
         Command::TelemetryFlush => internal::telemetry_flush(),
         Command::BrainRefresh(args) => internal::brain_refresh(&args),
         Command::Why(args) => why::run(&args, cli.context_dir.as_deref()),
+        Command::Rename(args) => rename::run(&args, cli.context_dir.as_deref()),
         Command::Daemon => {
             println!("not implemented");
             Ok(())

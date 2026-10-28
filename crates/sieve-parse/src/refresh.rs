@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 
 use sieve_core::askindex::{ask_index_path, build_ask_index, write_ask_index};
 use sieve_core::fingerprint::{
-    fingerprint_path, probe_drift, read_fingerprint, write_fingerprint, Drift, Fingerprint,
+    fingerprint_path, probe_drift, read_fingerprint, write_fingerprint, Drift, Fingerprint, Print,
 };
 use sieve_core::lock::{self, LockGuard};
 use sieve_core::lookup::{self, wiring_stamp, Lookup, DEFAULT_WIRING_CAP_BYTES};
@@ -29,7 +29,7 @@ use crate::build::{build_graph_cached_with, BuildOptions};
 /// plain context dir path, taken after a wait: [`lock::wait_for_lock`]
 /// reports only success or failure, with no guard of its own, so the
 /// waited case releases through [`lock::release`] by hand instead.
-enum RefreshLock {
+pub(crate) enum RefreshLock {
     // The guard is never read; it is held only so its own `Drop` runs
     // when `RefreshLock` drops.
     Immediate(#[allow(dead_code)] LockGuard),
@@ -50,7 +50,7 @@ impl Drop for RefreshLock {
 ///
 /// Returns `None` only when the wait in [`lock::wait_for_lock`] expires
 /// with the lock still held elsewhere.
-fn acquire_refresh_lock(context_dir: &Path) -> std::io::Result<Option<RefreshLock>> {
+pub(crate) fn acquire_refresh_lock(context_dir: &Path) -> std::io::Result<Option<RefreshLock>> {
     if let Some(guard) = LockGuard::acquire(context_dir)? {
         return Ok(Some(RefreshLock::Immediate(guard)));
     }
@@ -161,6 +161,31 @@ fn regenerate_lookup(context_dir: &Path, wiring_path: &Path) {
 /// Rebuilds the graph and the fingerprint only: no cards, no `INDEX.md`,
 /// no `.gitignore` edit.
 pub fn rebuild_graph_only(root: &Path, context_dir: &Path) -> std::io::Result<RebuildReport> {
+    rebuild_inner(root, context_dir, false).map(|(report, _)| report)
+}
+
+/// What a rebuild keeps for the rename plan: the graph, the raw edges and
+/// the build prints.
+pub(crate) struct Kept {
+    pub graph: Graph,
+    pub raw: Vec<crate::extract::RawEdge>,
+    pub prints: std::collections::BTreeMap<String, Print>,
+}
+
+/// Rebuilds like [`rebuild_graph_only`] and keeps the build data. The caller
+/// holds the build lock.
+pub(crate) fn rebuild_keeping(root: &Path, context_dir: &Path) -> io::Result<Kept> {
+    match rebuild_inner(root, context_dir, true)? {
+        (_, Some(kept)) => Ok(kept),
+        (_, None) => Err(io::Error::other("the rebuild kept no data")),
+    }
+}
+
+fn rebuild_inner(
+    root: &Path,
+    context_dir: &Path,
+    keep: bool,
+) -> io::Result<(RebuildReport, Option<Kept>)> {
     // The last build's `--only-dir` whitelist rides in the fingerprint, so
     // a refresh walks the same set (P1-70).
     let stamp = crate::extractor_stamp();
@@ -177,6 +202,7 @@ pub fn rebuild_graph_only(root: &Path, context_dir: &Path) -> std::io::Result<Re
         no_reuse: false,
         read_only: false,
         progress: None,
+        keep_raw: keep,
     };
     let mut timer = crate::timing::Timer::start();
     let report = build_graph_cached_with(root, context_dir, &opts)?;
@@ -198,17 +224,23 @@ pub fn rebuild_graph_only(root: &Path, context_dir: &Path) -> std::io::Result<Re
     let fingerprint = Fingerprint {
         version: 1,
         extractor: stamp.clone(),
-        files: report.prints,
+        files: report.prints.clone(),
         only_dirs: (!only_dirs.is_empty()).then_some(only_dirs),
     };
     write_fingerprint(&path, &fingerprint)?;
     timer.lap("write fingerprint");
 
-    Ok(RebuildReport {
+    let summary = RebuildReport {
         files: report.files,
         parsed: report.parsed,
         reused: report.reused,
-    })
+    };
+    let kept = keep.then_some(Kept {
+        graph: report.graph,
+        raw: report.raw,
+        prints: report.prints,
+    });
+    Ok((summary, kept))
 }
 
 /// Runs the pre-query refresh: rebuilds the graph, and only the graph,

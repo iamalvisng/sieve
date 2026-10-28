@@ -5,6 +5,20 @@ All notable changes to this project are in this file.
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.9] - 2026-10-28
+
+This release adds `sieve rename`, a cross-file rename for TypeScript and JavaScript top-level functions.
+
+### Added
+
+- `sieve rename <symbol> <new-name>` renames a TypeScript or JavaScript top-level function across files. It is a dry run by default and prints a plan and a diff. Each plan has an id. `--write --expect <plan-id>` writes the files only when the plan, computed again, has the same id.
+- Sieve refuses the whole rename when it cannot prove every site. The refusal names the line and the reason. It refuses a default export, a class, a method, a namespace import and a star barrel. It refuses an untraceable dynamic import when the name is also read as a property, a key or a string.
+- Sieve checks its own result after a write. It restores every file on any doubt.
+- `--recover` restores the old files after a crash. `--discard-journal` deletes the leftover journal. Other flags: `--json`, `--context <n>`, `--in <path>`, `--dir <path>`.
+- Exit codes: 0 for a ready or written plan, 1 for a usage or I/O error, 2 for a refusal.
+- Results against the TypeScript language service rename, on vite (commit 10033218) and execa v9.6.0: 0 wrong edits. Vite renamed 162 of 300 sampled functions and refused the rest. Execa renamed 283 of 300 and refused the rest.
+- The guide has a new page, [Rename](docs/guide/rename.md).
+
 ## [0.1.8] - 2026-10-15
 
 This release adds exact Kotlin call links for `x.f()`, `Type.f()` and `super.f()` calls.

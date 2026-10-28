@@ -137,6 +137,7 @@ pub fn check_graph(root: &Path, context_dir: &Path) -> io::Result<GraphCheck> {
         // Nothing writes a file at all (P1-35).
         read_only: true,
         progress: None,
+        keep_raw: false,
     };
     let report = build_graph_cached_with(root, context_dir, &opts)?;
     let current: HashMap<&str, &str> = report

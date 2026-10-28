@@ -28,12 +28,14 @@ mod py_proof;
 mod py_stdlib;
 mod py_tree;
 pub mod refresh;
+pub mod rename;
 pub mod resolve;
 mod rust_items;
 mod rust_proof;
 mod rust_tree;
 pub mod stamp;
 pub mod timing;
+mod ts_scope;
 pub use build::{
     build_graph, build_graph_cached, build_graph_cached_with, build_graph_with_raw, BuildOptions,
     BuildReport,

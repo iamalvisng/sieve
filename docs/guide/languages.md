@@ -46,18 +46,31 @@ Sieve reads code inside `.vue`, `.svelte` and `.astro` files.
 
 ## Exact links
 
-Sieve links imports across files with exact results for relative imports in
-TypeScript and JavaScript. These cover named imports, aliased imports
+Exact links cover TypeScript, JavaScript, Rust, Python, Go, Java, C# and
+Kotlin. Each language has its own scope, listed below. A call that Sieve
+cannot prove stays Inferred. Swift, PHP, R and the breadth-tier languages
+other than Rust and C# have no exact links.
+
+For TypeScript and JavaScript, Sieve links imports across files with exact
+results for relative imports. These cover named imports, aliased imports
 (`{ a as b }`), namespace imports (`* as ns` with `ns.fn()`) and default imports.
 They also cover barrel re-exports: `export { x } from`, `export *`, default
 re-exports and `export * as ns`. ADR 0005 and ADR 0006 hold the rules.
 
-The exact-link tier now covers TypeScript, JavaScript, Rust, Python, Go, Java, C# and Kotlin.
 Sieve marks a Rust, Python, Go, Java, C# or Kotlin call Extracted only when it proves one target. See
 [Concepts](concepts.md#exact-links) and ADR 0007.
 
+The scope of each language:
+
+- Rust: a free function in the same file or the same crate (through the module tree and `use`), a function in another workspace crate, and `Type::f()` and `Self::f()` calls. A `self.f()` call is exact when the caller sits in a module-level inherent impl and that impl holds one matching `fn f`.
+- Python: a name with one binding in the same file, and an import chain to one definition in another file (`import`, `from ... import`, relative imports and `__init__.py` re-exports).
+- Go: a call whose scope has one binding in the same file, `pkg.F()` calls through imports and `go.mod`, and receiver types written in the code.
+- Java: bare calls, `this` and `super` calls, static calls through imports, typed receivers and `new`.
+- C#: bare and `this.` calls, calls on a local, a parameter or a primary constructor parameter, `new T()`, `base.M()`, `Type.M()`, field receivers, and a type reached through a `global using`.
+- Kotlin: bare, `this.` and constructor calls across files, and calls on a typed value (`x.f()`), on an object or a companion (`Type.f()`) and `super.f()`.
+
 For Rust, these calls stay Inferred or get no edge: a method call `x.f()`,
-`self.f()`, a trait method, `<T as Trait>::f()`, a call to a trait-impl
+a `self.f()` call outside the case above, a trait method, `<T as Trait>::f()`, a call to a trait-impl
 function through a type, a call through a type alias, a call inside a macro
 argument, a macro call, and code made by `include!` or a procedural macro.
 A name with a `cfg` attribute on two definitions stays Inferred.
@@ -77,8 +90,7 @@ abstract target, and any call in a repo with a Lombok annotation or a parse erro
 when a subtype can override the target.
 
 For C#, these calls stay Inferred or get no edge: a call to an interface target,
-an extension method call, a call to a type found only through a global using,
-`base.M()`, a static `Type.M()` call, and a call on a field receiver.
+and an extension method call.
 A parse-error file adds text facts only.
 
 Sieve links a Kotlin call `x.f()` on a typed value, a call `Type.f()` on an object or a companion,
@@ -95,6 +107,11 @@ A parse-error file adds text facts only.
 Sieve does not link these TypeScript and JavaScript cases as exact: non-relative package specifiers,
 `paths` aliases, CommonJS, `export =`, and JavaScript barrel files for re-export
 records. Do not treat these links as exact.
+
+## Rename
+
+`sieve rename` uses only the TypeScript and JavaScript links. See
+[Rename](rename.md).
 
 ## Unsupported files
 

@@ -131,6 +131,24 @@ packages/vite/src/node/server/hmr.ts · 42 symbols
 
 Sieve also has `map`. The [command reference](docs/guide/commands.md) lists all commands.
 
+### Rename a function across files
+
+`sieve rename` renames a TypeScript or JavaScript top-level function in every file that uses it. It is a dry run by default. Sieve proves each edit site first. If it cannot prove one site, it refuses the whole rename and names the line and the reason. After a write, Sieve checks its own result and restores the files on any doubt. See [docs/guide/rename.md](docs/guide/rename.md).
+
+```
+$ sieve rename parseArgs parseCliArgs
+rename plan 3f9a1c2e: src/args.ts#parseArgs (function) -> parseCliArgs
+4 files, 7 edits. Dry run: no file changed.
+Write it: sieve rename parseArgs parseCliArgs --write --expect 3f9a1c2e
+
+--- a/src/args.ts
++++ b/src/args.ts
+@@ -12 +12 @@
+-export function parseArgs(argv: string[]): Args {
++export function parseCliArgs(argv: string[]): Args {
+...
+```
+
 ### Graph viewer
 
 `sieve viz` serves a graph viewer in your browser.
@@ -163,7 +181,7 @@ Register it with `{ "mcpServers": { "sieve": { "command": "sieve", "args": ["mcp
 
 ## Proof
 
-Sieve 0.1.0 on an Apple M1 Pro with 16 GB of memory, macOS 26.5.2.
+Sieve 0.1.0 on an Apple M1 Pro with 16 GB of memory, macOS 26.5.2, except the cross-file rename row: Sieve 0.1.9 on Linux. Rename numbers are correctness counts, not timings.
 
 | Claim | Repo and commit | Number | Method |
 |---|---|---|---|
@@ -174,12 +192,13 @@ Sieve 0.1.0 on an Apple M1 Pro with 16 GB of memory, macOS 26.5.2.
 | `ask` latency | ripgrep 3fce3b5 | 62 ms median, 101 ms max | Wall time of one `sieve ask` process. 30 timings: 10 questions, 3 runs each. |
 | `ask` latency | vite 10033218 | 158 ms median, 185 ms max | The same method. |
 | Exact cross-file calls | vite 10033218 | 1,272 of 1,272 match the TypeScript compiler | Name-level match. Inferred calls are not counted. |
+| Cross-file rename | vite 10033218, execa v9.6.0 | 0 wrong edits; 162 of 300 and 283 of 300 renamed, the rest refused | Each plan compared with the TypeScript language service rename. |
 
 [docs/guide/benchmarks.md](docs/guide/benchmarks.md) gives the method and the questions, so you can repeat each run.
 
 ## Languages
 
-Sieve parses TypeScript, JavaScript, Python, Go, Java, Kotlin, Swift, PHP and R natively. It parses 14 more with a generic parser. It reads script blocks in Vue, Svelte and Astro files. Exact cross-file links cover relative TypeScript and JavaScript imports: named, aliased, namespace and default imports, and barrel re-exports. They do not cover package specifiers, `paths` aliases, CommonJS or `export =`. See [docs/guide/languages.md](docs/guide/languages.md).
+Sieve parses TypeScript, JavaScript, Python, Go, Java, Kotlin, Swift, PHP and R natively. It parses 14 more with a generic parser. It reads script blocks in Vue, Svelte and Astro files. Exact cross-file links cover TypeScript, JavaScript, Rust, Python, Go, Java, C# and Kotlin, each with its own scope. For TypeScript and JavaScript, they cover relative imports and barrel re-exports, not package specifiers, `paths` aliases, CommonJS or `export =`. For the other languages, Sieve marks a call exact only when it proves one target. See [docs/guide/languages.md](docs/guide/languages.md).
 
 ## Local only
 
@@ -187,7 +206,8 @@ Sieve runs on your machine. Sieve sends no telemetry and makes no network call f
 
 ## When not to use Sieve
 
-- Sieve links calls across files as exact only in TypeScript and JavaScript, through relative imports and barrel re-exports. Package specifiers, `paths` aliases, CommonJS and other languages stay Inferred. Treat Inferred links as hints. See [ADR 0006](docs/adr/adr-0006-barrel-reexports.md).
+- Sieve links calls as exact only in TypeScript, JavaScript, Rust, Python, Go, Java, C# and Kotlin, and only inside the scope of each language. In TypeScript and JavaScript, package specifiers, `paths` aliases and CommonJS stay Inferred. Other languages stay Inferred. Treat Inferred links as hints. See [docs/guide/languages.md](docs/guide/languages.md) and [ADR 0006](docs/adr/adr-0006-barrel-reexports.md).
+- `sieve rename` handles top-level functions in TypeScript and JavaScript only. It refuses many renames. See [docs/guide/rename.md](docs/guide/rename.md).
 - Sieve has not measured token savings in a real agent session.
 - There is no Windows build in v0.1.0.
 
@@ -199,6 +219,7 @@ The [FAQ](docs/guide/faq.md) lists more limits.
 - [Quickstart](docs/guide/quickstart.md)
 - [Concepts](docs/guide/concepts.md)
 - [Commands](docs/guide/commands.md)
+- [Rename](docs/guide/rename.md)
 - [Claude Code](docs/guide/claude-code.md)
 - [MCP](docs/guide/mcp.md)
 - [Configuration](docs/guide/configuration.md)

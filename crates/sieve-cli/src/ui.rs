@@ -306,6 +306,7 @@ const COMMANDS: &[&str] = &[
     "telemetry",
     "viz",
     "why",
+    "rename",
     "mcp",
 ];
 

@@ -129,6 +129,13 @@ not indexed  1 file: .gitignore
 Flags: `--base <ref>`, `-d/--depth`, `--format text|markdown|mermaid|json`,
 `--export-viz <dir>`, `--no-owners`, `--pr-author`. `--format markdown` makes a PR comment.
 
+## rename
+
+`sieve rename <symbol> <new-name>` renames a TypeScript or JavaScript top-level
+function across files. It is a dry run unless you pass `--write --expect <plan-id>`.
+Sieve refuses the whole rename when it cannot prove every site. See
+[Rename](rename.md).
+
 ## stats
 
 ```

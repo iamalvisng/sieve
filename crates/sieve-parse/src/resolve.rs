@@ -663,7 +663,7 @@ const MAX_WALK_LOOKUPS: u32 = 256;
 
 /// What `lookup` finds for one export name in one file.
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum Lookup {
+pub(crate) enum Lookup {
     /// Exactly one exported function, by id.
     One(String),
     /// The name is an `export * as ns` namespace of this file id.
@@ -788,6 +788,36 @@ fn lookup(idx: &Indexes, file: &str, export: &str, depth: u32, walk: &mut Walk) 
         return Lookup::Stop;
     }
     hits.pop().unwrap_or(Lookup::Zero)
+}
+
+/// The export indexes of one graph, for the rename plan. It wraps
+/// [`build_indexes`] and exposes the barrel walk and the import resolver.
+pub(crate) struct ExportIndex<'a> {
+    idx: Indexes<'a>,
+}
+
+impl<'a> ExportIndex<'a> {
+    /// Builds the indexes over `nodes` and `raw`.
+    pub(crate) fn new(nodes: &'a [Node], raw: &'a [RawEdge]) -> Self {
+        Self {
+            idx: build_indexes(nodes, raw),
+        }
+    }
+
+    /// Finds the export `export` of the repo file `file`, through any barrel.
+    pub(crate) fn lookup(&self, file: &str, export: &str) -> Lookup {
+        lookup(&self.idx, file, export, 0, &mut Walk::default())
+    }
+
+    /// The repo file id that the relative `specifier` names from `from_path`,
+    /// or `None` for a bare specifier or a path with no repo file.
+    pub(crate) fn resolve_import(&self, from_path: &str, specifier: &str) -> Option<String> {
+        if !specifier.starts_with('.') {
+            return None;
+        }
+        let id = resolve_import(&self.idx.node_ids, from_path, specifier);
+        self.idx.node_ids.contains(id.as_str()).then_some(id)
+    }
 }
 
 /// The exported function `export` (the string `default` means the default

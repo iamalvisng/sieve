@@ -554,6 +554,9 @@ pub struct BuildReport {
     /// One line per file this build could not read, in walk order:
     /// `<rel>: <Node error text>` (P2-01).
     pub errors: Vec<String>,
+    /// Every raw edge of the build, in claimed order. Empty unless
+    /// [`BuildOptions::keep_raw`] is set.
+    pub raw: Vec<RawEdge>,
 }
 
 /// Builds the symbol graph the way [`build_graph`] does, but replays a
@@ -590,6 +593,8 @@ pub struct BuildOptions {
     /// Called after each claimed file with the count done, the total and the
     /// file path. The CLI uses it to draw its one progress line.
     pub progress: Option<fn(usize, usize, &str)>,
+    /// Keep the raw edges in [`BuildReport::raw`]. The rename plan sets this.
+    pub keep_raw: bool,
 }
 
 /// A file's stat, taken before its read, and the hash of its decoded text.
@@ -901,6 +906,7 @@ pub fn build_graph_cached_with(
         claimed: claimed_ids,
         prints,
         errors,
+        raw: if opts.keep_raw { raw_edges } else { Vec::new() },
     })
 }
 
@@ -1972,6 +1978,7 @@ mod tests {
             no_reuse: false,
             read_only: false,
             progress: None,
+            keep_raw: false,
         };
         let report = build_graph_cached_with(&dir.path, &context_dir, &only).expect("build");
         assert_eq!(report.claimed, vec!["src/a.ts".to_string()]);
@@ -1985,6 +1992,7 @@ mod tests {
             no_reuse: true,
             read_only: false,
             progress: None,
+            keep_raw: false,
         };
         let report = build_graph_cached_with(&dir.path, &context_dir, &cold).expect("build");
         assert_eq!(report.claimed.len(), 2);
