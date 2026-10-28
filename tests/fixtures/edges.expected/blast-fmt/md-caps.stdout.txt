@@ -1,4 +1,4 @@
-### sieve blast radius
+### sieve impact
 
 **1 area changed → 8 areas can be affected.** 64 dependent symbols, depth 1.
 Tests: **no test reaches extra**.
@@ -207,4 +207,4 @@ _Reached = a node under a test path has a resolved edge into the changed symbol.
 
 </details>
 
-<sub>`sieve blast` · working tree vs HEAD · depth 1 · 2 changed files</sub>
+<sub>`sieve impact` · working tree vs HEAD · depth 1 · 2 changed files</sub>

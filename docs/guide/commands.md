@@ -20,7 +20,7 @@ Flags: `-e`, `--no-reuse`, `--lsp`, `--include-dir`, `--only-dir`, `--no-gitigno
 ## ask
 
 ```
-$ sieve ask "how does the dev server handle hot module replacement"
+$ sieve query "how does the dev server handle hot module replacement"
 ask  how does the dev server handle hot module replacement · 8 hits
 
 1  [packages/vite/] createServerModuleRunner  fn  packages/vite/src/node/ssr/runtime/serverModuleRunner.ts:143-160
@@ -59,7 +59,7 @@ Flags: `--direction <in|out>` (`out` lists callees), `-d/--depth <n|all>`, `--in
 ## grep
 
 ```
-$ sieve grep "handleHMRUpdate"
+$ sieve find "handleHMRUpdate"
 grep "handleHMRUpdate" · 5 hits in 5 symbols across 3 files · searched 1583 files
 
 handleHMRUpdate  fn  packages/vite/src/node/server/hmr.ts:411-679  · 2 links in
@@ -95,7 +95,7 @@ Flags: `--max-dirs <n>` (default 16), `--json`, `--no-refresh`.
 ## skeleton
 
 ```
-$ sieve skeleton packages/vite/src/node/server/index.ts
+$ sieve symbols packages/vite/src/node/server/index.ts
 packages/vite/src/node/server/hmr.ts · 42 symbols
     48-56  WsOptions  iface
     58-88  HmrOptions  iface
@@ -114,7 +114,7 @@ Flags: `--json`, `--no-refresh`. The argument is a repo-relative path or a uniqu
 This sample ran after one edited line in `handleHMRUpdate` (`hmr.ts`).
 
 ```
-$ sieve blast
+$ sieve impact
 your diff changes handleHMRUpdate · 1 symbol in 2 files · 1 of 1 reached by a test · working tree vs HEAD
 3 callers affected within 2 hops
 └─ onHMRUpdate  fn  packages/vite/src/node/server/index.ts:908-915

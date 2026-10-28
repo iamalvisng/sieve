@@ -63,7 +63,7 @@ fn strip_savings_header(golden: &str) -> &str {
     // The saving is the last line of a golden. Keep the newline before it.
     let body = golden.strip_suffix('\n').unwrap_or(golden);
     match body.rfind('\n') {
-        Some(i) if body[i + 1..].starts_with("[sieve] saved") => &golden[..=i],
+        Some(i) if body[i + 1..].starts_with("\u{1f3af} ") => &golden[..=i],
         _ => golden,
     }
 }

@@ -1,1 +1,1 @@
-sieve: --title needs a value — see sieve blast --help
+sieve: --title needs a value — see sieve impact --help

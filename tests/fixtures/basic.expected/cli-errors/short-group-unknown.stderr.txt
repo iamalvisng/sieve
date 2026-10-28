@@ -1,1 +1,1 @@
-sieve: grep has no -x option — see sieve grep --help
+sieve: find has no -x option — see sieve find --help

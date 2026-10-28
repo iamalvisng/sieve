@@ -1,4 +1,4 @@
-//! Parity tests for `sieve skeleton`, `sieve callers`, `sieve map` and
+//! Parity tests for `sieve symbols`, `sieve callers`, `sieve map` and
 //! `sieve check` (P1-17 to P1-36, P3-20 to P3-33): each command's report,
 //! against the goldens under `tests/fixtures/<name>.expected/queries/`.
 

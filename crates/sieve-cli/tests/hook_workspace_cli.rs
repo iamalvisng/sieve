@@ -1,6 +1,6 @@
 //! Parity tests for the prompt hook at a workspace parent (P4-46).
 //!
-//! The prompt hook runs `sieve ask <prompt> . --json -n 3`,
+//! The prompt hook runs `sieve query <prompt> . --json -n 3`,
 //! so at a parent it gets the federated result.
 //! The expected stdout below is the recorded output for the same
 //! `tests/fixtures/ws-ask/` copy, built with `sieve build`.
@@ -15,8 +15,8 @@ use support::ws::{copy_dir, git_init};
 use support::TempDir;
 
 const PACK_HEAD: &str = "[sieve] starting points for this task: pull the code inline with \
-`sieve ask \\\"<what you need>\\\" --source`, trace impact with `sieve callers <symbol>`, or \
-search with `sieve grep \\\"<literal>\\\"`:";
+`sieve query \\\"<what you need>\\\" --source`, trace impact with `sieve callers <symbol>`, or \
+search with `sieve find \\\"<literal>\\\"`:";
 
 /// A built copy of the `ws-ask` fixture: a git repo per child, then one
 /// `sieve build` at the parent.

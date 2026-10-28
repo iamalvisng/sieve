@@ -358,7 +358,7 @@ fn answer_read(
     } else {
         &format!(
             "[sieve] Sieve narrowed this Read to {shown} of {total} lines of {rel}. Read a span \
-             with offset and limit, or run `sieve ask \"<name>\" --source` for a symbol."
+             with offset and limit, or run `sieve query \"<name>\" --source` for a symbol."
         )
     };
     Some(format!(
@@ -368,7 +368,7 @@ fn answer_read(
 }
 
 /// The smallest graph answer that counts as a real answer, in bytes.
-/// `sieve skeleton` on a non-source file prints "no definitions indexed", about 40 bytes. A plain
+/// `sieve symbols` on a non-source file prints "no definitions indexed", about 40 bytes. A plain
 /// "smaller wins" rule lets that non-answer beat every JSON, Markdown, TOML
 /// and lock file. Every real answer holds a note line, which is longer.
 pub(crate) const MIN_ANSWER_BYTES: u64 = 64;
@@ -847,7 +847,7 @@ mod tests {
         assert_eq!(
             last_line(&text),
             "[sieve] Sieve narrowed this Read to 5 of 5 lines of src/lib.rs. Read a span with \
-             offset and limit, or run `sieve ask \"<name>\" --source` for a symbol."
+             offset and limit, or run `sieve query \"<name>\" --source` for a symbol."
         );
     }
 

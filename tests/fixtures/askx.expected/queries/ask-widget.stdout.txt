@@ -1,4 +1,4 @@
-ask  widget · 6 hits
+query  widget · 6 hits
 
 1  widget  fn  src/widget.ts:1-3
    function widget(n: number): number
@@ -16,3 +16,4 @@ ask  widget · 6 hits
 
 6  bigwidget  fn  src/widget.ts:5-96
    function bigwidget(n: number): number
+🎯 6 ranked hits

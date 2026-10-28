@@ -1,1 +1,1 @@
-sieve: too many arguments for 'ask'. Expected 2 arguments but got 3: q, x, y. — see sieve ask --help
+sieve: too many arguments for 'query'. Expected 2 arguments but got 3: q, x, y. — see sieve query --help

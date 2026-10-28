@@ -92,7 +92,7 @@ mod tests {
 
     #[test]
     fn tool_joins_name_and_base() {
-        assert_eq!(SIEVE.tool("find_code"), "sieve_find_code");
+        assert_eq!(SIEVE.tool("query"), "sieve_query");
     }
 
     #[test]

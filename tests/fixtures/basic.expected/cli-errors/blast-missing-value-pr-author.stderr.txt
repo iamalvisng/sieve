@@ -1,1 +1,1 @@
-sieve: --pr-author needs a value — see sieve blast --help
+sieve: --pr-author needs a value — see sieve impact --help

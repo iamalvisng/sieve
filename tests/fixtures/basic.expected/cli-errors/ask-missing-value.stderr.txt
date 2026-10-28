@@ -1,1 +1,1 @@
-sieve: -n, needs a value — see sieve ask --help
+sieve: -n, needs a value — see sieve query --help

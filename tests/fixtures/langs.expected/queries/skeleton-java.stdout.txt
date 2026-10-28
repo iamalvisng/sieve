@@ -10,4 +10,4 @@ java/App.java · 11 symbols
 30-33  main  method  void main(String[] args)
 35-37  famACall  method  void famACall()
 39-41  famCCall  method  void famCCall()
-[sieve] saved ≈ 31 tokens
+🎯 11 signatures · ~31 tokens saved

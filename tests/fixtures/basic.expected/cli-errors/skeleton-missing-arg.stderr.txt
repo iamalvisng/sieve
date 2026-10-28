@@ -1,1 +1,1 @@
-sieve: skeleton needs a file — see sieve skeleton --help
+sieve: symbols needs a file — see sieve symbols --help

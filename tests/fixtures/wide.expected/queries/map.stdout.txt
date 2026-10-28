@@ -31,4 +31,3 @@ f09  fn  d09/a.ts:1-3  · 1 link in
 f10  fn  d10/a.ts:1-3  · 1 link in
 f11  fn  d11/a.ts:1-3  · 1 link in
 f12  fn  d12/a.ts:1-3  · 1 link in
-[sieve] saved ≈ 72 tokens

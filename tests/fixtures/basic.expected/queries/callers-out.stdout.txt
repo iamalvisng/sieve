@@ -1,4 +1,4 @@
 quadruple  fn  src/util.ts:5-7
 calls 1
 └─ double  fn  src/util.ts:1-3
-[sieve] saved ≈ 17 tokens
+🎯 1 exact callers · ~18 tokens saved

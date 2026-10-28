@@ -1,5 +1,6 @@
 value  method  ts/accessors.ts:4-6
-no callers found — the index has no incoming links for this symbol. 2 symbols share the name value. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve grep value
+no callers found — the index has no incoming links for this symbol. 2 symbols share the name value. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve find value
 
 value  method  ts/accessors.ts:8-10
-no callers found — the index has no incoming links for this symbol. 2 symbols share the name value. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve grep value
+no callers found — the index has no incoming links for this symbol. 2 symbols share the name value. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve find value
+🎯 0 exact callers

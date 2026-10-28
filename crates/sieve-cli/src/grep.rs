@@ -1,4 +1,4 @@
-//! The `sieve grep` subcommand: a regex search over the indexed graph,
+//! The `sieve find` subcommand: a regex search over the indexed graph,
 //! grouped by enclosing symbol.
 
 use std::collections::HashSet;
@@ -12,11 +12,11 @@ use sieve_core::workspace;
 use sieve_query::grep::{
     format_grep_result, grep_graph, zero_hit_note, GrepOptions, GrepResult, DEFAULT_MAX_HITS,
 };
-use sieve_savings::{savings_for, with_savings, Savings};
+use sieve_savings::{append_line, hits_line, savings_for, Savings};
 
 use crate::query;
 
-/// Flags for `sieve grep`.
+/// Flags for `sieve find`.
 #[derive(Args, Debug)]
 pub struct GrepArgs {
     /// The regex, or literal string with `--fixed`, to search for.
@@ -66,7 +66,7 @@ struct GrepJson<'a> {
     saved: Option<SavedJson>,
 }
 
-/// Runs `sieve grep`: the query prelude, then the search, then the report.
+/// Runs `sieve find`: the query prelude, then the search, then the report.
 /// At a workspace parent, the search runs in each child and merges
 /// (P1-57).
 pub fn run(args: &GrepArgs, dir_override: Option<&Path>) -> Result<(), String> {
@@ -95,13 +95,9 @@ pub fn run(args: &GrepArgs, dir_override: Option<&Path>) -> Result<(), String> {
         return Ok(());
     }
 
-    let paths = dedup_paths(result.groups.iter().map(|g| g.path.clone()));
-    let saved = savings_for(&graph, &paths);
     let body = format_grep_result(&result);
-    print!(
-        "{}",
-        with_savings(sieve_core::product().name, &body, saved.as_ref())
-    );
+    let line = hits_line(result.total_hits, result.groups.len());
+    print!("{}", append_line(&body, &line));
     Ok(())
 }
 
@@ -160,10 +156,8 @@ fn run_workspace(
         return Ok(());
     }
     let body = format_grep_result(&fed.result);
-    print!(
-        "{}",
-        with_savings(sieve_core::product().name, &body, saved.as_ref())
-    );
+    let line = hits_line(fed.result.total_hits, fed.result.groups.len());
+    print!("{}", append_line(&body, &line));
     if !coverage.is_empty() {
         println!("{coverage}");
     }

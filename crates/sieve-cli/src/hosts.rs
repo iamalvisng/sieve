@@ -999,6 +999,25 @@ const HOOK_SUBS: [&str; 12] = [
 fn hook_command_is_ours(command: &str) -> bool {
     HOOK_SUBS.iter().any(|s| command == names::hook_command(s))
         || command.contains(&product().hooks_file())
+        || hook_command_by_path(command)
+}
+
+/// Returns `true` when `command` is `<program> hook <sub>`, `<sub>` is a
+/// known hook, and the file name of `<program>` is the product name.
+/// Double or single quotes around `<program>` are removed first.
+fn hook_command_by_path(command: &str) -> bool {
+    let mut parts = command.split_whitespace();
+    let (Some(program), Some("hook"), Some(sub), None) =
+        (parts.next(), parts.next(), parts.next(), parts.next())
+    else {
+        return false;
+    };
+    // An unquoted plain path stays a user command.
+    if !program.starts_with(['"', '\'']) && !program.contains('$') {
+        return false;
+    }
+    let program = program.trim_matches(|c| c == '"' || c == '\'');
+    HOOK_SUBS.contains(&sub) && program.rsplit('/').next() == Some(product().name)
 }
 
 /// Returns `true` when a `permissions.allow` entry is one of Sieve's own
@@ -1777,9 +1796,9 @@ pub fn epilogue(counts: Option<(usize, usize)>) -> String {
         None => String::new(),
     };
     let steps = if counts.is_some() {
-        "\n  1. restart your agent  a new session picks up sieve automatically\n  2. code as usual       ask your agent to fix a bug or explain a flow —\n                         it now answers from the graph\n  3. explore by hand     sieve ask \"where is auth handled?\" · sieve callers <fn> · sieve viz\n"
+        "\n  1. restart your agent  a new session picks up sieve automatically\n  2. code as usual       ask your agent to fix a bug or explain a flow —\n                         it now answers from the graph\n  3. explore by hand     sieve query \"where is auth handled?\" · sieve callers <fn> · sieve viz\n"
     } else {
-        "\n  1. build the graph     sieve build\n  2. restart your agent  a new session picks up sieve automatically\n  3. code as usual       ask your agent to fix a bug or explain a flow —\n                         it now answers from the graph\n  4. explore by hand     sieve ask \"where is auth handled?\" · sieve callers <fn> · sieve viz\n"
+        "\n  1. build the graph     sieve build\n  2. restart your agent  a new session picks up sieve automatically\n  3. code as usual       ask your agent to fix a bug or explain a flow —\n                         it now answers from the graph\n  4. explore by hand     sieve query \"where is auth handled?\" · sieve callers <fn> · sieve viz\n"
     };
     format!(
         "\n       _\n   ___(_) _____   _____\n  / __| |/ _ \\ \\ / / _ \\\n  \\__ \\ |  __/\\ V /  __/\n  |___/_|\\___| \\_/ \\___|{counts_suffix}\n{steps}\n  share it: git add .claude && git commit — teammates run `sieve build` for their own local graph\n"
@@ -2032,6 +2051,46 @@ mod tests {
             WriteAction::SkippedUnparseable
         );
         assert_eq!(fs::read_to_string(&path).unwrap(), "not json");
+    }
+
+    #[test]
+    fn hook_command_is_ours_accepts_a_path_to_the_product_binary() {
+        assert!(hook_command_is_ours(
+            "\"$CLAUDE_PROJECT_DIR/target/release/sieve\" hook pre-read"
+        ));
+        assert!(hook_command_is_ours(
+            "\"/opt/homebrew/bin/sieve\"  hook   stop"
+        ));
+        assert!(hook_command_is_ours("'/a/sieve' hook prompt"));
+    }
+
+    #[test]
+    fn hook_command_is_ours_rejects_foreign_programs_and_unknown_subs() {
+        assert!(!hook_command_is_ours("my-sieve hook pre-read"));
+        assert!(!hook_command_is_ours("/x/my-sieve hook pre-read"));
+        assert!(!hook_command_is_ours("/opt/homebrew/bin/sieve hook stop"));
+        assert!(!hook_command_is_ours("sieve hook not-a-sub"));
+    }
+
+    #[test]
+    fn merge_claude_settings_replaces_path_form_hooks_without_duplicating() {
+        let dir = TempDir::new("claude-settings-path-hooks");
+        let path = dir.path.join("settings.json");
+        merge_claude_settings(&path, false).unwrap();
+        let fresh = fs::read_to_string(&path).unwrap();
+        let by_path = fresh.replace(
+            "\"sieve hook ",
+            "\"\\\"$CLAUDE_PROJECT_DIR/target/release/sieve\\\" hook ",
+        );
+        assert_ne!(fresh, by_path);
+        fs::write(&path, by_path).unwrap();
+        merge_claude_settings(&path, false).unwrap();
+        let merged = fs::read_to_string(&path).unwrap();
+        assert_eq!(
+            merged.matches(" hook ").count(),
+            fresh.matches(" hook ").count()
+        );
+        assert!(!merged.contains("target/release/sieve"));
     }
 
     #[test]

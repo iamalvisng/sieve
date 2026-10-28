@@ -501,6 +501,15 @@ pub struct SessionState {
         skip_serializing_if = "BTreeMap::is_empty"
     )]
     pub saved_by_day: BTreeMap<String, u64>,
+    /// The version of the formula that wrote `savedTokens` and `savedByDay`.
+    /// A file with no version, or an older one, holds the old whole-file
+    /// baseline numbers. The totals ignore them.
+    #[serde(
+        rename = "savingsFormula",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
+    pub savings_formula: Option<u64>,
     /// One record per file path read this session (repeat-read, "remembered
     /// reads"). Empty on every Phase 1 session, so `skip_serializing_if`
     /// keeps `state.json` byte-identical to the Phase 1 golden.
@@ -620,10 +629,30 @@ impl SessionState {
     }
 }
 
+/// The version of the saved-tokens formula. Version 1 is the old whole-file
+/// baseline, which also covers a file with no version. Version 2 is the
+/// answer-line formula.
+pub(crate) const SAVINGS_FORMULA: u64 = 2;
+
 impl SessionState {
+    /// The tokens this session saved by the current formula. An old file gives 0.
+    pub(crate) fn current_saved(&self) -> u64 {
+        if self.savings_formula == Some(SAVINGS_FORMULA) {
+            self.saved_tokens
+        } else {
+            0
+        }
+    }
+
     /// Adds `n` saved tokens to the session total and to today's local-day
     /// total.
     fn add_saved(&mut self, n: u64) {
+        if self.savings_formula != Some(SAVINGS_FORMULA) {
+            // The stored numbers come from an old formula: start the new count.
+            self.saved_tokens = 0;
+            self.saved_by_day.clear();
+            self.savings_formula = Some(SAVINGS_FORMULA);
+        }
         self.saved_tokens += n;
         *self
             .saved_by_day
@@ -843,7 +872,7 @@ fn stale_banner(freshness: Option<&IndexFreshness>) -> Option<String> {
     Some(format!(
         "\u{26a0} sieve's index may be ahead of your working tree: {} of {} indexed \
         files are not on disk (branch switch or uncommitted move?). If sieve names a path that \
-        isn't there, don't chase it \u{2014} `sieve grep` the symbol to find where it lives now; \
+        isn't there, don't chase it \u{2014} `sieve find` the symbol to find where it lives now; \
         run `sieve build` to refresh.",
         f.missing, f.total
     ))
@@ -982,9 +1011,9 @@ pub(crate) fn session_id_of(input: &Value) -> String {
         .to_string()
 }
 
-/// Runs the in-process equivalent of `sieve ask "<prompt>" . --json -n 3`
+/// Runs the in-process equivalent of `sieve query "<prompt>" . --json -n 3`
 /// (`--in <scope>` too, when `in_prefix` is set). Refreshes the graph
-/// first, discarding the refresh note — the real hook spawns `sieve ask`
+/// first, discarding the refresh note — the real hook spawns `sieve query`
 /// with its stderr piped to `/dev/null`, so this child's stderr must stay
 /// silent too. Returns `None` for a
 /// failed call: no graph to read.
@@ -998,7 +1027,7 @@ fn run_ask_for_prompt(
         disabled: false,
         force_hash: false,
     };
-    // At a workspace parent `sieve ask` federates, and
+    // At a workspace parent `sieve query` federates, and
     // its prelude refreshes each child (P4-46). A federated error, such as
     // an unknown `--in` child, is a failed call too.
     if let Some(ws) = sieve_core::workspace::read(context_dir) {
@@ -1161,8 +1190,8 @@ fn retrieval_body(hits: &[&sieve_query::ask::AskHit]) -> String {
     let header = if hits.iter().any(|h| h.code.is_some()) {
         "[sieve] retrieved context, read these spans; do not re-open the files:"
     } else {
-        "[sieve] starting points for this task: pull the code inline with `sieve ask \"<what you \
-        need>\" --source`, trace impact with `sieve callers <symbol>`, or search with `sieve grep \
+        "[sieve] starting points for this task: pull the code inline with `sieve query \"<what you \
+        need>\" --source`, trace impact with `sieve callers <symbol>`, or search with `sieve find \
         \"<literal>\"`:"
     };
     format!("{}\n{}", header, blocks.join("\n"))
@@ -1884,7 +1913,7 @@ fn classify_tool_use(tool_name: &str, command: Option<&str>) -> Option<&'static 
 }
 
 /// Whether `tool_name` names one of the MCP tools, across a host
-/// prefix (`mcp__sieve__sieve_find_code`, `MCP:sieve_find_code`) — the
+/// prefix (`mcp__sieve__sieve_query`, `MCP:sieve_query`) — the
 /// last `[:./]`- or `__`-delimited segment, checked against the real name
 /// list.
 fn is_sieve_mcp_tool(tool_name_lower: &str) -> bool {
@@ -1897,14 +1926,7 @@ fn is_sieve_mcp_tool(tool_name_lower: &str) -> bool {
     // bare tool suffixes by hand, instead of calling
     // `sieve_daemon::names::tool_names()` (six `String` allocations) once
     // per hook tool-use event.
-    const TOOL_BASES: [&str; 6] = [
-        "find_code",
-        "file_api",
-        "check_freshness",
-        "trace_calls",
-        "find_all",
-        "repo_map",
-    ];
+    const TOOL_BASES: [&str; 6] = ["query", "symbols", "check", "callers", "find", "map"];
     let is_named_tool = bare
         .strip_prefix(product().name)
         .and_then(|rest| rest.strip_prefix('_'))
@@ -1956,14 +1978,12 @@ pub(crate) fn command_invokes_sieve(command: &str) -> bool {
     false
 }
 
-/// Sums every `[<product>] tokens saved \u{2248} N` footer in `text`
-/// (`sumSavingsFooters`).
+/// Sums the saved tokens of every answer line in `text`
+/// (`sumSavingsFooters`). It also reads the long `[<product>] tokens saved
+/// \u{2248} N` footer that an older transcript holds.
 fn sum_savings_footers(text: &str) -> u64 {
-    let name = product().name;
-    // The product prints the short `[sieve] saved \u{2248} N tokens`
-    // header. It still reads the long form, which an older transcript holds.
-    let long = format!("[{name}] tokens saved \u{2248} ");
-    sum_after_marker(text, &format!("[{name}] saved \u{2248} ")) + sum_after_marker(text, &long)
+    let long = format!("[{}] tokens saved \u{2248} ", product().name);
+    sieve_savings::sum_answer_lines(text) + sum_after_marker(text, &long)
 }
 
 /// Sums the number that follows each `marker` in `text`.
@@ -2388,7 +2408,7 @@ mod tests {
             Some(
                 "\u{26a0} sieve's index may be ahead of your working tree: 1 of 2 indexed \
                 files are not on disk (branch switch or uncommitted move?). If sieve names a path that \
-                isn't there, don't chase it \u{2014} `sieve grep` the symbol to find where it lives now; \
+                isn't there, don't chase it \u{2014} `sieve find` the symbol to find where it lives now; \
                 run `sieve build` to refresh."
                     .to_string()
             )
@@ -2487,22 +2507,24 @@ mod tests {
         assert_eq!(sum_savings_footers(text), 1620);
     }
 
+    /// The answer line is the last line of a query result. The hook reads
+    /// it there, reads a `k` number, and counts it once.
     #[test]
-    fn test_savings_short_header_is_read_by_the_marker() {
-        let text = "[sieve] saved \u{2248} 1,200 tokens\n\n... [sieve] saved \u{2248} 30 tokens";
-        assert_eq!(sum_after_marker(text, "[sieve] saved \u{2248} "), 1230);
-        assert_eq!(sum_after_marker(text, "[sieve] tokens saved \u{2248} "), 0);
+    fn test_savings_answer_line_is_read_from_the_last_line() {
+        let text =
+            "h  fn  a.ts:1-9\n1 caller\n\u{1f3af} 1 exact callers \u{b7} ~20k tokens saved\n";
+        assert_eq!(sum_savings_footers(text), 20_000);
+        let json = "{\"stdout\":\"x\\n\u{1f3af} 4 signatures \u{b7} ~1.9k tokens saved\\n\"}";
+        assert_eq!(sum_savings_footers(json), 1_900);
     }
 
-    /// The saving line is the last line of a query result. The hook reads it
-    /// there, and counts it once.
     #[test]
-    fn test_savings_marker_is_read_from_the_last_line() {
-        let text = "h  fn  a.ts:1-9\n1 caller\n\u{2514}\u{2500} g  fn  b.ts:1-3\n[sieve] saved \u{2248} 20,269 tokens\n";
-        assert_eq!(sum_after_marker(text, "[sieve] saved \u{2248} "), 20_269);
+    fn test_savings_answer_line_without_a_saving_adds_nothing() {
+        let text = "x\n\u{1f3af} 9 hits in 4 symbols\n";
+        assert_eq!(sum_savings_footers(text), 0);
         assert_eq!(
-            text.lines().last(),
-            Some("[sieve] saved \u{2248} 20,269 tokens")
+            sum_savings_footers("[sieve] saved \u{2248} 1,200 tokens"),
+            0
         );
     }
 

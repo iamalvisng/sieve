@@ -1,4 +1,4 @@
-ask  dog speak · 6 hits
+query  dog speak · 6 hits
 
 1  Dog  class  py/derived.py:6-11
    class Dog(Animal)
@@ -17,3 +17,4 @@ ask  dog speak · 6 hits
 
 6  twice  method  py/derived.py:10-11
    def twice(self)
+🎯 6 ranked hits

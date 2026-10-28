@@ -1,1 +1,1 @@
-sieve: --dir needs a value — see sieve skeleton --help
+sieve: --dir needs a value — see sieve symbols --help

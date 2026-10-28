@@ -1,4 +1,4 @@
-ask  shape area circle · 8 hits
+query  shape area circle · 8 hits
 
 1  Circle  class  ts/derived.ts:3-11
    class Circle extends Base implements Shape
@@ -21,3 +21,4 @@ ask  shape area circle · 8 hits
 
 8  greet  method  ts/base.ts:6-8
    greet(): string
+🎯 8 ranked hits

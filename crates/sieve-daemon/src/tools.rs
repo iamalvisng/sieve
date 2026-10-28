@@ -13,27 +13,27 @@ use sieve_core::workspace;
 use sieve_parse::refresh::{
     ensure_fresh_children, ensure_fresh_graph, env_truthy, refresh_note, RefreshOptions,
 };
+use sieve_parse::rename::{apply_plan, plan_rename, ApplyStatus, Status as RenameStatus};
 use sieve_parse::{
     check_context, check_graph, check_graph_lookup, federated_check_text, format_check_report,
     format_graph_check_report, GraphCheck, LookupCheck,
 };
 use sieve_query::ask::{ask, format_ask, AskOptions};
 use sieve_query::callers::{
-    callers_saved_paths, edge_walk, render_block, resolve_symbol, CallersError, Depth, Direction,
-    Hit,
+    callers_hit_count, edge_walk, render_block, resolve_symbol, word_grep_chars, CallersError,
+    Depth, Direction, Hit,
 };
 use sieve_query::grep::{
     format_grep_result, grep_graph, zero_hit_note, GrepError, GrepOptions, DEFAULT_MAX_HITS,
 };
-use sieve_query::map::{build_repo_map, format_repo_map, map_saved_paths, MapOptions, RepoMap};
+use sieve_query::map::{build_repo_map, format_repo_map, MapOptions, RepoMap};
 use sieve_query::skeleton::{format_skeleton, skeleton, skeleton_saved_paths};
 use sieve_query::workspace::{
     coverage_note, federate_ask, federate_callers, federate_grep, federate_map, load_children,
     FederateAskOptions,
 };
 use sieve_savings::{
-    append_line, ask_pack_region, savings_for, sieve_header, to_tokens, utf16_len, with_savings,
-    with_savings_nl, Savings,
+    append_line, callers_line, hits_line, ranked_line, savings_for, signatures_line,
 };
 
 use crate::names::canonical_tool_name;
@@ -71,6 +71,48 @@ fn why_tool(args: &Value, root: &Path, context_dir: &Path) -> (String, bool) {
     .unwrap_or_else(|_| (format!("{name} failed: internal error"), true))
 }
 
+/// `sieve_rename`: a dry run returns the plan as JSON. `write: true` needs
+/// `expect`, the plan id of a dry run. A refusal or a failed write is an error.
+fn rename_tool(args: &Value, root: &Path, context_dir: &Path) -> (String, bool) {
+    let name = product().tool("rename");
+    let text = |key: &str| {
+        args.get(key)
+            .and_then(Value::as_str)
+            .filter(|s| !s.is_empty())
+    };
+    let (Some(symbol), Some(new_name)) = (text("symbol"), text("new_name")) else {
+        return (format!("{name} requires symbol and new_name"), true);
+    };
+    let in_prefix = text("in");
+    if args.get("write").is_some_and(|v| !v.is_boolean()) {
+        return (format!("{name}: write must be a boolean"), true);
+    }
+    if args.get("expect").is_some_and(|v| !v.is_string()) {
+        return (format!("{name}: expect must be a string"), true);
+    }
+    if args.get("write") == Some(&Value::Bool(true)) {
+        let Some(expect) = text("expect") else {
+            return (
+                format!("{name} with write:true requires expect: run a dry run first and pass its plan_id"),
+                true,
+            );
+        };
+        return match apply_plan(root, context_dir, symbol, new_name, in_prefix, Some(expect)) {
+            Ok(report) => (to_json(&report), report.status != ApplyStatus::Written),
+            Err(e) => (format!("{name} failed: {e}"), true),
+        };
+    }
+    match plan_rename(root, context_dir, symbol, new_name, in_prefix) {
+        Ok(plan) => (to_json(&plan), plan.status != RenameStatus::Ready),
+        Err(e) => (format!("{name} failed: {e}"), true),
+    }
+}
+
+/// Renders a value as pretty JSON. A failure gives the error text.
+fn to_json<T: serde::Serialize>(value: &T) -> String {
+    serde_json::to_string_pretty(value).unwrap_or_else(|e| e.to_string())
+}
+
 /// The text a missing graph reports for every tool that has no graceful
 /// empty-result path of its own (`mcp-server.md` section 4).
 fn no_graph_text() -> String {
@@ -92,7 +134,7 @@ fn base_tool(canonical: &str) -> &str {
 pub fn call(name: &str, args: &Value, root: &Path, context_dir: &Path) -> (String, bool) {
     let canonical = canonical_tool_name(name);
     // `check_freshness` tries the lookup first, so it checks the cap itself.
-    if base_tool(&canonical) != "check_freshness" {
+    if base_tool(&canonical) != "check" {
         if let Some(text) = capped_text(context_dir) {
             return (text, true);
         }
@@ -106,7 +148,7 @@ pub fn call(name: &str, args: &Value, root: &Path, context_dir: &Path) -> (Strin
             return (format!("{child}: {text}"), true);
         }
     }
-    let note = if base_tool(&canonical) == "check_freshness" {
+    let note = if base_tool(&canonical) == "check" {
         None
     } else {
         let opts = RefreshOptions {
@@ -124,7 +166,7 @@ pub fn call(name: &str, args: &Value, root: &Path, context_dir: &Path) -> (Strin
     // the tool call path catches the throw before it adds the note.
     let mut thrown = false;
     let federated = ws.and_then(|_| {
-        if base_tool(&canonical) == "find_code" {
+        if base_tool(&canonical) == "query" {
             let (text, is_error, did_throw) = workspace_find_code(args, root, context_dir);
             thrown = did_throw;
             return Some((text, is_error));
@@ -151,20 +193,16 @@ fn call_workspace(
     root: &Path,
     context_dir: &Path,
 ) -> Option<(String, bool)> {
-    let name = product().name;
-    if !matches!(
-        tool,
-        "trace_calls" | "find_all" | "repo_map" | "check_freshness"
-    ) {
+    if !matches!(tool, "callers" | "find" | "map" | "check") {
         return None;
     }
     let graphs = load_children(root, context_dir);
     match tool {
-        "trace_calls" => {
+        "callers" => {
             let query = symbol_arg(args);
             if query.is_empty() {
                 return Some((
-                    format!("{} requires a symbol", product().tool("trace_calls")),
+                    format!("{} requires a symbol", product().tool("callers")),
                     true,
                 ));
             }
@@ -185,22 +223,18 @@ fn call_workspace(
                 str_arg(args, "in"),
                 direction,
                 depth,
-                |graph, body, paths| {
-                    with_savings(name, body, savings_for(graph, paths).as_ref())
-                        .trim_end_matches('\n')
-                        .to_string()
-                },
+                |_, body, _| body.trim_end_matches('\n').to_string(),
             );
             Some(match fed {
                 Ok(f) => (f.text, !f.found),
                 Err(e) => (e.to_string(), true),
             })
         }
-        "find_all" => {
+        "find" => {
             let pattern = js_string_arg(args, "pattern");
             if pattern.is_empty() {
                 return Some((
-                    format!("{} requires a pattern", product().tool("find_all")),
+                    format!("{} requires a pattern", product().tool("find")),
                     true,
                 ));
             }
@@ -211,24 +245,19 @@ fn call_workspace(
                 in_prefix: None,
                 max_hits: DEFAULT_MAX_HITS,
             };
-            let fed = match federate_grep(&graphs, &pattern, &opts, |g, paths| {
-                savings_for(g, paths).map(|s| (s.files, s.baseline_chars))
-            }) {
+            let fed = match federate_grep(&graphs, &pattern, &opts, |_, _| None) {
                 Ok(f) => f,
                 Err(GrepError::InvalidPattern { message, .. }) => return Some((message, true)),
                 Err(e) => return Some((e.to_string(), true)),
             };
-            // The grep result adds the summed savings header, kept
-            // only when the baseline is above zero.
-            let saved = (fed.saved_chars > 0).then_some(Savings {
-                baseline_chars: fed.saved_chars,
-                files: fed.saved_files,
-            });
             let text = if fed.result.total_hits == 0 {
                 zero_hit_note(&fed.result)
             } else {
                 let body = format_grep_result(&fed.result);
-                with_savings(name, &body, saved.as_ref())
+                append_line(
+                    &body,
+                    &hits_line(fed.result.total_hits, fed.result.groups.len()),
+                )
             };
             let coverage = coverage_note(&graphs);
             let text = if coverage.is_empty() {
@@ -238,17 +267,14 @@ fn call_workspace(
             };
             Some((text, false))
         }
-        "repo_map" => {
+        "map" => {
             let max_dirs = args
                 .get("max_dirs")
                 .and_then(Value::as_f64)
                 .filter(|n| n.is_finite() && *n > 0.0)
                 .map(|n| n as usize);
-            let text = federate_map(&graphs, max_dirs, |graph, body| {
-                let saved = savings_for(graph, &map_saved_paths(graph));
-                with_savings(name, body, saved.as_ref())
-                    .trim_end_matches('\n')
-                    .to_string()
+            let text = federate_map(&graphs, max_dirs, |_, body| {
+                body.trim_end_matches('\n').to_string()
             });
             Some((text, false))
         }
@@ -285,13 +311,14 @@ fn dispatch(
     context_dir: &Path,
 ) -> (String, bool) {
     match base_tool(canonical) {
-        "find_code" => find_code(args, root, context_dir),
-        "file_api" => file_api(args, context_dir),
-        "check_freshness" => check_freshness(root, context_dir),
-        "trace_calls" => trace_calls(args, context_dir),
-        "find_all" => find_all(args, root, context_dir),
-        "repo_map" => repo_map(args, context_dir),
+        "query" => find_code(args, root, context_dir),
+        "symbols" => file_api(args, context_dir),
+        "check" => check_freshness(root, context_dir),
+        "callers" => trace_calls(args, root, context_dir),
+        "find" => find_all(args, root, context_dir),
+        "map" => repo_map(args, context_dir),
         "why" => why_tool(args, root, context_dir),
+        "rename" => rename_tool(args, root, context_dir),
         _ => (format!("unknown tool: {raw_name}"), true),
     }
 }
@@ -355,7 +382,7 @@ fn load_graph(context_dir: &Path) -> Option<Graph> {
     serde_json::from_slice(&bytes).ok()
 }
 
-/// An empty graph, for `sieve_find_code`'s no-graph path: `ask` runs over
+/// An empty graph, for `sieve_query`'s no-graph path: `ask` runs over
 /// an empty node set instead of erroring (`ask-ranking.md` section 0).
 fn empty_graph() -> Graph {
     Graph {
@@ -369,18 +396,6 @@ fn empty_graph() -> Graph {
         nodes: Vec::new(),
         edges: Vec::new(),
     }
-}
-
-/// Keeps only the first occurrence of each path, in encounter order.
-fn dedup_paths<I: IntoIterator<Item = String>>(paths: I) -> Vec<String> {
-    let mut seen = std::collections::HashSet::new();
-    let mut out = Vec::new();
-    for path in paths {
-        if seen.insert(path.clone()) {
-            out.push(path);
-        }
-    }
-    out
 }
 
 /// A string argument that is read with `typeof x === 'string' && x`
@@ -435,30 +450,6 @@ pub(crate) fn js_number_text(n: f64) -> String {
     }
 }
 
-/// The rendered body with the escalation nudge cut away and the header
-/// kept, for the `ask --source` pack measurement (section 7.9).
-/// The same cut `sieve-cli/src/ask.rs` makes.
-fn pack_region(rendered: &str) -> String {
-    ask_pack_region(product().name, rendered)
-}
-
-/// The `sieve_find_code` savings sentence, or `None` when the rule omits
-/// it: no baseline, a zero baseline, or a pack no smaller than the
-/// baseline (section 7.9).
-fn find_code_savings_line(graph: &Graph, paths: &[String], rendered_body: &str) -> Option<String> {
-    let saved = savings_for(graph, paths)?;
-    if saved.baseline_chars == 0 {
-        return None;
-    }
-    let pack = to_tokens(utf16_len(&pack_region(rendered_body)));
-    let base = to_tokens(saved.baseline_chars);
-    if base <= pack {
-        return None;
-    }
-    let delta = base - pack;
-    Some(sieve_header(product().name, delta))
-}
-
 /// `find_code` at a workspace parent (P4-44): the
 /// federated `ask`, with source inlined and no savings line. A thrown
 /// error, such as an unknown `in` child, is the message as an error.
@@ -467,7 +458,7 @@ fn workspace_find_code(args: &Value, root: &Path, context_dir: &Path) -> (String
     let query = js_string_arg(args, "query");
     if query.is_empty() {
         return (
-            format!("{} requires a query", product().tool("find_code")),
+            format!("{} requires a query", product().tool("query")),
             true,
             false,
         );
@@ -500,7 +491,7 @@ fn find_code(args: &Value, root: &Path, context_dir: &Path) -> (String, bool) {
     let query = js_string_arg(args, "query");
     if query.is_empty() {
         return (
-            format!("{} requires a query", product().tool("find_code")),
+            format!("{} requires a query", product().tool("query")),
             true,
         );
     }
@@ -526,10 +517,10 @@ fn find_code(args: &Value, root: &Path, context_dir: &Path) -> (String, bool) {
     };
 
     let body = format_ask(&result);
-    let paths = dedup_paths(result.hits.iter().map(|h| h.path.clone()));
-    let text = match find_code_savings_line(&graph, &paths, &body) {
-        Some(line) => append_line(&body, &line),
-        None => body,
+    let text = if result.hits.is_empty() {
+        body
+    } else {
+        append_line(&body, &ranked_line(result.hits.len()))
     };
     (text, false)
 }
@@ -538,23 +529,26 @@ fn file_api(args: &Value, context_dir: &Path) -> (String, bool) {
     let file = js_string_arg(args, "file");
     if file.is_empty() {
         return (
-            format!("{} requires a file", product().tool("file_api")),
+            format!("{} requires a file", product().tool("symbols")),
             true,
         );
     }
 
     let graph = load_graph(context_dir);
     let r = skeleton(graph.as_ref(), &file);
-    // `formatSkeleton` measures the savings pack on the body with no
-    // trailing newline, then adds exactly one newline after the whole
-    // header-plus-body string (`mcp-server.md` section 4,;
-    // mirrors `sieve-cli/src/skeleton.rs`'s own fix for the same rounding
-    // boundary).
+    // The answer line measures the body without its final newline.
     let rendered = format_skeleton(&r);
     let body = rendered.strip_suffix('\n').unwrap_or(&rendered);
     let paths = skeleton_saved_paths(&r);
-    let saved = graph.as_ref().and_then(|g| savings_for(g, &paths));
-    let text = with_savings_nl(product().name, body, saved.as_ref());
+    let baseline = graph
+        .as_ref()
+        .and_then(|g| savings_for(g, &paths))
+        .map_or(0, |s| s.baseline_chars);
+    let text = if r.entries.is_empty() {
+        format!("{body}\n")
+    } else {
+        append_line(body, &signatures_line(r.entries.len(), baseline, body))
+    };
     let is_error = r.entries.is_empty() && r.note.is_some();
     (text, is_error)
 }
@@ -602,7 +596,7 @@ fn full_graph_check(root: &Path, context_dir: &Path) -> Result<GraphCheck, (Stri
     check_graph(root, context_dir).map_err(|e| (e.to_string(), true))
 }
 
-/// Renders the `sieve_trace_calls` text: one tree per matched symbol,
+/// Renders the `sieve_callers` text: one tree per matched symbol,
 /// joined by a blank line, with no quoted call-site lines.
 fn render_matches(matches: &[(&Node, Vec<Hit>)], direction: Direction) -> String {
     let candidate_count = matches.len();
@@ -627,21 +621,21 @@ fn parse_depth_arg(args: &Value) -> Depth {
     }
 }
 
-/// The text `sieve_trace_calls` prints for a symbol the graph does not
+/// The text `sieve_callers` prints for a symbol the graph does not
 /// hold (`unknownSymbolText`): the CLI's wording, with
 /// the build command in backticks.
 fn unknown_symbol_text(query: &str) -> String {
     format!(
-        "no symbol named {query} — try {} grep {query}",
+        "no symbol named {query} — try {} find {query}",
         product().name
     )
 }
 
-fn trace_calls(args: &Value, context_dir: &Path) -> (String, bool) {
+fn trace_calls(args: &Value, root: &Path, context_dir: &Path) -> (String, bool) {
     let query = symbol_arg(args);
     if query.is_empty() {
         return (
-            format!("{} requires a symbol", product().tool("trace_calls")),
+            format!("{} requires a symbol", product().tool("callers")),
             true,
         );
     }
@@ -670,17 +664,19 @@ fn trace_calls(args: &Value, context_dir: &Path) -> (String, bool) {
         .collect();
 
     let body = render_matches(&pairs, direction);
-    let paths = callers_saved_paths(&pairs);
-    let saved = savings_for(&graph, &paths);
-    let text = with_savings(product().name, &body, saved.as_ref());
-    (text, false)
+    let name = pairs
+        .first()
+        .map_or(query.as_str(), |(s, _)| s.name.as_str());
+    let baseline = word_grep_chars(&graph, root, name);
+    let line = callers_line(callers_hit_count(&pairs), baseline, &body);
+    (append_line(&body, &line), false)
 }
 
 fn find_all(args: &Value, root: &Path, context_dir: &Path) -> (String, bool) {
     let pattern = js_string_arg(args, "pattern");
     if pattern.is_empty() {
         return (
-            format!("{} requires a pattern", product().tool("find_all")),
+            format!("{} requires a pattern", product().tool("find")),
             true,
         );
     }
@@ -707,11 +703,9 @@ fn find_all(args: &Value, root: &Path, context_dir: &Path) -> (String, bool) {
     if result.total_hits == 0 {
         return (zero_hit_note(&result), false);
     }
-    // The savings header is added here.
-    let paths = dedup_paths(result.groups.iter().map(|g| g.path.clone()));
-    let saved = savings_for(&graph, &paths);
     let body = format_grep_result(&result);
-    (with_savings(product().name, &body, saved.as_ref()), false)
+    let line = hits_line(result.total_hits, result.groups.len());
+    (append_line(&body, &line), false)
 }
 
 fn repo_map(args: &Value, context_dir: &Path) -> (String, bool) {
@@ -737,11 +731,8 @@ fn repo_map(args: &Value, context_dir: &Path) -> (String, bool) {
     if let Some(n) = max_dirs.filter(|n| n.fract() != 0.0) {
         rendered = fractional_dropped_notes(&rendered, &map, n);
     }
-    let body = rendered.strip_suffix('\n').unwrap_or(&rendered);
-    let paths = map_saved_paths(&graph);
-    let saved = savings_for(&graph, &paths);
-    let text = with_savings_nl(product().name, body, saved.as_ref());
-    (text, false)
+    // `repo_map` has no answer line: no narrow baseline exists for it.
+    (rendered, false)
 }
 
 /// The `… +N more directories` note for a dropped count, as
@@ -847,7 +838,7 @@ mod tests {
         let (text, is_error) = find_code(&serde_json::json!({}), Path::new("."), Path::new("."));
         assert_eq!(
             text,
-            format!("{} requires a query", product().tool("find_code"))
+            format!("{} requires a query", product().tool("query"))
         );
         assert!(is_error);
     }
@@ -865,13 +856,7 @@ mod tests {
         let (root, ctx) = capped_dir("tool");
         set_test_wiring_cap(Some(1));
         let args = serde_json::json!({"query": "x", "symbol": "x", "pattern": "x", "file": "a"});
-        for tool in [
-            "find_code",
-            "file_api",
-            "trace_calls",
-            "find_all",
-            "repo_map",
-        ] {
+        for tool in ["query", "symbols", "callers", "find", "map"] {
             let (text, is_error) = call(&product().tool(tool), &args, &root, &ctx);
             assert!(is_error, "{tool}");
             assert!(text.contains("over the size cap"), "{tool}: {text}");
@@ -959,7 +944,7 @@ mod tests {
         std::fs::create_dir_all(&kid).expect("kid dir");
         std::fs::write(kid.join("wiring.json"), "not json at all").expect("kid wiring");
         set_test_wiring_cap(Some(1));
-        for tool in ["find_all", "trace_calls", "repo_map", "check_freshness"] {
+        for tool in ["find", "callers", "map", "check"] {
             let args = serde_json::json!({"pattern": "x", "symbol": "x"});
             let (text, is_error) = call(&product().tool(tool), &args, &root, &ctx);
             assert!(is_error, "{tool}");
@@ -968,5 +953,128 @@ mod tests {
         }
         set_test_wiring_cap(None);
         std::fs::remove_dir_all(&root).ok();
+    }
+
+    const RENAME_FILES: [(&str, &str); 2] = [
+        (
+            "src/args.ts",
+            "export function parseArgs(argv: string[]): string[] {\n  return argv;\n}\n",
+        ),
+        (
+            "src/cli.ts",
+            "import { parseArgs } from \"./args\";\nconst a = parseArgs([]);\nconsole.log(a);\n",
+        ),
+    ];
+
+    fn rename_fixture(
+        tag: &str,
+        files: &[(&str, &str)],
+    ) -> (std::path::PathBuf, std::path::PathBuf) {
+        let dir = std::env::temp_dir().join(format!("sieve-rn4-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let root = dir.join("repo");
+        for (path, body) in files {
+            let full = root.join(path);
+            std::fs::create_dir_all(full.parent().expect("parent")).expect("mkdir");
+            std::fs::write(full, body).expect("write file");
+        }
+        (root, dir.join("ctx"))
+    }
+
+    fn rename_call(args: Value, root: &Path, ctx: &Path) -> (Value, bool) {
+        let (text, is_error) = rename_tool(&args, root, ctx);
+        let value = serde_json::from_str(&text).unwrap_or(Value::String(text));
+        (value, is_error)
+    }
+
+    #[test]
+    fn test_rn4_dry_run_returns_a_ready_plan() {
+        let (root, ctx) = rename_fixture("dry", &RENAME_FILES);
+        let args = serde_json::json!({"symbol": "parseArgs", "new_name": "parseCliArgs"});
+        let (plan, is_error) = rename_call(args, &root, &ctx);
+        assert!(!is_error, "{plan}");
+        assert_eq!(plan["status"], "ready");
+        assert_eq!(plan["plan_id"].as_str().map(str::len), Some(8));
+        let body = std::fs::read_to_string(root.join("src/args.ts")).expect("read");
+        assert!(body.contains("parseArgs"), "a dry run changed a file");
+        let _ = std::fs::remove_dir_all(root.parent().expect("dir"));
+    }
+
+    #[test]
+    fn test_rn4_write_or_expect_of_the_wrong_type_is_an_error() {
+        let (root, ctx) = rename_fixture("badtype", &RENAME_FILES);
+        let base = serde_json::json!({"symbol": "parseArgs", "new_name": "parseCliArgs"});
+        let mut args = base.clone();
+        args["write"] = Value::String("true".into());
+        let (text, is_error) = rename_tool(&args, &root, &ctx);
+        assert!(is_error && text.contains("write must be"), "{text}");
+        let mut args = base;
+        args["expect"] = serde_json::json!(5);
+        let (text, is_error) = rename_tool(&args, &root, &ctx);
+        assert!(is_error && text.contains("expect must be"), "{text}");
+        let _ = std::fs::remove_dir_all(root.parent().expect("dir"));
+    }
+
+    #[test]
+    fn test_rn4_write_without_expect_is_refused() {
+        let (root, ctx) = rename_fixture("noexpect", &RENAME_FILES);
+        let args =
+            serde_json::json!({"symbol": "parseArgs", "new_name": "parseCliArgs", "write": true});
+        let (text, is_error) = rename_tool(&args, &root, &ctx);
+        assert!(is_error && text.contains("requires expect"), "{text}");
+        let body = std::fs::read_to_string(root.join("src/args.ts")).expect("read");
+        assert!(body.contains("parseArgs"), "the file changed");
+        let _ = std::fs::remove_dir_all(root.parent().expect("dir"));
+    }
+
+    #[test]
+    fn test_rn4_write_with_a_stale_plan_id_is_refused() {
+        let (root, ctx) = rename_fixture("stale", &RENAME_FILES);
+        let args = serde_json::json!({
+            "symbol": "parseArgs", "new_name": "parseCliArgs",
+            "write": true, "expect": "00000000"
+        });
+        let (report, is_error) = rename_call(args, &root, &ctx);
+        assert!(is_error, "{report}");
+        assert_eq!(report["status"], "expect_mismatch");
+        let body = std::fs::read_to_string(root.join("src/args.ts")).expect("read");
+        assert!(body.contains("parseArgs"), "the file changed");
+        let _ = std::fs::remove_dir_all(root.parent().expect("dir"));
+    }
+
+    #[test]
+    fn test_rn4_write_with_the_plan_id_writes() {
+        let (root, ctx) = rename_fixture("write", &RENAME_FILES);
+        let dry = serde_json::json!({"symbol": "parseArgs", "new_name": "parseCliArgs"});
+        let (plan, _) = rename_call(dry, &root, &ctx);
+        let args = serde_json::json!({
+            "symbol": "parseArgs", "new_name": "parseCliArgs",
+            "write": true, "expect": plan["plan_id"]
+        });
+        let (report, is_error) = rename_call(args, &root, &ctx);
+        assert!(!is_error, "{report}");
+        assert_eq!(report["status"], "written");
+        let body = std::fs::read_to_string(root.join("src/cli.ts")).expect("read");
+        assert!(body.contains("parseCliArgs") && !body.contains("parseArgs"));
+        let _ = std::fs::remove_dir_all(root.parent().expect("dir"));
+    }
+
+    #[test]
+    fn test_rn4_a_refused_plan_returns_its_reasons() {
+        let files = [
+            (
+                "src/a.ts",
+                "export function run() {}\nexport function runAll() {}\n",
+            ),
+            ("src/b.ts", "import(\"./a\");\n"),
+        ];
+        let (root, ctx) = rename_fixture("refuse", &files);
+        let args = serde_json::json!({"symbol": "run", "new_name": "runAll"});
+        let (plan, is_error) = rename_call(args, &root, &ctx);
+        assert!(is_error, "{plan}");
+        assert_eq!(plan["status"], "refused");
+        let refused = plan["refused"].as_array().expect("refused list");
+        assert!(refused.iter().any(|r| r["reason"] == "collision"), "{plan}");
+        let _ = std::fs::remove_dir_all(root.parent().expect("dir"));
     }
 }

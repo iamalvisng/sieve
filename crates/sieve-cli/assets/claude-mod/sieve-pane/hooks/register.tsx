@@ -101,16 +101,19 @@ const TICK = Symbol('tick')
 /**
  * Runs `sieve <argv>`. It never throws. It uses `$.process.spawn`, because leaving the `for await` loop kills the child.
  * The loop ends early when `stale()` says a newer job waits, or after 20 s. The result is then `{ cancelled: true }`.
- * A piece is `{ stream, text }`; the last piece is `{ code, signal }`. A signal with no code counts as a failure.
+ * A piece is `{ stream, text }`. The exit `{ code, signal }` is the last piece or the return value of the iterator. A signal with no code counts as a failure.
  */
-async function sieve($: Pick<Engine, 'process'>, argv: string[], stale: () => boolean = () => !!queue.job): Promise<{ json?: Json; note?: string; cancelled?: boolean }> {
+async function sieve($: Pick<Engine, 'process'>, argv: string[], stale: () => boolean = () => !!queue.job): Promise<{ json?: Json; note?: string; cancelled?: boolean; raw?: string }> {
   let out = ''
   let err = ''
   let code: number | undefined
+  // A piece can be bytes. One streaming decoder per stream keeps a multibyte char whole across pieces.
+  const dec = { stdout: new TextDecoder(), stderr: new TextDecoder() }
+  const textOf = (d: TextDecoder, t: unknown) => (typeof t === 'string' ? t : t == null ? '' : d.decode(t as Uint8Array, { stream: true }))
   const started = Date.now()
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
-    const it = ($.process as Json).spawn({ argv: ['sieve', ...argv] })[Symbol.asyncIterator]()
+    const it = ($.process as Json).spawn({ argv: [bin.path, ...argv] })[Symbol.asyncIterator]()
     let next = it.next()
     for (;;) {
       const r: any = await Promise.race([next, new Promise(res => (timer = setTimeout(() => res(TICK), TICK_MS)))])
@@ -120,27 +123,55 @@ async function sieve($: Pick<Engine, 'process'>, argv: string[], stale: () => bo
         return { cancelled: true, note: 'sieve was cancelled' }
       }
       if (r === TICK) continue
+      // The engine gives the exit as the return value of the iterator (done: true), not as a piece.
+      const x = r.value
+      const isExit = x != null && ('code' in x || 'signal' in x)
+      if (isExit) code = typeof x.code === 'number' ? x.code : 1
       if (r.done) break
       next = it.next()
-      const x = r.value
-      if ('code' in x || 'signal' in x) code = typeof x.code === 'number' ? x.code : 1
-      else if (x.stream === 'stderr') err += String(x.text ?? '')
-      else out += String(x.text ?? '')
+      if (isExit) continue
+      if (x.stream === 'stderr') err += textOf(dec.stderr, x.text)
+      else out += textOf(dec.stdout, x.text)
     }
   } catch {
-    return { note: 'sieve not found on PATH' }
+    return { note: notFound() }
   }
-  if (code === 127) return { note: 'sieve not found on PATH' }
+  if (code === 127) return { note: notFound() }
   if (code !== undefined && code !== 0) {
-    const line = firstLine(err || out)
+    // The CLI prints `[sieve] ` notices on stderr before the error. The error line skips them.
+    const line = firstLine(err.split('\n').filter(l => !l.startsWith('[sieve] ')).join('\n') || out)
+    // An old binary does not know a new command or flag. Name the binary and its version.
+    if (/no command named|unknown (flag|option)|unexpected argument/.test(err || line) && argv[0] !== '--version') {
+      const v = await sieve($, ['--version'], stale)
+      return { note: `${bin.path} (version ${firstLine(v.raw ?? '') || 'unknown'}) is too old for \`sieve ${argv[0]}\`; fix "bin" in .sieve/config.json` }
+    }
     // The CLI error line is `sieve: <what> — <what to run>`.
     return { note: /no (graph|index)/.test(line) ? 'no Sieve graph in this project; run sieve build' : line.replace(/^sieve: /, '') }
   }
+  const json = parseJson(out)
+  return json !== undefined ? { json } : { raw: out, note: `sieve gave output that is not JSON (${out.length} chars: ${JSON.stringify(out.slice(0, 40))})` }
+}
+
+/** Parses the output. A stray line before or after the object (a notice or a footer) is cut off. */
+function parseJson(out: string): Json | undefined {
   try {
-    return { json: JSON.parse(out) }
+    return JSON.parse(out)
+  } catch {}
+  const a = out.indexOf('{')
+  const b = out.lastIndexOf('}')
+  try {
+    return a >= 0 && b > a ? JSON.parse(out.slice(a, b + 1)) : undefined
   } catch {
-    return { note: 'sieve gave output that is not JSON' }
+    return undefined
   }
+}
+
+/** The error when the binary does not start. It names the path, so the owner knows which `"bin"` to fix. */
+const notFound = () => (bin.path === 'sieve' ? 'sieve not found on PATH' : `cannot start ${bin.path}; fix "bin" in .sieve/config.json`)
+
+/** Reads `"bin"` again at each run, so a changed config applies at once. A `$` with no session or fs makes it `sieve`. */
+async function refreshBin($: Json): Promise<void> {
+  bin.path = await readBin($)
 }
 
 // `--` ends the flags, so a name or a path that starts with `-` stays an argument.
@@ -167,20 +198,49 @@ async function query($: Pick<Engine, 'process'>, file: string, tool: string, lin
   return makeView(file, tool, why.json, callers, kids)
 }
 
+/** The dirs of `map --json`: the top-level `dirs` (old shape) and every `scopes[].dirs` (new shape). */
+const mapDirs = (m: Json): Json[] => [...((m?.dirs ?? []) as Json[]), ...((m?.scopes ?? []) as Json[]).flatMap(sc => sc.dirs ?? [])]
+
+/** The map view: the 4 biggest folders and the 4 most called hubs of `sieve map`. The CLI and the MCP tool give the same view. */
+export async function mapView($: Pick<Engine, 'process'>, tool: string): Promise<SievePaneView | undefined> {
+  const map = await sieve($, ['map', '--json'])
+  if (!map.json) return { file: 'map', tool, why: [], tree: [], note: map.note }
+  if (queue.job) return undefined // a newer job waits: stop, the view is stale
+  const dirs = mapDirs(map.json)
+  const folders = dirs.map(d => ({ path: String(d.path), n: Number(d.symbols) || 0 })).sort((x, y) => y.n - x.n).slice(0, 4)
+  const symbols = dirs
+    .flatMap(d => d.hubs ?? [])
+    .map((h: Json) => ({ name: String(h.name), line: Number(lineOf(h.span)) || 1, n: Number(h.inDegree) || 0, path: String(h.path) }))
+    .sort((x: Json, y: Json) => y.n - x.n)
+    .slice(0, 4)
+  return { file: 'map', tool, why: [], tree: [], folders, symbols }
+}
+
+/** The view of `sieve why <arg>`: `path:line` and a symbol name give the symbol view, a code file gives the file view. */
+export async function whyView($: Pick<Engine, 'process'>, arg: string, tool: string): Promise<SievePaneView | undefined> {
+  const at = /^(.+):(\d+)$/.exec(arg)
+  if (at) return query($, at[1]!, tool, Number(at[2]), false)
+  return isCode(arg) ? fileView($, arg) : symbolView($, arg, tool)
+}
+
 /**
- * The file view: its 3 most called symbols, then the symbol view of the most called one. It runs at most 3 queries:
- * `map` (the hubs of the file, with their caller counts), `why` and `callers`. A file with no hub runs `map` and `why` only.
- * ponytail: `map` lists the top hubs of each directory, so a symbol that is not a hub is not counted. Upgrade: a per-file counts query in the CLI.
+ * The file view: its 3 most called symbols, then the symbol view of the most called one. It runs at most 4 queries:
+ * `symbols` (every symbol of the file, with its caller count), `why` and `callers`. A file with no called symbol runs `symbols` and `why` only.
+ * An old binary gives no `inDegree`. Then the view reads the hubs of `map`, as before.
  */
 export async function fileView($: Pick<Engine, 'process'>, file: string): Promise<SievePaneView | undefined> {
-  const map = await sieve($, ['map', '--json'])
-  if (!map.json) return { file, tool: 'Read', why: [], tree: [], note: map.note }
+  const syms = await sieve($, ['symbols', '--json', '--', file])
+  const entries = (syms.json?.entries ?? []) as Json[]
+  let list: { name: string; line: number; n: number }[]
+  if (entries.some(e => typeof e.inDegree === 'number')) {
+    list = entries.map(e => ({ name: String(e.name), line: Number(lineOf(e.span)) || 1, n: Number(e.inDegree) || 0 }))
+  } else {
+    const map = await sieve($, ['map', '--json'])
+    if (!map.json) return { file, tool: 'Read', why: [], tree: [], note: map.note }
+    list = mapDirs(map.json).flatMap(d => d.hubs ?? []).filter(h => h.path === file).map(h => ({ name: String(h.name), line: Number(lineOf(h.span)), n: Number(h.inDegree) || 0 }))
+  }
   if (queue.job) return undefined // a newer job waits: stop, the view is stale
-  const hubs: Json[] = ((map.json.dirs ?? []) as Json[]).flatMap(d => d.hubs ?? []).filter(h => h.path === file)
-  const symbols = hubs
-    .map(h => ({ name: String(h.name), line: Number(lineOf(h.span)), n: Number(h.inDegree) || 0 }))
-    .sort((x, y) => y.n - x.n)
-    .slice(0, 3)
+  const symbols = list.filter(x => x.n > 0).sort((x, y) => y.n - x.n).slice(0, 3)
   if (!symbols.length) {
     const why = await sieve($, ['why', '--json', '--', file])
     return { file, tool: 'Read', why: why.json ? whyCards(why.json) : [], tree: [], symbols }
@@ -200,10 +260,10 @@ export async function symbolView($: Pick<Engine, 'process'>, name: string, tool:
   return query($, String(sym.path), tool, Number(lineOf(sym.span)) || 1, false)
 }
 
-/** The symbol view of the top hit of `sieve ask`. A top hit that is not a symbol gives a note. */
+/** The symbol view of the top hit of `sieve query`. A top hit that is not a symbol gives a note. */
 export async function askView($: Pick<Engine, 'process'>, text: string, tool: string): Promise<SievePaneView | undefined> {
   if (!text) return { file: text, tool, why: [], tree: [] }
-  const found = await sieve($, ['ask', '--json', '--', text])
+  const found = await sieve($, ['query', '--json', '--', text])
   const top = found.json?.hits?.[0]
   const at = top?.kind === 'symbol' ? /^(.+):L(\d+)/.exec(String(top.pointer)) : null
   if (!at) return { file: text, tool, why: [], tree: [], note: found.note ?? 'the top hit is not a symbol' }
@@ -211,9 +271,12 @@ export async function askView($: Pick<Engine, 'process'>, text: string, tool: st
   return query($, at[1]!, tool, Number(at[2]), false)
 }
 
-const SUBS = new Set(['ask', 'grep', 'callers', 'blast', 'map', 'skeleton', 'why'])
+/** The old command names, each with the new name it stands for. */
+const OLD_SUBS: Record<string, string> = { ask: 'query', grep: 'find', blast: 'impact', skeleton: 'symbols' }
+const SUBS = new Set(['query', 'find', 'callers', 'impact', 'map', 'symbols', 'why', ...Object.keys(OLD_SUBS)])
 const VALUE_FLAGS = new Set(['--depth', '--in', '--format', '--limit', '--max', '--budget'])
-const MCP_SUBS: Record<string, string> = { find_code: 'ask', find_all: 'grep', trace_calls: 'callers', file_api: 'skeleton', repo_map: 'map', check_freshness: 'check', why: 'why' }
+/** The MCP tool names (new and old) and the command each one stands for. */
+const MCP_SUBS: Record<string, string> = { find_code: 'query', find_all: 'find', trace_calls: 'callers', file_api: 'symbols', repo_map: 'map', check_freshness: 'check', ask: 'query', grep: 'find', skeleton: 'symbols', why: 'why' }
 
 /** Splits a shell command into simple commands of words. Quotes keep a word whole. `;`, `&`, `|` and a newline end a command. `>` and `<` end the words of a command. */
 function shellWords(command: string): string[][] {
@@ -258,8 +321,9 @@ export function sieveCommand(command: string): { sub: string; arg: string } | un
     while (/^[A-Za-z_]\w*=/.test(cmd[i] ?? '')) i++
     if (cmd[i] === 'npx') i++
     const bin = cmd[i] ?? ''
-    const sub = cmd[i + 1] ?? ''
-    if (!(bin === 'sieve' || bin.endsWith('/sieve')) || !SUBS.has(sub)) continue
+    const typed = cmd[i + 1] ?? ''
+    if (!(bin === 'sieve' || bin.endsWith('/sieve')) || !SUBS.has(typed)) continue
+    const sub = OLD_SUBS[typed] ?? typed
     const words: string[] = []
     const rest = cmd.slice(i + 2)
     for (let j = 0; j < rest.length; j++) {
@@ -268,15 +332,15 @@ export function sieveCommand(command: string): { sub: string; arg: string } | un
       if (!w.startsWith('-')) words.push(w)
       else if (!w.includes('=') && (VALUE_FLAGS.has(w) || /^\d+$/.test(rest[j + 1] ?? ''))) j++ // the value of `--flag N` or `-x N`
     }
-    return { sub, arg: sub === 'ask' ? words.join(' ') : (words[0] ?? '') }
+    return { sub, arg: sub === 'query' ? words.join(' ') : (words[0] ?? '') }
   }
   return undefined
 }
 
-/** The sum of every `[sieve] saved ≈ N tokens` line. N may have commas. */
+/** The sum of every `🎯 … · ~N tokens saved` line. N is a number or a `k` number such as `1.9k`. */
 export function savedTokens(text: string): number {
   let sum = 0
-  for (const m of text.matchAll(/\[sieve\] saved ≈ (\d{1,3}(?:,\d{3})*|\d+) tokens/g)) sum += Number(m[1]!.replace(/,/g, ''))
+  for (const m of text.matchAll(/🎯 [^\n"\\]*? · ~?(\d+(?:\.\d)?)(k?) tokens saved/g)) sum += Math.round(Number(m[1]) * (m[2] ? 1000 : 1))
   return sum
 }
 
@@ -288,7 +352,7 @@ function sieveQuery(e: Json, ran: Json): Query | undefined {
   else if (tool.startsWith('mcp__sieve__')) {
     // The MCP input fields sit flat on `e`, as `command` does for Bash (claude-code.d.ts, McpToolCallInputFallback).
     const arg = [e.pattern, e.symbol, e.query, e.file, e.path, e.name, e.question].find(v => typeof v === 'string')
-    const name = tool.slice('mcp__sieve__'.length).replace(/^sieve_/, '') // the tool is `sieve_trace_calls`, so the full name is mcp__sieve__sieve_trace_calls
+    const name = tool.slice('mcp__sieve__'.length).replace(/^sieve_/, '') // the tool is `sieve_callers`, so the full name is mcp__sieve__sieve_callers
     found = { sub: MCP_SUBS[name] ?? name, arg: arg ?? '' }
   }
   return found && { ...found, saved: savedTokens(String(ran?.text ?? '')) }
@@ -313,8 +377,9 @@ export async function onToolCall($: Pick<Engine, 'session'>, e: Json, next: (e: 
     const cwd = normalize(await $.session.cwd())
     const q = sieveQuery(e, ran)
     if (q) {
+      statsRun.last = -Infinity // a Sieve call changed the stats: the next tick refetches
       const abs = normalize(q.arg.startsWith('/') ? q.arg : `${cwd}/${q.arg}`)
-      const isFile = q.sub === 'skeleton' && !!q.arg && isCode(q.arg) && abs.startsWith(`${cwd}/`)
+      const isFile = q.sub === 'symbols' && !!q.arg && isCode(q.arg) && abs.startsWith(`${cwd}/`)
       setJob({ file: isFile ? abs.slice(cwd.length + 1) : q.arg, path: abs, tool: q.sub, input: e, at: Date.now(), query: q, isFile })
       return ran
     }
@@ -334,6 +399,7 @@ export async function step($: Pick<Engine, 'process' | 'fs'>, put: Put): Promise
   queue.busy = true
   queue.job = undefined
   try {
+    await refreshBin($)
     const text = job.tool === 'Edit' || job.tool === 'MultiEdit' ? String(await $.fs.read(job.path).catch(() => '')) : ''
     const whole = job.tool === 'Read' && !job.input.offset && !job.input.limit // a whole-file Read: line 1 is an import, not a symbol
     const line = whole || job.query ? 1 : findLine(job.tool, job.input, text)
@@ -342,9 +408,13 @@ export async function step($: Pick<Engine, 'process' | 'fs'>, put: Put): Promise
         ? await fileView($, job.file)
         : job.query.sub === 'callers'
           ? await symbolView($, job.query.arg, job.tool)
-          : job.query.sub === 'ask'
+          : job.query.sub === 'query'
             ? await askView($, job.query.arg, job.tool)
-            : { file: job.file, tool: job.tool, why: [], tree: [] }
+            : job.query.sub === 'map'
+              ? await mapView($, job.tool)
+              : job.query.sub === 'why'
+                ? await whyView($, job.query.arg, job.tool)
+                : { file: job.file, tool: job.tool, why: [], tree: [] }
       : whole
       ? await fileView($, job.file)
       : line === undefined
@@ -352,6 +422,7 @@ export async function step($: Pick<Engine, 'process' | 'fs'>, put: Put): Promise
         : await query($, job.file, job.tool, line)
     if (v) Object.assign(v, { at: job.at, query: job.query })
     if (v && !queue.job) await put(v)
+    if (v?.query?.saved) statsRun.last = -Infinity // a saving changed the stats: the next tick refetches
   } catch (err) {
     await put({ file: job.file, tool: job.tool, why: [], tree: [], note: `sieve-pane error: ${String(err)}` }).catch(() => {})
   } finally {
@@ -359,7 +430,7 @@ export async function step($: Pick<Engine, 'process' | 'fs'>, put: Put): Promise
   }
 }
 
-/** The band data from `sieve blast --format json`, or null when nothing changed. */
+/** The band data from `sieve impact --format json`, or null when nothing changed. */
 export function bandInfo(b: Json): Band | null {
   const seeds: Json[] = b?.seeds ?? []
   if (!seeds.length) return null
@@ -375,8 +446,8 @@ export function bandInfo(b: Json): Band | null {
   }
 }
 
-/** The Tokyo Night colors. `text` (fg_dark) is the dim text color. `dim` is for borders, bar tracks and the dimmed mascot only: it gives 2.8:1 on the pane background. */
-export const C = { fg: '#c0caf5', dim: '#565f89', text: '#9aa5ce', blue: '#7aa2f7', cyan: '#7dcfff', purple: '#bb9af7', green: '#9ece6a', orange: '#ff9e64', red: '#f7768e', yellow: '#e0af68', border: '#3b4261' }
+/** The Tokyo Night colors. `bg` is the pane background. `text` (fg_dark) is the dim text color. `dim` is for borders, bar tracks and the dimmed mascot only: it gives 2.8:1 on the pane background. */
+export const C = { fg: '#c0caf5', dim: '#565f89', text: '#9aa5ce', blue: '#7aa2f7', cyan: '#7dcfff', purple: '#bb9af7', green: '#9ece6a', orange: '#ff9e64', red: '#f7768e', yellow: '#e0af68', border: '#3b4261', bg: '#1a1b26' }
 
 /** The level of a caller count: green for 1 to 5, orange for 6 to 20, red above 20. */
 export const level = (n: number) => (n > 20 ? 'red' : n > 5 ? 'orange' : 'green')
@@ -391,13 +462,14 @@ export const blast: { dirty: boolean; busy: boolean; last: number } = { dirty: f
 const MIN_GAP_MS = 2000
 
 /** One blast step: run at most once per 2 seconds, and only after a new edit. A failure clears the band. */
-export async function blastStep($: Pick<Engine, 'process'>, now: number, putBand: (b: Band | null) => Promise<void>): Promise<void> {
+export async function blastStep($: Pick<Engine, 'process'> & Partial<Pick<Engine, 'session' | 'fs'>>, now: number, putBand: (b: Band | null) => Promise<void>): Promise<void> {
   if (blast.busy || !blast.dirty || now - blast.last < MIN_GAP_MS) return
   blast.busy = true
   blast.dirty = false
   blast.last = now
   try {
-    const out = await sieve($, ['blast', '--format', 'json', '--no-owners'], () => false)
+    await refreshBin($)
+    const out = await sieve($, ['impact', '--format', 'json', '--no-owners'], () => false)
     if (!blast.dirty) await putBand(out.json ? bandInfo(out.json) : null) // a newer edit wins
   } catch {} // A failing putBand is dropped. A blast failure puts null: the band clears.
   finally {
@@ -425,7 +497,7 @@ export function parseStats(j: Json): Stats | null {
   const t = j?.today?.tokens
   if (typeof t !== 'number') return null
   const days: number[] = ((j.last7days ?? []) as Json[]).map(d => Number(d.tokens) || 0).reverse()
-  return { tokens: t, dollars: typeof j.today.dollars === 'number' ? j.today.dollars : null, spark: days }
+  return { tokens: t, dollars: typeof j.today.dollars === 'number' ? j.today.dollars : null, spark: days, session: Number(j.session?.tokens) || 0 }
 }
 
 export const kfmt = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n))
@@ -435,12 +507,15 @@ export const sparkline = (days: number[]) => {
 }
 
 /** One stats step: at most once per 30 s. A failure hides the section. */
-export async function statsStep($: Pick<Engine, 'process'>, now: number, putStats: (s: Stats | null) => Promise<void>): Promise<void> {
+export async function statsStep($: Pick<Engine, 'process'> & Partial<Pick<Engine, 'session' | 'fs'>>, now: number, putStats: (s: Stats | null) => Promise<void>): Promise<void> {
   if (statsRun.busy || now - statsRun.last < STATS_GAP_MS) return
   statsRun.busy = true
   statsRun.last = now
   try {
-    const out = await sieve($, ['stats', '--json'], () => false)
+    await refreshBin($)
+    // The current session's id, as the status line reads `session_id`. Without it the CLI reads the newest session file.
+    const id: unknown = await Promise.resolve().then(() => ($ as Json).session.id()).catch(() => undefined)
+    const out = await sieve($, ['stats', '--json', ...(typeof id === 'string' && id ? ['--session', id] : [])], () => false)
     const s = out.json ? parseStats(out.json) : null
     await putStats(s)
   } catch {} // A failing putStats is dropped.
@@ -452,14 +527,14 @@ export async function statsStep($: Pick<Engine, 'process'>, now: number, putStat
 // --- the mascot ---
 const rgb = (h: string) => parseInt(h.slice(1), 16)
 const TERM_DEFAULT = 0x01000000 // the terminal's own color, as RasterProps says
-const PANE_BG = [0x1a, 0x1b, 0x26]
+const PANE_BG = [0x1a, 0x1b, 0x26] // the same color as `C.bg`
 /** Mixes a color 45% toward the pane background: the dimmed mascot. */
 const dimmed = (c: number) => PANE_BG.reduce((out, bg, i) => out | (Math.round(bg * 0.45 + ((c >> (16 - 8 * i)) & 255) * 0.55) << (16 - 8 * i)), 0)
 export const MASCOT_NAMES = [...Object.keys(MASCOTS), 'none']
 
 const pixel = (name: string, frame: number) => {
   const m = MASCOTS[name]
-  return m ? m.small[frame % m.small.length]! : undefined // the small frames: 6 pixel rows, 3 cell rows
+  return m ? m.frames[frame % m.frames.length]! : undefined // the full frames: 14 pixel rows by 16 columns, 7 cell rows. No crop, no scale.
 }
 
 /**
@@ -555,7 +630,11 @@ export const chart = (days: number[]) => {
   return days.map(v => GLYPHS[top ? Math.round((v / top) * 7) : 0]!)
 }
 
-/** The Radar tree. `width` is the pane width in cells. Pure: it makes no query. */
+/**
+ * The Radar tree. `width` is the pane width in cells. The root box has no background: the pane shows the frame color.
+ * The root box never shrinks (flexShrink 0), so it grows to fit every row.
+ * Pure: it makes no query.
+ */
 export function radar(ui: { Box: any; Text: any; Raster?: any; Svg?: any }, width: number, v: SievePaneView | null, b: Band | null, s: Stats | null, art: Art = { name: DEFAULT_MASCOT, frame: 0 }) {
   const { Box, Text, Raster, Svg } = ui
   const w = Math.max(width - 2, 24) - 1 // the padding takes 2 cells (the engine's pane draws the frame), the body has 24 at least, 1 cell stays free
@@ -600,38 +679,49 @@ export function radar(ui: { Box: any; Text: any; Raster?: any; Svg?: any }, widt
 
   if (v?.query) {
     out.push(T({ color: C.cyan }, `sieve ${v.query.sub} ${cut(v.query.arg, 40)}`))
-    if (v.query.saved) out.push(T({ bold: true, color: C.green }, `+${v.query.saved.toLocaleString('en-US')} tokens saved`))
+    if (v.query.saved) out.push(T({ bold: true, color: C.green }, `+~${v.query.saved.toLocaleString('en-US')} tokens saved`))
   }
 
   // 2. the stat tiles
   const imp = v && !noncode ? impactOf(v, b) : { n: undefined, hops: undefined }
   const tiles: [string, string, string][] = []
-  if (s) tiles.push(['SAVED TODAY', kfmt(s.tokens), C.green], ['THIS WEEK', kfmt(s.spark.reduce((a, x) => a + x, 0)), C.blue])
-  if (imp.n !== undefined) tiles.push(['IMPACT', String(imp.n), levelColor(imp.n)])
+  if (s) tiles.push(['SESSION', `~${kfmt(s.session)}`, C.green], ['TODAY', `~${kfmt(s.tokens)}`, C.green], ['7 DAYS', `~${kfmt(s.spark.reduce((a, x) => a + x, 0))}`, C.blue])
+  // The IMPACT tile shows in the symbol view only. A file view (it has `symbols`) and a non-code view show none.
+  if (imp.n !== undefined && v?.symbol && !v.symbols) tiles.push(['IMPACT', String(imp.n), levelColor(imp.n)])
   if (tiles.length) {
-    // Each tile fits its text, 4 cells wider (border and padding). When the row is too wide, the tiles share it in equal parts.
-    const fit = tiles.map(([k, val]) => Math.max(k.length, val.length) + 4)
-    const share = Math.floor((w - (tiles.length - 1)) / tiles.length)
-    const widths = fit.reduce((a, x) => a + x, 0) + tiles.length - 1 <= w ? fit : fit.map(() => share)
-    out.push(
-      <Box gap={1}>
-        {tiles.map(([k, val, color], i) => {
-          const tile = widths[i]!
-          return (
-            <Box flexDirection="column" borderStyle="round" borderColor={C.border} paddingX={1} width={tile}>
-              {T({ color: C.text }, k, tile - 4)}
-              {T({ bold: true, color }, val, tile - 4)}
-            </Box>
-          )
-        })}
-      </Box>,
-    )
+    // Each tile fits its text, 4 cells wider (border and padding). A tile that does not fit the rest of the row starts the next row. The gap is 1 cell in every row.
+    const fit = tiles.map(([k, val]) => Math.min(w, Math.max(k.length, val.length) + 4))
+    const rows: number[][] = []
+    let used = 0
+    fit.forEach((f, i) => {
+      if (!rows.length || used + 1 + f > w) (rows.push([i]), (used = f))
+      else (rows[rows.length - 1]!.push(i), (used += 1 + f))
+    })
+    for (const row of rows)
+      out.push(
+        <Box gap={1}>
+          {row.map(i => {
+            const [k, val, color] = tiles[i]!
+            const tile = fit[i]!
+            return (
+              <Box flexDirection="column" borderStyle="round" borderColor={C.border} paddingX={1} width={tile}>
+                {T({ color: C.text }, k, tile - 4)}
+                {T({ bold: true, color }, val, tile - 4)}
+              </Box>
+            )
+          })}
+        </Box>,
+      )
   }
 
   if (v && !noncode) {
     if (v.symbols) {
-      out.push(blank(), title('MOST CALLED SYMBOLS'))
-      out.push(...(v.symbols.length ? v.symbols.map(c => T({ color: C.cyan }, `${c.name}:${c.line}   ${c.n} ${c.n === 1 ? 'caller' : 'callers'}`)) : [T({ color: C.text }, 'none')]))
+      if (v.folders) {
+        out.push(blank(), title('TOP FOLDERS'))
+        out.push(...(v.folders.length ? v.folders.map(f => T({ color: C.cyan }, `${f.path}   ${f.n} symbols`)) : [T({ color: C.text }, 'none')]))
+      }
+      out.push(blank(), title(v.folders ? 'HUBS' : 'MOST CALLED SYMBOLS'))
+      out.push(...(v.symbols.length ? v.symbols.map(c => T({ color: C.cyan }, `${c.name}${c.path ? `  ${c.path}` : `:${c.line}`}   ${c.n} ${c.n === 1 ? 'caller' : 'callers'}`)) : [T({ color: C.text }, 'none')]))
     }
     if (v.symbol) {
       // 3. who depends on this
@@ -656,7 +746,7 @@ export function radar(ui: { Box: any; Text: any; Raster?: any; Svg?: any }, widt
       }
     }
     // 5. why it exists
-    if (v.symbol || v.symbols) {
+    if (v.symbol || (v.symbols && !v.folders)) {
       out.push(blank(), title('WHY IT EXISTS'))
       if (!v.why.length) out.push(T({ color: C.text }, 'no decision recorded'))
       for (const d of v.why) {
@@ -683,7 +773,7 @@ export function radar(ui: { Box: any; Text: any; Raster?: any; Svg?: any }, widt
     }
   }
   return (
-    <Box flexDirection="column" paddingX={1} paddingTop={1}>
+    <Box flexDirection="column" paddingX={1} paddingTop={1} flexGrow={1} flexShrink={0}>
       {out}
     </Box>
   )
@@ -737,6 +827,20 @@ export async function animStep($: Pick<Engine, 'ui'>, a = anim): Promise<void> {
   }
 }
 
+/** The binary the pane spawns. `readBin` sets it at session start. */
+export const bin = { path: 'sieve' }
+
+/** The `bin` path from the project's `.sieve/config.json`, or `sieve`. Never throws. */
+export async function readBin($: Pick<Engine, 'session' | 'fs'>): Promise<string> {
+  try {
+    const cwd = normalize(await $.session.cwd())
+    const b = JSON.parse(String(await $.fs.read(`${cwd}/.sieve/config.json`))).bin
+    return typeof b === 'string' && b !== '' ? b : 'sieve'
+  } catch {
+    return 'sieve'
+  }
+}
+
 /** The mascot name from the project's `.sieve/config.json`, or undefined. Never throws. */
 export async function readMascot($: Pick<Engine, 'session' | 'fs'>): Promise<string | undefined> {
   try {
@@ -762,7 +866,7 @@ export function startWorker(
   worker.started = true
   $.clock.every(300, async () => {
     await step($, put).catch(() => {})
-    const now = await $.clock.now()
+    const now = Date.now() // not $.clock.now(): its unit is not in the types, and a wrong unit blocks the 30 s gap
     await blastStep($, now, putBand).catch(() => {})
     await statsStep($, now, putStats).catch(() => {})
     await animStep($).catch(() => {})
@@ -774,6 +878,7 @@ export const register: Register = on => {
     await $.command.register({ name: 'sieve-pane', description: 'Open the Sieve pane: the callers, the impact and the why of the code' })
     await $.command.register({ name: 'sieve-mascot', description: `Set and save the pane mascot: ${MASCOT_NAMES.join(', ')}` })
     anim.name = (await readMascot($)) ?? DEFAULT_MASCOT
+    bin.path = await readBin($)
     // The worker starts here, with this hook's $. reference.md, "Work that outlives a dispatch", lines 129-133:
     // "Work meant to outlive a dispatch belongs elsewhere: start it from a `session.start` hook, ...
     //  and keep it going with `$.clock.every` and `$.clock.after`, whose timers run until cancelled or until the module reloads."

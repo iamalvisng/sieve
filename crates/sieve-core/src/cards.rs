@@ -290,20 +290,20 @@ pub fn write_index(out_dir: &Path, stats: &CardStats) -> io::Result<()> {
         String::new(),
         "Small markdown nodes summarising this repo. `grep` any term, symbol, or".to_string(),
         format!(
-            "filename here, or run `{name} ask \"<task>\"`. Each node carries prose plus exact"
+            "filename here, or run `{name} query \"<task>\"`. Each node carries prose plus exact"
         ),
         "`file:line`; open a source file only to edit the named span.".to_string(),
         String::new(),
         format!(
             "The same graph is queryable as MCP tools (`{}`, `{}`,",
-            product.tool("find_code"),
-            product.tool("find_all"),
+            product.tool("query"),
+            product.tool("find"),
         ),
         format!(
             "`{}`, `{}`, `{}`) where a host exposes them, and",
-            product.tool("trace_calls"),
-            product.tool("file_api"),
-            product.tool("repo_map"),
+            product.tool("callers"),
+            product.tool("symbols"),
+            product.tool("map"),
         ),
         format!("as the `{name}` CLI everywhere else. Edges — who calls what — live only in the"),
         format!(

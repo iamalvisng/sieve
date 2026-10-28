@@ -219,7 +219,7 @@ fn evidence_line(
 
 /// The markdown title: the product name and no emoji.
 fn blast_title(product: &str) -> String {
-    format!("### {product} blast radius")
+    format!("### {product} impact")
 }
 
 /// The PR-comment body: diagram, one table, then everything else
@@ -262,7 +262,7 @@ pub fn format_blast_markdown(r: &BlastReport, root: Option<&Path>) -> String {
     }
     out.push(String::new());
     out.push(format!(
-        "<sub>`{product} blast` · {} · {} · {}</sub>",
+        "<sub>`{product} impact` · {} · {} · {}</sub>",
         r.basis,
         depth_label(r.depth),
         plural(r.changed.len(), "changed file")
@@ -684,7 +684,7 @@ mod tests {
 
     #[test]
     fn test_savings_blast_title_has_no_leaf_under_sieve() {
-        assert_eq!(blast_title("sieve"), "### sieve blast radius");
+        assert_eq!(blast_title("sieve"), "### sieve impact");
     }
 
     /// P1-26: a label escapes quotes and angle brackets per line, then

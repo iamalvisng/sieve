@@ -1,4 +1,4 @@
-//! Parity tests for `sieve ask` (P1-02 to P1-11, P1-40, P1-49): the query
+//! Parity tests for `sieve query` (P1-02 to P1-11, P1-40, P1-49): the query
 //! prelude and the `ask` report, against the goldens under
 //! `tests/fixtures/<name>.expected/queries/`.
 //!
@@ -279,7 +279,7 @@ fn test_p1_02_to_11_p1_49_ask_cli_matches_golden() {
     );
 }
 
-/// Runs `sieve ask <args>` in `root` and returns the stdout.
+/// Runs `sieve query <args>` in `root` and returns the stdout.
 fn ask_stdout(root: &Path, args: &[&str]) -> String {
     let mut full = vec!["ask".to_string()];
     full.extend(args.iter().map(|a| a.to_string()));
@@ -295,11 +295,14 @@ fn test_ask_def_prints_the_lean_answer_and_the_savings_line_last() {
     // The `askx` fixture holds a large file, so the savings line prints.
     let temp = build_fixture("askx");
     let text = ask_stdout(&temp.path, &["bigwidget", "--def"]);
-    assert!(text.starts_with("ask  bigwidget \u{b7} def\n"), "{text}");
+    assert!(text.starts_with("query  bigwidget \u{b7} def\n"), "{text}");
     assert!(text.contains("export function bigwidget"), "{text}");
     assert!(text.contains("callers: "), "{text}");
     let last = text.lines().last().expect("last line");
-    assert!(last.starts_with("[sieve] saved"), "{text}");
+    assert!(
+        last.starts_with("\u{1f3af} exact body of bigwidget \u{b7} ~"),
+        "{text}"
+    );
     assert_ne!(text, ask_stdout(&temp.path, &["bigwidget"]));
 }
 

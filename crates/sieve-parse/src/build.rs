@@ -460,7 +460,10 @@ fn extract_text(
     }
     if let Some(lang) = generic_lang_of(&id) {
         let (symbols, edges) = generic_extractor.extract_file(&id, text, lang.name);
-        let file_node = generic_file_node(&id, text);
+        let mut file_node = generic_file_node(&id, text);
+        if lang.name == "shell" {
+            file_node.body_text = Some(crate::extract::file_residual(text, &symbols));
+        }
         return Some((file_node, symbols, edges, lang.name.to_string()));
     }
     None
@@ -1576,6 +1579,25 @@ mod tests {
             fs::create_dir_all(parent).expect("create parent dir");
         }
         fs::write(path, contents).expect("write file");
+    }
+
+    #[test]
+    fn a_shell_file_gives_function_nodes_and_its_loose_lines_reach_the_file_body() {
+        let dir = TempDir::new("shell");
+        write_file(
+            &dir.path,
+            "run.sh",
+            "echo refuse: symlink\nhelper() {\n  echo inside\n}\n",
+        );
+        write_file(&dir.path, "plain.sh", "set -e\necho only-loose-line\n");
+        let graph = build_graph(&dir.path, &dir.path.join("ctx")).expect("build graph");
+        let node = |id: &str| graph.nodes.iter().find(|n| n.id == id);
+        let helper = node("run.sh#helper").expect("function node");
+        assert_eq!(helper.span, span(2, 4));
+        let body = node("run.sh").and_then(|n| n.body_text.clone());
+        assert!(body.is_some_and(|b| b.contains("refuse: symlink") && !b.contains("inside")));
+        let plain = node("plain.sh").and_then(|n| n.body_text.clone());
+        assert!(plain.is_some_and(|b| b.contains("only-loose-line")));
     }
 
     #[test]

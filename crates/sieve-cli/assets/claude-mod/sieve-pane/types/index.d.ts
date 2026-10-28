@@ -22,14 +22,16 @@ export type SievePaneView = {
   n?: number
   hops?: number
   /** The most called symbols of a file. Set by a whole-file Read. */
-  symbols?: { name: string; line: number; n: number }[]
+  symbols?: { name: string; line: number; n: number; /** Set by the map view. */ path?: string }[]
+  /** The biggest folders. Set by the map view. */
+  folders?: { path: string; n: number }[]
   /** One line that says why the view is empty, such as "sieve not found". */
   note?: string
 }
 /** The blast of the working diff: the band text and the impact bar read it. */
 export type Band = { sym: string; more?: number; n: number; hops: number; routes: number }
 /** The savings numbers. `spark` holds the last 7 days of tokens, oldest first. */
-export type Stats = { tokens: number; dollars: number | null; spark: number[] }
+export type Stats = { tokens: number; dollars: number | null; spark: number[]; /** The tokens this Claude session saved. */ session: number }
 
 declare module 'claude-code' {
   interface PluginState {

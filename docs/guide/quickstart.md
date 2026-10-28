@@ -20,7 +20,7 @@ A query does not build the index. If no index exists, Sieve prints
 "No index here yet. Run `sieve build .` first."
 
 ```sh
-sieve ask "how does login work"
+sieve query "how does login work"
 ```
 
 Sieve returns ranked symbols with exact `file:line` spans.
@@ -35,7 +35,7 @@ sieve callers createServer --depth 2
 ## 4. Search for text
 
 ```sh
-sieve grep "handleHMRUpdate"
+sieve find "handleHMRUpdate"
 ```
 
 Sieve groups each hit under the symbol that holds it.
@@ -43,7 +43,7 @@ Sieve groups each hit under the symbol that holds it.
 ## 5. See your change reach
 
 ```sh
-sieve blast
+sieve impact
 ```
 
 This shows what depends on the lines of your working-tree diff.

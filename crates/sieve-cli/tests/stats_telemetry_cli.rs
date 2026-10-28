@@ -16,9 +16,9 @@ use std::process::Output;
 
 use support::TempDir;
 
-const ONE: &str = r#"{"lastQuery":"ask bigwidget","perAgentQuery":{},"toolReads":3,"sourceReads":1,"savedTokens":12345,"injectedPointers":[],"nudges":0,"inputCostMicros":5000000,"inputTokensBilled":1000000}"#;
+const ONE: &str = r#"{"lastQuery":"ask bigwidget","perAgentQuery":{},"toolReads":3,"sourceReads":1,"savingsFormula":2,"savedTokens":12345,"injectedPointers":[],"nudges":0,"inputCostMicros":5000000,"inputTokensBilled":1000000}"#;
 const ZERO: &str = r#"{"lastQuery":null,"perAgentQuery":{},"toolReads":0,"sourceReads":0,"savedTokens":0,"injectedPointers":[],"nudges":0}"#;
-const SUBCENT: &str = r#"{"toolReads":1,"sourceReads":0,"savedTokens":100,"inputCostMicros":5000000,"inputTokensBilled":1000000,"lastQuery":"grep x"}"#;
+const SUBCENT: &str = r#"{"toolReads":1,"sourceReads":0,"savingsFormula":2,"savedTokens":100,"inputCostMicros":5000000,"inputTokensBilled":1000000,"lastQuery":"grep x"}"#;
 
 fn golden_dir() -> PathBuf {
     support::manifest_dir().join("../../tests/fixtures/basic.expected/stats-telemetry")

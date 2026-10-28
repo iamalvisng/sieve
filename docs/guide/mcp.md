@@ -27,16 +27,17 @@ The server has seven tools.
 
 | Tool | Inputs | Use |
 |---|---|---|
-| `sieve_find_code` | `query` (required), `limit`, `full`, `in` | Ask in plain words. Like `sieve ask`. |
-| `sieve_find_all` | `pattern` (required), `in`, `ignore_case`, `fixed` | Every match of a pattern. Like `sieve grep`. |
-| `sieve_trace_calls` | `symbol` (required), `direction`, `depth`, `in` | Callers or callees. Like `sieve callers`. |
-| `sieve_file_api` | `file` (required) | Signatures of one file. Like `sieve skeleton`. |
-| `sieve_repo_map` | `max_dirs` | Orientation. Like `sieve map`. |
-| `sieve_check_freshness` | none | Reports drift between the index and the code. |
+| `sieve_query` | `query` (required), `limit`, `full`, `in` | Ask in plain words. Like `sieve query`. |
+| `sieve_find` | `pattern` (required), `in`, `ignore_case`, `fixed` | Every match of a pattern. Like `sieve find`. |
+| `sieve_callers` | `symbol` (required), `direction`, `depth`, `in` | Callers or callees. Like `sieve callers`. |
+| `sieve_symbols` | `file` (required) | Signatures of one file. Like `sieve symbols`. |
+| `sieve_map` | `max_dirs` | Orientation. Like `sieve map`. |
+| `sieve_check` | none | Reports drift between the index and the code. |
 | `sieve_why` | `symbol` (required), `all` | The decision records for a symbol. |
 
 Notes:
 
+- The old tool names (`sieve_find_code`, `sieve_find_all`, `sieve_trace_calls`, `sieve_file_api`, `sieve_skeleton`, `sieve_repo_map`, `sieve_check_freshness`, `sieve_ask`, `sieve_grep`) still run in `tools/call`. The tool list does not show them.
 - `direction` is `in` (default) or `out`.
 - `depth` is a number, or `all` for the full closure.
 - `in` is a repo-relative path prefix.

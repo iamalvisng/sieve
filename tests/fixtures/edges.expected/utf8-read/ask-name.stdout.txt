@@ -1,4 +1,4 @@
-ask  caf · 4 hits
+query  caf · 4 hits
 
 1  caf�Name  fn  ts/latin-name.ts:1-3
    function caf�Name(): number
@@ -28,3 +28,4 @@ export function latinCaller(): number {
 ```
 
 4  latin.ts  file  ts/latin.ts
+🎯 4 ranked hits

@@ -292,10 +292,14 @@ pub fn error_line(ui: &Ui, message: &str, command: Option<&str>) -> String {
 /// The subcommands that take part in the error hint.
 const COMMANDS: &[&str] = &[
     "build",
+    "query",
+    "find",
     "ask",
     "grep",
+    "symbols",
     "skeleton",
     "callers",
+    "impact",
     "blast",
     "map",
     "check",
@@ -318,7 +322,14 @@ pub fn current_command() -> Option<String> {
         if arg == "--dir" {
             args.next();
         } else if COMMANDS.contains(&arg.as_str()) {
-            return Some(arg);
+            // An old name reads as its new name in every error text.
+            return Some(match arg.as_str() {
+                "ask" => "query".to_string(),
+                "grep" => "find".to_string(),
+                "blast" => "impact".to_string(),
+                "skeleton" => "symbols".to_string(),
+                _ => arg,
+            });
         }
     }
     None
@@ -369,8 +380,8 @@ pub fn commander_message(line: &str, command: Option<&str>) -> String {
     } else if body.starts_with("missing required argument") {
         let arg = quoted(body).unwrap_or_default();
         return match (command, arg.as_str()) {
-            (Some("ask"), "query") => {
-                format!("ask needs a question \u{2014} run {name} ask \"how does login work\"")
+            (Some("query"), "query") => {
+                format!("query needs a question \u{2014} run {name} query \"how does login work\"")
             }
             (Some(c), a) => format!("{c} needs a {a} \u{2014} {help}"),
             (None, a) => format!("{name} needs a {a} \u{2014} {help}"),
@@ -429,7 +440,7 @@ mod tests {
             error_line(
                 &ui,
                 "no index here yet \u{2014} run sieve build .",
-                Some("ask")
+                Some("query")
             ),
             "sieve: no index here yet \u{2014} run sieve build ."
         );
@@ -454,8 +465,8 @@ mod tests {
             "build has no --nope option \u{2014} see sieve build --help"
         );
         assert_eq!(
-            commander_message("error: missing required argument 'query'", Some("ask")),
-            "ask needs a question \u{2014} run sieve ask \"how does login work\""
+            commander_message("error: missing required argument 'query'", Some("query")),
+            "query needs a question \u{2014} run sieve query \"how does login work\""
         );
         assert_eq!(
             commander_message("error: unknown command 'foo'", None),
@@ -468,9 +479,9 @@ mod tests {
         assert_eq!(
             commander_message(
                 "error: unknown option '--jsno'\n(Did you mean --json?)",
-                Some("grep")
+                Some("find")
             ),
-            "grep has no --jsno option \u{2014} did you mean --json, or see sieve grep --help"
+            "find has no --jsno option \u{2014} did you mean --json, or see sieve find --help"
         );
     }
 

@@ -1,4 +1,4 @@
-ask  latinString · 8 hits
+query  latinString · 8 hits
 
 1  latinString  fn  ts/latin.ts:2-4
    function latinString(): string
@@ -66,3 +66,4 @@ export class Base {
   }
 }
 ```
+🎯 8 ranked hits

@@ -4,7 +4,7 @@ A Claude Code mod. It shows a Tokyo Night dashboard for the code the agent reads
 
 The pane (`/sieve-pane`) has these parts, top to bottom:
 - Header: a pixel mascot, the symbol name in bold, and `file:line · kind · edited 9:58pm` in dim.
-- Tiles: SAVED TODAY (green), THIS WEEK (blue) and IMPACT (green, orange or red).
+- Tiles: SESSION, TODAY (green) and 7 DAYS (blue). Each number has a "~". The IMPACT section keeps its bar.
 - WHO DEPENDS ON THIS: the callers to depth 2 as a tree, 4 rows, then "+N more".
 - IMPACT: a bar and "N callers · H hops". Green is 1 to 5, orange 6 to 20, red above 20.
 - WHY IT EXISTS: the recorded decisions. A superseded one is red with ⚠.
@@ -22,5 +22,5 @@ The pane reacts to the Read, Edit and Write tools, and to Sieve queries made thr
 The band above the prompt shows, after an Edit, MultiEdit or Write:
 `✎ checkApiKeyRateLimit and 2 more changed → 6 callers affected in 2 routes`, in the level color.
 The saved numbers come from `sieve stats --json`, at most every 30 seconds.
-Try it: run `sieve build`, put `sieve` on PATH, then `claude --plugin-dir <absolute path to this folder>`.
+Try it: run `sieve build`, put `sieve` on PATH (or set `"bin": "<path>"` in `.sieve/config.json` to pick another binary), then `claude --plugin-dir <absolute path to this folder>`. The mod reads `"bin"` again at each run.
 Run `claude plugin test <this folder>` for the tests. The mod never changes a tool call and makes no model call.

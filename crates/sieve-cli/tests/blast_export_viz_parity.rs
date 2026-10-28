@@ -1,4 +1,4 @@
-//! Parity tests for `sieve blast --export-viz <dir>` (P1-24, P1-65), against
+//! Parity tests for `sieve impact --export-viz <dir>` (P1-24, P1-65), against
 //! the goldens under `tests/fixtures/edges.expected/blast-viz/`. Each case is
 //! one `tests/inputs/blast-viz/<id>.sh` in the `blast-fmt` shape. Each golden
 //! holds the stdout, stderr, the exit code and the written `index.html`.
@@ -176,7 +176,7 @@ fn assert_case_matches_golden(id: &str) {
         .args(&argv)
         .current_dir(&root)
         .output()
-        .expect("run sieve blast");
+        .expect("run sieve impact");
     let stdout = mask_tmp(&String::from_utf8_lossy(&output.stdout), &temp.path);
     let stderr = normalize_stderr(&mask_tmp(
         &String::from_utf8_lossy(&output.stderr),

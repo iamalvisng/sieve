@@ -3,4 +3,4 @@ src/app.ts · 4 symbols
   7-9  constructor  method  (name: string)
 11-13  run  method  (n: number): number  · 1 caller
 16-20  main  fn  (): void
-[sieve] saved ≈ 37 tokens
+🎯 4 signatures · ~37 tokens saved

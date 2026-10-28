@@ -37,19 +37,19 @@ fn rename_table_daemon_tool_names_are_sieve() {
     assert_eq!(
         tool_names(),
         [
-            "sieve_find_code",
-            "sieve_file_api",
-            "sieve_check_freshness",
-            "sieve_trace_calls",
-            "sieve_find_all",
-            "sieve_repo_map",
+            "sieve_query",
+            "sieve_symbols",
+            "sieve_check",
+            "sieve_callers",
+            "sieve_find",
+            "sieve_map",
         ]
     );
 }
 
 #[test]
 fn rename_table_daemon_canonical_tool_name_maps_ask() {
-    assert_eq!(canonical_tool_name("sieve_ask"), "sieve_find_code");
+    assert_eq!(canonical_tool_name("sieve_ask"), "sieve_query");
 }
 
 #[test]
@@ -62,8 +62,9 @@ fn test_f6_sieve_tools_list_adds_sieve_why_and_instructions_name_it() {
     let out = run("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}\n");
     assert!(out.contains("\"name\":\"sieve_why\""), "reply: {out}");
     let specs = sieve_daemon::names::tool_specs();
-    assert_eq!(specs.len(), 7);
+    assert_eq!(specs.len(), 8);
     assert_eq!(specs[6].name, "sieve_why");
+    assert_eq!(specs[7].name, "sieve_rename");
     assert!(sieve_daemon::names::instructions().contains("- sieve_why: "));
     // `tool_names` keeps the six base tools.
     assert_eq!(tool_names().len(), 6);

@@ -1,4 +1,4 @@
 café  fn  src/uni.ts:1-3
 1 caller
 └─ drinkCoffee  fn  src/uni.ts:9-11
-[sieve] saved ≈ 42 tokens
+🎯 1 exact callers

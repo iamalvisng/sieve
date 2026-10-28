@@ -1,4 +1,4 @@
-ask  parse config · 8 hits
+query  parse config · 8 hits
 
 1  [alpha/] parseConfigFile  fn  alpha/src/a.ts:9-11
    function parseConfigFile(path: string): string

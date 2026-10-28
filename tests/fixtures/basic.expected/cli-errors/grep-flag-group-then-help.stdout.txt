@@ -1,4 +1,4 @@
-Usage: sieve grep [options] <pattern> [dir]
+Usage: sieve find [options] <pattern> [dir]
 
 Regex search over indexed files, hits grouped by enclosing symbol and ranked by
 coupling ($0, no LLM)

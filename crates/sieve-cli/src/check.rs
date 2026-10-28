@@ -238,9 +238,9 @@ mod tests {
         );
         assert_eq!(
             lines[2],
-            "  supported: .astro .bb .c .cc .cjs .clj .cljc .cljs .cpp .cs .cts .cxx .dart .ex \
+            "  supported: .astro .bash .bb .c .cc .cjs .clj .cljc .cljs .cpp .cs .cts .cxx .dart .ex \
              .exs .go .h .hh .hpp .java .js .jsx .kt .kts .lua .mjs .ml .mli .mts .nix .php .py \
-             .pyi .r .rb .rs .sc .scala .sol .svelte .swift .ts .tsx .vue .zig"
+             .pyi .r .rb .rs .sc .scala .sh .sol .svelte .swift .ts .tsx .vue .zig"
         );
         assert!(unknown_extension_lines(&[
             ".ts".to_string(),

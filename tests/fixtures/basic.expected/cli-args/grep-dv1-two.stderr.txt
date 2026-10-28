@@ -1,1 +1,1 @@
-no hits for "zzz_nohit" in 7 indexed files — try a bare symbol name or a short substring, or run sieve ask "<question>". Use raw grep -rn only for files the index does not hold. 2 indexed files could not be read — run sieve build
+no hits for "zzz_nohit" in 7 indexed files — try a bare symbol name or a short substring, or run sieve query "<question>". Use raw grep -rn only for files the index does not hold. 2 indexed files could not be read — run sieve build

@@ -96,16 +96,34 @@ export default {
    ],
    "tiny": [
     [
-     "gGGGGG.G",
-     ".MmMmMG.",
-     "..MmMm..",
-     "........"
+     ".....G..",
+     "gGGGGGg.",
+     ".gMmMg..",
+     "..W.W..."
     ],
     [
-     "gGGGGG.G",
-     ".MmMmMG.",
-     "..MmMm..",
+     ".....G..",
+     "gGGGGGg.",
+     ".gMmMg..",
      "...W..W."
+    ]
+   ],
+   "status": [
+    [
+     "..........G.",
+     ".........G..",
+     "gGGGGGGGGGg.",
+     ".gQMmMmMMg..",
+     "..gMmMmMg...",
+     "...gWMWg...."
+    ],
+    [
+     "..........G.",
+     ".........G..",
+     "gGGGGGGGGGg.",
+     ".gQmMmMmMg..",
+     "..gmMmMmg...",
+     "...gMWMg...."
     ]
    ]
   },
@@ -177,6 +195,24 @@ export default {
      "NPnrrnPN",
      ".NnnrnN."
     ]
+   ],
+   "status": [
+    [
+     "..lnlnlnl...",
+     "NNnnnnnnnnNN",
+     "NNnkwnnkwnNN",
+     "NNPnnkknnPNN",
+     "NNnnnrrnnnNN",
+     "N..nnnnnn..N"
+    ],
+    [
+     "..lnlnlnl...",
+     "NNnnnnnnnnNN",
+     "NNnNNnnNNnNN",
+     "NNPnnkknnPNN",
+     "NNnnnnrrnnNN",
+     "N..nnnnnn..N"
+    ]
    ]
   },
   "cloud": {
@@ -236,16 +272,34 @@ export default {
    ],
    "tiny": [
     [
-     "O......O",
+     "OO....OO",
      "OPOOOOPO",
      "OkOWWOkO",
      ".OWPPWO."
     ],
     [
-     "O......O",
+     "OO....OO",
      "OPOOOOPO",
      "OOOWWOOO",
      ".OWPPWO."
+    ]
+   ],
+   "status": [
+    [
+     ".O........O.",
+     "OPOOOOOOOOPO",
+     "OOkwOOOOkwOO",
+     "OOkkOWWOkkOO",
+     "OPOWWPPWWOPO",
+     ".OOOWWWWOOO."
+    ],
+    [
+     ".O........O.",
+     "OPOOOOOOOOPO",
+     "OOOOOOOOOOOO",
+     "OOkkOWWOkkOO",
+     "OPOWWPPWWOPO",
+     ".OOOWWWWOOO."
     ]
    ]
   },
@@ -308,14 +362,32 @@ export default {
     [
      ".ssssss.",
      "sSkSSkSs",
-     ".mmmmmm.",
-     "..y..y.."
+     "sSSkkSSs",
+     ".mmmmmm."
     ],
     [
      ".ssssss.",
      "sSSSSSSs",
-     ".mmmmmm.",
-     "...y..y."
+     "sSSkkSSs",
+     ".mmmmmm."
+    ]
+   ],
+   "status": [
+    [
+     "ssssssssssss",
+     "sSSSSSSSSSSs",
+     "sSkwSSSSkwSs",
+     "sSSSSSkkSSSs",
+     ".sSSSSSSSSs.",
+     "..m.m.m.m.m."
+    ],
+    [
+     "ssssssssssss",
+     "sSSSSSSSSSSs",
+     "sSSSSSSSSSSs",
+     "sSkkSSkkSSSs",
+     ".sSSSSSSSSs.",
+     ".m.m.y.m.m.."
     ]
    ]
   },
@@ -376,16 +448,34 @@ export default {
    ],
    "tiny": [
     [
-     "p......p",
+     "p.pppp.p",
      "pwkppwkp",
      "pppyyppp",
      ".pfppfp."
     ],
     [
-     "p......p",
+     "p.pppp.p",
      "pkkppkkp",
      "pppyyppp",
      ".pfppfp."
+    ]
+   ],
+   "status": [
+    [
+     ".pp......pp.",
+     "pppppppppppp",
+     "pwwwppppwwwp",
+     "pwkwppppwkwp",
+     "pwwwpyypwwwp",
+     ".pfpffffpfp."
+    ],
+    [
+     ".pp......pp.",
+     "pppppppppppp",
+     "pppppppppppp",
+     "pkkkppppkkkp",
+     "pppppyyppppp",
+     ".pfpffffpfp."
     ]
    ]
   },
@@ -447,15 +537,33 @@ export default {
    "tiny": [
     [
      "...g....",
-     "tkwttkwt",
-     "ttmmmmtt",
-     ".d.dd.d."
+     ".tkwtkw.",
+     ".ttmmtt.",
+     "dmmmmmmd"
     ],
     [
      "...o....",
-     "tkkttkkt",
-     "ttmmmmtt",
-     ".d.dd.d."
+     ".tkktkk.",
+     ".ttmmtt.",
+     "dmmmmmmd"
+    ]
+   ],
+   "status": [
+    [
+     ".....gg.....",
+     ".tttttttttt.",
+     "tkwttttttkwt",
+     "ttttddddtttt",
+     "dmdmdmdmdmmd",
+     "dmmdmdmdmdmd"
+    ],
+    [
+     ".....dd.....",
+     ".tttttttttt.",
+     "tttttttttttt",
+     "tkkttttttkkt",
+     "dmdmdmdmdmmd",
+     "dmmdmdmdmdmd"
     ]
    ]
   }

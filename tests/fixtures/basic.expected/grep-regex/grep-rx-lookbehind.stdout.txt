@@ -1,4 +1,4 @@
-grep "(?<=hit)me" · 1 hit in 1 symbol across 1 file · searched 1 file
+find "(?<=hit)me" · 1 hit in 1 symbol across 1 file · searched 1 file
 
 regex-cases.ts  module  src/regex-cases.ts  · 0 links in
   1: // hitme

@@ -251,7 +251,7 @@ pub fn federate_callers(
     let cov = coverage_note(graphs);
     if blocks.is_empty() {
         let base = format!(
-            "no symbol named {symbol} in any of the {} workspace repos — try {} grep {symbol}",
+            "no symbol named {symbol} in any of the {} workspace repos — try {} find {symbol}",
             graphs.loaded.len(),
             sieve_core::product().name
         );
@@ -1123,7 +1123,7 @@ mod tests {
         assert!(!miss.found);
         assert_eq!(
             miss.text,
-            "no symbol named zzz in any of the 2 workspace repos — try sieve grep zzz\n\
+            "no symbol named zzz in any of the 2 workspace repos — try sieve find zzz\n\
              2 of 3 workspace repos have graphs; run sieve build to cover gamma"
         );
     }

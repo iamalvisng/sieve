@@ -20,7 +20,7 @@ To rebuild, run `sieve build`. Add `--no-reuse` to parse every file again.
 ## A file is missing from the results
 
 - Sieve indexes only [supported extensions](languages.md).
-- `sieve blast` reports a changed file that no parser claims, or a file that the
+- `sieve impact` reports a changed file that no parser claims, or a file that the
   index does not hold yet.
 - A folder that the walk skips by default needs `--include-dir <name>`.
 - A nested Git clone needs `--follow-nested-repos`. A submodule needs `--follow-submodules`.

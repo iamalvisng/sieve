@@ -160,7 +160,7 @@ fn grep_rows(
     if result.truncated.hits > 0 {
         let name = sieve_core::product().name;
         rows.push(format!(
-            "+{} more \u{b7} {name} grep {} --fixed",
+            "+{} more \u{b7} {name} find {} --fixed",
             result.truncated.hits,
             ident.name()
         ));
@@ -178,7 +178,7 @@ pub fn format_def(
 ) -> String {
     let name = sieve_core::product().name;
     let q = ident.as_str();
-    let mut out = vec![format!("ask  {q} \u{b7} def"), String::new()];
+    let mut out = vec![format!("query  {q} \u{b7} def"), String::new()];
     let Some(top) = def.nodes.first() else {
         let (rows, unreadable) = grep_rows(graph, repo_root, ident, in_prefix);
         if rows.is_empty() {
@@ -197,7 +197,7 @@ pub fn format_def(
     }
     if def.nodes.len() > MAX_DEF_ROWS {
         out.push(format!(
-            "+{} more \u{b7} {name} grep {}",
+            "+{} more \u{b7} {name} find {}",
             def.nodes.len() - MAX_DEF_ROWS,
             ident.name()
         ));
@@ -349,7 +349,7 @@ mod tests {
             .join("\n");
         let name = sieve_core::product().name;
         let want = format!(
-            "ask  run \u{b7} def\n\nrun  fn  a.ts:1-20\n```\n{body}\n```\ncallers: 1 \u{b7} {name} callers run\n"
+            "query  run \u{b7} def\n\nrun  fn  a.ts:1-20\n```\n{body}\n```\ncallers: 1 \u{b7} {name} callers run\n"
         );
         assert_eq!(out, want);
         // Measured: a 20-line body.
@@ -373,7 +373,7 @@ mod tests {
         assert!(out.contains("run  fn  f1.ts:1-2\nrun  fn  f2.ts:1-2\n"));
         assert!(out.contains("run  fn  f5.ts:1-2\n"));
         assert!(!out.contains("f6.ts:1-2"));
-        assert!(out.contains(&format!("+2 more \u{b7} {name} grep run\n")));
+        assert!(out.contains(&format!("+2 more \u{b7} {name} find run\n")));
         // No file on disk: the answer prints no body, only what exists.
         assert!(!out.contains("```"));
         assert!(out.ends_with("callers: 0\n"));
@@ -516,11 +516,11 @@ mod tests {
         let g = graph(vec![file("a.ts")], vec![]);
         let out = render(&g, &dir, "minFont", None);
         let name = sieve_core::product().name;
-        assert!(out.starts_with("ask  minFont \u{b7} def\n\n"));
+        assert!(out.starts_with("query  minFont \u{b7} def\n\n"));
         assert!(out.contains("a.ts:1: use(minFont, 1)\n"));
         assert!(out.contains("a.ts:15: use(minFont, 15)\n"));
         assert!(!out.contains("a.ts:16:"));
-        assert!(out.ends_with(&format!("+5 more \u{b7} {name} grep minFont --fixed\n")));
+        assert!(out.ends_with(&format!("+5 more \u{b7} {name} find minFont --fixed\n")));
     }
 
     #[test]
@@ -531,7 +531,7 @@ mod tests {
         let out = render(&g, &dir, "minFont", None);
         assert_eq!(
             out,
-            "ask  minFont \u{b7} def\n\nno definition and no occurrence of minFont in the index\n"
+            "query  minFont \u{b7} def\n\nno definition and no occurrence of minFont in the index\n"
         );
     }
 

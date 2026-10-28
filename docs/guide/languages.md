@@ -116,5 +116,5 @@ records. Do not treat these links as exact.
 ## Unsupported files
 
 Sieve ignores a file with an extension that has no parser. `build -e`
-warns and lists the supported extensions. `sieve blast` reports a changed file
+warns and lists the supported extensions. `sieve impact` reports a changed file
 that no parser claims.

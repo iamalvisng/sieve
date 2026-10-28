@@ -17,7 +17,7 @@ use sieve_core::{Graph, Kind, Node, Relation};
 use thiserror::Error;
 
 use crate::ask::structural::resolve_symbol as resolve_symbol_matches;
-use crate::grep::escape_regex;
+use crate::grep::{escape_regex, grep_graph, GrepOptions};
 use crate::relations::WALK_RELATIONS;
 
 /// Which way `callers` walks the graph: `In` = who points at the symbol,
@@ -50,7 +50,7 @@ pub enum CallersError {
 /// command.
 fn no_symbol_message(query: &str) -> String {
     format!(
-        "no symbol named {query} — try {} grep {query}",
+        "no symbol named {query} — try {} find {query}",
         sieve_core::product().name
     )
 }
@@ -411,7 +411,7 @@ pub(crate) fn loose_note_for(direction: Direction, name: &str, candidate_count: 
     };
     format!(
         "no {label} found — the index has no {dir_word} links for this symbol.{ambiguity} \
-        Check the name, or run {} grep {name}",
+        Check the name, or run {} find {name}",
         sieve_core::product().name
     )
 }
@@ -443,7 +443,7 @@ fn loose_note_json(direction: Direction, name: &str, candidate_count: usize) -> 
     format!(
         "  no indexed {label} — the graph has no {dir_word} call/reference edges for this \
         symbol as written.{ambiguity} Check the name (try the bare symbol, or \"Type.method\"), \
-        or find its uses with {} grep \"{name}\". Fall back to raw grep -rn only for \
+        or find its uses with {} find \"{name}\". Fall back to raw grep -rn only for \
         unindexed files",
         sieve_core::product().name
     )
@@ -561,6 +561,36 @@ pub fn callers_saved_paths(matches: &[(&Node, Vec<Hit>)]) -> Vec<String> {
         }
     }
     paths
+}
+
+/// The count of hits over every matched symbol: the `<n>` of the answer line.
+pub fn callers_hit_count(matches: &[(&Node, Vec<Hit>)]) -> usize {
+    matches.iter().map(|(_, hits)| hits.len()).sum()
+}
+
+/// The size, in chars, of the output of `grep -rnw <name>` over the indexed
+/// files under `root`: one `path:line:text` row per whole-word match. This is
+/// the baseline the `callers` answer line measures against. A hit's text is
+/// capped at 160 code units, so the baseline errs low.
+pub fn word_grep_chars(graph: &Graph, root: &Path, name: &str) -> u64 {
+    let opts = GrepOptions {
+        ignore_case: false,
+        fixed: false,
+        in_prefix: None,
+        max_hits: 1_000_000,
+    };
+    let pattern = format!(r"\b{}\b", escape_regex(name));
+    let Ok(result) = grep_graph(graph, root, &pattern, &opts) else {
+        return 0;
+    };
+    let mut chars = 0u64;
+    for group in &result.groups {
+        for hit in &group.hits {
+            let row = format!("{}:{}:{}\n", group.path, hit.line, hit.text);
+            chars += row.encode_utf16().count() as u64;
+        }
+    }
+    chars
 }
 
 /// A matched symbol's `--json` shape (section 2.9).
@@ -700,6 +730,20 @@ mod tests {
     }
 
     #[test]
+    fn word_grep_chars_counts_whole_word_rows_only() {
+        let dir = crate::test_support::TempDir::new("word-grep-chars");
+        std::fs::write(dir.join("a.ts"), "run();\nrunner();\nx = run;\n").expect("write");
+        let g = graph(
+            vec![node("a", "a.ts", Kind::File, "a.ts", "L1-L3")],
+            Vec::new(),
+        );
+        // Two rows match the whole word: `a.ts:1:run();` and `a.ts:3:x = run;`.
+        let want = ("a.ts:1:run();\n".len() + "a.ts:3:x = run;\n".len()) as u64;
+        assert_eq!(word_grep_chars(&g, &dir, "run"), want);
+        assert_eq!(word_grep_chars(&g, &dir, "absent"), 0);
+    }
+
+    #[test]
     fn parse_depth_accepts_all_case_insensitively() {
         assert_eq!(parse_depth("all").unwrap().0, None);
         assert_eq!(parse_depth("FULL").unwrap().0, None);
@@ -765,7 +809,7 @@ mod tests {
         let err = resolve_symbol(&g, "nope", None).expect_err("no match");
         assert_eq!(
             err.to_string(),
-            "no symbol named nope — try sieve grep nope"
+            "no symbol named nope — try sieve find nope"
         );
     }
 
@@ -825,7 +869,7 @@ mod tests {
         let err = resolve_symbol(&g, "nope", Some("/")).expect_err("no symbol, not bad prefix");
         assert_eq!(
             err.to_string(),
-            "no symbol named nope — try sieve grep nope"
+            "no symbol named nope — try sieve find nope"
         );
     }
 

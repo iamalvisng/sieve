@@ -198,7 +198,7 @@ fn fallthrough_note_for(subject: &str) -> String {
     let name = sieve_core::product().name;
     format!(
         "structural index: no entries for '{subject}' — showing lexical matches; \
-        for precise edges try {name} callers '{subject}', or {name} grep '{subject}' for every \
+        for precise edges try {name} callers '{subject}', or {name} find '{subject}' for every \
         reference (loosen the pattern if it returns nothing)"
     )
 }

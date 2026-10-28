@@ -7,7 +7,7 @@
 //! `blast*` queries against the working tree. This test reproduces that git
 //! state in a temp copy.
 //!
-//! Known gap: `sieve blast` refreshes (re-parses) the graph before it
+//! Known gap: `sieve impact` refreshes (re-parses) the graph before it
 //! diffs, so its seeds see the EDITED file content. `sieve-query` has no
 //! parser (extraction lives in `sieve-parse`, a different crate this task
 //! must not touch), so this test hands `blast()` the golden `wiring.json`

@@ -1687,6 +1687,7 @@ fn edge(path: &str, relation: Relation, rec: KtRec) -> RawEdge {
         default_export: false,
         reexport: None,
         ns_export: false,
+        by_value: false,
         rust: None,
         py: None,
         go: None,

@@ -1,4 +1,4 @@
-Usage: sieve ask [options] <query> [dir]
+Usage: sieve query [options] <query> [dir]
 
 Query the sieve/ graph — returns ranked symbols + exact file:line, routed to prose
 or code ($0, no key)

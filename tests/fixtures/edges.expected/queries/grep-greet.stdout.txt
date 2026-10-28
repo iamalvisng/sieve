@@ -1,4 +1,4 @@
-grep "greet" · 4 hits in 4 symbols across 3 files · searched 12 files
+find "greet" · 4 hits in 4 symbols across 3 files · searched 12 files
 
 Base.greet  method  ts/base.ts:6-8  · 1 link in
   6: greet(): string {
@@ -11,4 +11,4 @@ Circle.area  method  ts/derived.ts:4-6  · 1 link in
 
 Circle.describe  method  ts/derived.ts:8-10  · 0 links in
   9: return super.greet();
-[sieve] saved ≈ 83 tokens
+🎯 4 hits in 4 symbols

@@ -16,8 +16,8 @@ number in the README. You can repeat each run.
 
 1. Cold build: run `sieve build .` on 3 fresh copies of the clone, with no `sieve/` folder. Report the median.
 2. Warm build: run the same command again with no change. The number is the median of 5 runs.
-3. `ask` latency: 10 questions per repo, each run 3 times. That gives 30 timings. The number is the wall time of one `sieve ask` process. Report the median and the maximum.
-4. Answer size: count the bytes of `sieve ask "<question>" --source`. Count the bytes of every distinct file the output names. Compare the two totals. This is not tokens. It is not an agent session.
+3. `query` latency: 10 questions per repo, each run 3 times. That gives 30 timings. The number is the wall time of one `sieve query` process. Report the median and the maximum.
+4. Answer size: count the bytes of `sieve query "<question>" --source`. Count the bytes of every distinct file the output names. Compare the two totals. This is not tokens. It is not an agent session.
 5. Exact cross-file calls: `scripts/oracle/ts-calls.mjs` lists the call rows that the TypeScript compiler resolves in vite. `scripts/oracle/compare.mjs` checks each Extracted cross-file call edge and reports two counts. Count 1 keys on (source file, target file, name). Count 2 is the gate: the oracle row line must fall inside the span of the Sieve edge's source node. Sieve found 1,272 such edges in vite, and all 1,272 match. Barrel re-exports resolve. The build and ask times in items 1 and 2 are from the 0.1.1 release build, not re-measured after this change. Calls that stay Inferred are not counted.
 6. The questions were written before the first run. No question was dropped. Medians move by a few ms because the times are 25 to 250 ms.
 
@@ -112,7 +112,7 @@ The oracle scripts are in `scripts/oracle/`. `rs-calls.py` and
 
 ## Refresh after an edit
 
-Sieve refreshes the index before a query. This table shows the time of a 1-file refresh in seconds. The numbers are the median of 5 on an Apple M-series machine with a release build. The time is the time of `sieve ask` minus the time of the same query with `--no-refresh`. Output is byte-identical to a full build on all 6 repos. A refresh with no change takes 0.03 to 0.17 s, unchanged. `SIEVE_TIMING=1` prints each phase to stderr.
+Sieve refreshes the index before a query. This table shows the time of a 1-file refresh in seconds. The numbers are the median of 5 on an Apple M-series machine with a release build. The time is the time of `sieve query` minus the time of the same query with `--no-refresh`. Output is byte-identical to a full build on all 6 repos. A refresh with no change takes 0.03 to 0.17 s, unchanged. `SIEVE_TIMING=1` prints each phase to stderr.
 
 | Repo | Files | Before | After |
 |---|---|---|---|

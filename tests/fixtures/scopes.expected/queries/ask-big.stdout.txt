@@ -1,4 +1,4 @@
-ask  big function · 7 hits
+query  big function · 7 hits
 
 1  [packages/big/] bigFive  fn  packages/big/index.ts:13-14
    function bigFive(): number
@@ -22,3 +22,4 @@ ask  big function · 7 hits
 
 matched in: packages/big/ (7)
 also matched: (root) — narrow with --in (root)
+🎯 7 ranked hits

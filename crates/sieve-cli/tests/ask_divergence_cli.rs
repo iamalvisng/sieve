@@ -1,4 +1,4 @@
-//! Parity tests for the `sieve ask` divergences from a recorded run
+//! Parity tests for the `sieve query` divergences from a recorded run
 //! (DV1 to DV8, P1-02 to P1-07), against the goldens under
 //! `tests/fixtures/<name>.expected/ask-dv/`. The query lists live in
 //! `tests/inputs/ask-dv/<name>.txt`.
@@ -121,7 +121,7 @@ fn run_matches(name: &str, id: &str, dir: &Path, argv: &[String]) -> bool {
         .args(argv)
         .current_dir(dir)
         .output()
-        .expect("run sieve ask");
+        .expect("run sieve query");
     let got_out = String::from_utf8_lossy(&output.stdout).into_owned();
     let got_err = normalize_stderr(&String::from_utf8_lossy(&output.stderr));
     let got_exit = output.status.code().unwrap_or(-1);

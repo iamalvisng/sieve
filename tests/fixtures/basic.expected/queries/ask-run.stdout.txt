@@ -1,4 +1,4 @@
-ask  how does run compute the result · 8 hits
+query  how does run compute the result · 8 hits
 
 1  run  method  src/app.ts:11-13
    run(n: number): number
@@ -23,3 +23,4 @@ ask  how does run compute the result · 8 hits
 
 8  App  class  src/app.ts:4-14
    class App
+🎯 8 ranked hits

@@ -5,6 +5,7 @@
 // Count 1 (slice 1): the key is (source file, target file, name).
 // Count 2 (gate): a row matches an edge only if the row line is inside the
 // span of the edge source node, and the target file and name also match.
+// A row with arg true is a function passed as a call argument. A call row or an arg row can match an edge.
 // A Sieve edge with no match is wrong. Coverage is per shape, for rows with a
 // relative specifier only. One line shows the count of the other rows.
 import fs from "node:fs";
@@ -59,6 +60,8 @@ console.log(`Sieve Extracted cross-file call edges: ${edges.length}`);
 console.log(`non-relative oracle rows (not in coverage): ${all.length - rows.length}`);
 console.log(`count 1: ${edges.length - wrong1.length} of ${edges.length} edges right; ${keys.size - unc1.length} of ${keys.size} pairs covered`);
 console.log(`count 2: ${edges.length - wrong2.length} of ${edges.length} edges right; ${rows.length - unc2.length} of ${rows.length} rows covered`);
+const argRows = rows.filter((r) => r.arg);
+console.log(`value-argument rows: ${argRows.length}, covered (count 2): ${argRows.filter((r) => covered.has(r)).length}`);
 console.log("per shape: shape, rows, pairs, pairs covered (count 1), rows covered (count 2)");
 for (const shape of [...new Set(rows.map((r) => r.shape))].sort()) {
   const rs = rows.filter((r) => r.shape === shape);

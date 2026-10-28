@@ -370,7 +370,7 @@ fn test_p3_05_pagerank_matches_the_sieve_golden_on_basic() {
     }
 }
 
-/// Strips a leading `[sieve] tokens saved` header plus its blank line,
+/// Strips a trailing answer line header plus its blank line,
 /// when the golden carries one (section 7.9). None of the `ask-*` goldens
 /// this crate ports carry one — the `--source` savings sentence is empty
 /// on every parity fixture (section 11, `basic/ask-source`) — but the
@@ -379,7 +379,7 @@ fn strip_savings_header(golden: &str) -> &str {
     // The saving is the last line of a golden. Keep the newline before it.
     let body = golden.strip_suffix('\n').unwrap_or(golden);
     match body.rfind('\n') {
-        Some(i) if body[i + 1..].starts_with("[sieve] saved") => &golden[..=i],
+        Some(i) if body[i + 1..].starts_with("\u{1f3af} ") => &golden[..=i],
         _ => golden,
     }
 }

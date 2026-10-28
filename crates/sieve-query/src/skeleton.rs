@@ -6,7 +6,7 @@ use std::cmp::Ordering;
 use serde::Serialize;
 use sieve_core::{start_line, Graph, Kind, Node};
 
-use crate::relations::WALK_RELATIONS;
+use crate::relations::compute_in_degree;
 
 /// One definition in a file's skeleton view.
 #[derive(Debug, Clone, Serialize)]
@@ -20,9 +20,9 @@ pub struct SkeletonEntry {
     /// (section 1.7). Omitted, not `null`, when there is none.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
-    /// How many symbols link to this one. The text report shows it. The
-    /// JSON report does not.
-    #[serde(skip)]
+    /// How many symbols link to this one. Both reports show it. The JSON
+    /// key is `inDegree`, the same count as `find --json`.
+    #[serde(rename = "inDegree")]
     pub callers: usize,
 }
 
@@ -112,12 +112,7 @@ pub fn skeleton(graph: Option<&Graph>, file: &str) -> SkeletonResult {
 
     defs.sort_by_key(|n| start_line(&n.span));
 
-    let mut links_in: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
-    for edge in &graph.edges {
-        if WALK_RELATIONS.contains(&edge.relation) {
-            *links_in.entry(edge.target.as_str()).or_default() += 1;
-        }
-    }
+    let links_in = compute_in_degree(graph);
 
     let entries = defs
         .iter()
@@ -127,7 +122,7 @@ pub fn skeleton(graph: Option<&Graph>, file: &str) -> SkeletonResult {
             span: n.span.clone(),
             signature: n.signature.clone(),
             summary: n.summary.as_deref().and_then(first_summary_line),
-            callers: links_in.get(n.id.as_str()).copied().unwrap_or(0),
+            callers: links_in.get(&n.id).copied().unwrap_or(0),
         })
         .collect();
 
@@ -297,6 +292,25 @@ mod tests {
             nodes,
             edges: Vec::new(),
         }
+    }
+
+    #[test]
+    fn json_entry_carries_in_degree() {
+        let mut g = graph(vec![
+            node("a.ts", "hot", Kind::Function, "L1-L2", None),
+            node("a.ts", "cold", Kind::Function, "L5-L6", None),
+        ]);
+        for source in ["x", "y", "z"] {
+            g.edges.push(sieve_core::Edge {
+                source: source.to_string(),
+                target: "a.ts#hot".to_string(),
+                relation: sieve_core::Relation::Calls,
+                confidence: sieve_core::Confidence::Extracted,
+            });
+        }
+        let v = serde_json::to_value(skeleton(Some(&g), "a.ts")).unwrap();
+        assert_eq!(v["entries"][0]["inDegree"], 3);
+        assert_eq!(v["entries"][1]["inDegree"], 0);
     }
 
     #[test]

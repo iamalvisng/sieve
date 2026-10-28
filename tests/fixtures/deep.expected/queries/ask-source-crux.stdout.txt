@@ -1,4 +1,4 @@
-ask  quadruple · 7 hits
+query  quadruple · 7 hits
 
 1  quadruple  fn  src/util.ts:5-7
    This function quadruples the input number by applying the double function twice, demonstrating function composition.
@@ -61,3 +61,4 @@ export function main(): void {
 }
 … (crux — full definition at src/app.ts:L16-L20; rerun with --full)
 ```
+🎯 7 ranked hits

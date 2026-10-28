@@ -348,7 +348,8 @@ fn test_rn3_dry_run_text_golden() {
          @@ -5 +5 @@\n\
          -  const args = parseArgs(process.argv.slice(2));\n\
          +  const args = parseCliArgs(process.argv.slice(2));\n\
-         not edited  src/cli.ts:3  comment  // parseArgs reads argv\n"
+         not edited  src/cli.ts:3  comment  // parseArgs reads argv\n\
+         \u{1f3af} 2 files \u{b7} 0 unproven edits\n"
     );
     assert_eq!(text(&out.stdout), expected);
 }

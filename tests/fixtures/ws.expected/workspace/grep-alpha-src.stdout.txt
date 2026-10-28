@@ -1,7 +1,8 @@
-grep "alphaAdd" · 2 hits in 2 symbols across 1 file · searched 1 file
+find "alphaAdd" · 2 hits in 2 symbols across 1 file · searched 1 file
 
 alphaAdd  fn  src/a.ts:1-3  · 1 link in
   1: export function alphaAdd(a: number, b: number): number {
 
 alphaTwice  fn  src/a.ts:5-7  · 0 links in
   6: return alphaAdd(n, n);
+🎯 2 hits in 2 symbols

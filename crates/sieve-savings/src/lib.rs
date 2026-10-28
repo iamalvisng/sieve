@@ -76,37 +76,116 @@ pub fn format_thousands(n: u64) -> String {
     out
 }
 
-/// The short savings header: no percent, no instruction text. The
-/// statusline and the pane show the total. The hook reads the number after
-/// the `\u{2248}` sign.
-pub fn sieve_header(name: &str, saved_tokens: u64) -> String {
-    format!(
-        "[{name}] saved \u{2248} {} tokens",
-        format_thousands(saved_tokens)
+/// The tokens an `answer` saves against a baseline of `baseline_chars`.
+///
+/// Both sides count as chars / 4. The result is never below 0.
+pub fn saved_tokens(baseline_chars: u64, answer: &str) -> u64 {
+    to_tokens(baseline_chars).saturating_sub(to_tokens(utf16_len(answer)))
+}
+
+/// Formats a token count: under 1,000 as the number, else `k` with one
+/// decimal (`1.9k`), and from 10,000 up `k` with no decimal (`84k`).
+pub fn format_short(n: u64) -> String {
+    if n < 1_000 {
+        return n.to_string();
+    }
+    let tenths = (n + 50) / 100;
+    if tenths < 100 {
+        format!("{}.{}k", tenths / 10, tenths % 10)
+    } else {
+        format!("{}k", (n + 500) / 1_000)
+    }
+}
+
+/// The answer line: `\u{1f3af} <label>`, then ` \u{b7} <saved> tokens saved`
+/// when `saved` is above 0.
+pub fn answer_line(label: &str, saved: u64) -> String {
+    if saved == 0 {
+        format!("{MARK} {label}")
+    } else {
+        format!(
+            "{MARK} {label} \u{b7} ~{} tokens saved",
+            format_short(saved)
+        )
+    }
+}
+
+/// The mark that opens every answer line.
+const MARK: &str = "\u{1f3af}";
+
+/// The answer line of `callers` and `trace_calls`: `n` exact callers, and
+/// the saving against `baseline_chars` of whole-word grep output.
+pub fn callers_line(n: usize, baseline_chars: u64, body: &str) -> String {
+    answer_line(
+        &format!("{n} exact callers"),
+        saved_tokens(baseline_chars, body),
     )
 }
 
-/// The one-line savings estimate for a command's rendered `body`.
+/// The answer line of `skeleton` and `file_api`: `n` signatures, and the
+/// saving against the whole file of `baseline_chars`.
+pub fn signatures_line(n: usize, baseline_chars: u64, body: &str) -> String {
+    answer_line(
+        &format!("{n} signatures"),
+        saved_tokens(baseline_chars, body),
+    )
+}
+
+/// The answer line of `ask --def`: the exact body of `name`, and the saving
+/// against the whole file of `baseline_chars`.
+pub fn def_line(name: &str, baseline_chars: u64, body: &str) -> String {
+    answer_line(
+        &format!("exact body of {name}"),
+        saved_tokens(baseline_chars, body),
+    )
+}
+
+/// The answer line of `grep` and `find_all`: no saving number.
+pub fn hits_line(hits: usize, symbols: usize) -> String {
+    answer_line(&format!("{hits} hits in {symbols} symbols"), 0)
+}
+
+/// The answer line of a ranked `ask` and `find_code`: no saving number.
+pub fn ranked_line(hits: usize) -> String {
+    answer_line(&format!("{hits} ranked hits"), 0)
+}
+
+/// The answer line of a ready `rename` plan.
+pub fn rename_line(files: usize) -> String {
+    answer_line(&format!("{files} files \u{b7} 0 unproven edits"), 0)
+}
+
+/// Sums the saved tokens of every answer line in `text`.
 ///
-/// `name` is the product name (for example `sieve`) the line
-/// opens with, in `[name]`.
-///
-/// Returns `""` when there is nothing honest to claim: no baseline, a zero
-/// baseline, or an output that is not actually smaller than the baseline.
-pub fn savings_line(name: &str, body: &str, saved: Option<&Savings>) -> String {
-    let Some(saved) = saved else {
-        return String::new();
+/// A line counts when it holds the mark and ends in `tokens saved`. A
+/// `k` number reads as thousands. `text` may be a JSON string, so a
+/// line also ends at a quote or a backslash.
+pub fn sum_answer_lines(text: &str) -> u64 {
+    let mut total = 0u64;
+    let mut rest = text;
+    while let Some(idx) = rest.find(MARK) {
+        let after = &rest[idx + MARK.len()..];
+        let end = after.find(['\n', '"', '\\']).unwrap_or(after.len());
+        total += parse_saved_tail(&after[..end]).unwrap_or(0);
+        rest = &after[end..];
+    }
+    total
+}
+
+/// Reads `<n>[.d][k] tokens saved` from the end of one answer line.
+fn parse_saved_tail(line: &str) -> Option<u64> {
+    let head = line.trim_end().strip_suffix(" tokens saved")?;
+    let num = head.rsplit(" \u{b7} ").next()?;
+    let num = num.strip_prefix('~').unwrap_or(num);
+    let (digits, scale) = match num.strip_suffix('k') {
+        Some(d) => (d, 1_000.0),
+        None => (num, 1.0),
     };
-    if saved.baseline_chars == 0 {
-        return String::new();
+    let value: f64 = digits.parse().ok()?;
+    if value < 0.0 || !value.is_finite() {
+        return None;
     }
-    let pack = to_tokens(utf16_len(body));
-    let base = to_tokens(saved.baseline_chars);
-    if base <= pack {
-        return String::new();
-    }
-    let delta = base - pack;
-    sieve_header(name, delta)
+    Some((value * scale).round() as u64)
 }
 
 /// Adds the savings `line` as the last line of `text`.
@@ -122,82 +201,10 @@ pub fn append_line(text: &str, line: &str) -> String {
     }
 }
 
-/// Renders `body` with the savings line as the last line.
-///
-/// `name` is the product name the line opens with, in `[name]`.
-///
-/// Returns `body` unchanged when the savings line is empty.
-pub fn with_savings(name: &str, body: &str, saved: Option<&Savings>) -> String {
-    let line = savings_line(name, body, saved);
-    if line.is_empty() {
-        body.to_string()
-    } else {
-        append_line(body, &line)
-    }
-}
-
-/// [`with_savings`] for a `body` with no final newline. The result ends
-/// with exactly one newline, with or without the savings line.
-pub fn with_savings_nl(name: &str, body: &str, saved: Option<&Savings>) -> String {
-    let text = with_savings(name, body, saved);
-    if text.ends_with('\n') {
-        text
-    } else {
-        format!("{text}\n")
-    }
-}
-
-/// The part of a rendered `ask` output that the savings line measures.
-/// The part of a rendered `ask` output that the savings line measures.
-///
-/// The savings line measures `body`: the joined lines,
-/// header included, before it appends the escalation nudge and the final
-/// `"\n"`. This cuts that nudge (`\n\n[name] ...`) and the final newline
-/// from `rendered`, and keeps the header line. `sieve-cli`'s `ask` and
-/// `sieve-daemon`'s `find_code` share this one cut.
-pub fn ask_pack_region(name: &str, rendered: &str) -> String {
-    let without_trailing_newline = rendered.strip_suffix('\n').unwrap_or(rendered);
-    let marker = format!("\n\n[{name}] ");
-    match without_trailing_newline.rfind(&marker) {
-        Some(idx) => without_trailing_newline[..idx].to_string(),
-        None => without_trailing_newline.to_string(),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use sieve_core::wiring::{Meta, Node, Origin, SummaryState};
-
-    #[test]
-    fn ask_pack_region_cuts_the_nudge_and_keeps_the_header() {
-        let rendered =
-            "sieve ask — \"x\"  (lexical)\n\n1. a\n   b\n\n[sieve] only 1 hit — switch tool\n";
-        assert_eq!(
-            ask_pack_region("sieve", rendered),
-            "sieve ask — \"x\"  (lexical)\n\n1. a\n   b"
-        );
-        assert_eq!(
-            ask_pack_region("sieve", "sieve ask — \"x\"  (lexical)\n\n1. a\n"),
-            "sieve ask — \"x\"  (lexical)\n\n1. a"
-        );
-    }
-
-    #[test]
-    fn with_savings_nl_ends_with_one_newline_either_way() {
-        let saved = Savings {
-            baseline_chars: 229_476,
-            files: 14,
-        };
-        let body = "x".repeat(40);
-        let text = with_savings_nl("sieve", &body, Some(&saved));
-        assert_eq!(
-            text.lines().last(),
-            Some("[sieve] saved \u{2248} 57,359 tokens")
-        );
-        assert!(text.ends_with("tokens\n"));
-        assert_eq!(with_savings_nl("sieve", "a", None), "a\n");
-    }
 
     #[test]
     fn append_line_puts_the_saving_on_the_last_line() {
@@ -276,45 +283,77 @@ mod tests {
     }
 
     #[test]
-    fn savings_line_is_empty_when_the_pack_is_not_smaller() {
-        let saved = Savings {
-            baseline_chars: 230,
-            files: 1,
-        };
-        let body = "x".repeat(297);
-        assert_eq!(savings_line("sieve", &body, Some(&saved)), "");
+    fn saved_tokens_is_the_token_gap_and_never_below_zero() {
+        assert_eq!(saved_tokens(229_476, &"x".repeat(6_536)), 55_735);
+        assert_eq!(saved_tokens(230, &"x".repeat(297)), 0);
+        assert_eq!(saved_tokens(0, "abc"), 0);
     }
 
     #[test]
-    fn savings_line_names_the_given_product() {
-        let saved = Savings {
-            baseline_chars: 229_476,
-            files: 14,
-        };
-        let body = "x".repeat(6_536);
-        let line = savings_line("sieve", &body, Some(&saved));
-        assert_eq!(line, "[sieve] saved ≈ 55,735 tokens");
+    fn format_short_uses_k_with_one_decimal_below_10k() {
+        let cases = [
+            (0, "0"),
+            (999, "999"),
+            (1_000, "1.0k"),
+            (1_949, "1.9k"),
+            (9_949, "9.9k"),
+            (9_950, "10k"),
+            (10_000, "10k"),
+            (84_000, "84k"),
+            (84_499, "84k"),
+        ];
+        for (n, want) in cases {
+            assert_eq!(format_short(n), want, "{n}");
+        }
     }
 
-    /// The header holds no emoji and no instruction text.
     #[test]
-    fn test_savings_sieve_header_has_no_tally_instruction() {
-        let saved = Savings {
-            baseline_chars: 229_476,
-            files: 14,
-        };
-        let line = savings_line("sieve", &"x".repeat(6_536), Some(&saved));
-        assert!(!line.contains('🌱') && !line.contains("reply"), "{line}");
+    fn answer_line_leaves_out_the_saving_when_it_is_zero() {
+        assert_eq!(
+            answer_line("13 exact callers", 1_900),
+            "\u{1f3af} 13 exact callers \u{b7} ~1.9k tokens saved"
+        );
+        assert_eq!(
+            answer_line("13 exact callers", 0),
+            "\u{1f3af} 13 exact callers"
+        );
+    }
+
+    #[test]
+    fn each_command_line_has_its_label() {
+        let body = "x".repeat(40);
+        assert_eq!(
+            callers_line(13, 7_640, &body),
+            "\u{1f3af} 13 exact callers \u{b7} ~1.9k tokens saved"
+        );
+        assert_eq!(
+            signatures_line(4, 4_040, &body),
+            "\u{1f3af} 4 signatures \u{b7} ~1.0k tokens saved"
+        );
+        assert_eq!(
+            def_line("run", 440, &body),
+            "\u{1f3af} exact body of run \u{b7} ~100 tokens saved"
+        );
+        assert_eq!(callers_line(2, 40, &body), "\u{1f3af} 2 exact callers");
+        assert_eq!(hits_line(9, 4), "\u{1f3af} 9 hits in 4 symbols");
+        assert_eq!(ranked_line(5), "\u{1f3af} 5 ranked hits");
+        assert_eq!(rename_line(3), "\u{1f3af} 3 files \u{b7} 0 unproven edits");
+    }
+
+    #[test]
+    fn sum_answer_lines_reads_k_numbers_and_json_strings() {
+        let text = "x\n\u{1f3af} 3 exact callers \u{b7} ~1.9k tokens saved\n\
+                    \u{1f3af} 2 signatures \u{b7} ~84k tokens saved\n\
+                    \u{1f3af} 9 hits in 4 symbols\n\u{1f3af} 1 signatures \u{b7} 8 tokens saved";
+        assert_eq!(sum_answer_lines(text), 1_900 + 84_000 + 8);
+        let json = "{\"stdout\":\"\u{1f3af} 1 exact callers \u{b7} ~500 tokens saved\\n\"}";
+        assert_eq!(sum_answer_lines(json), 500);
+        assert_eq!(sum_answer_lines("no line"), 0);
     }
 
     #[test]
     fn format_thousands_groups_by_three_digits() {
         assert_eq!(format_thousands(1_234_567), "1,234,567");
-    }
-
-    #[test]
-    fn with_savings_returns_the_body_unchanged_on_an_empty_line() {
-        assert_eq!(with_savings("sieve", "hello", None), "hello");
     }
 
     #[test]

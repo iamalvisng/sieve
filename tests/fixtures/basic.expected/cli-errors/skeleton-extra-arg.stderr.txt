@@ -1,1 +1,1 @@
-sieve: too many arguments for 'skeleton'. Expected 2 arguments but got 3: a, b, c. — see sieve skeleton --help
+sieve: too many arguments for 'symbols'. Expected 2 arguments but got 3: a, b, c. — see sieve symbols --help

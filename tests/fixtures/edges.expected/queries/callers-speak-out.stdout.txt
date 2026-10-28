@@ -1,3 +1,3 @@
 speak  method  py/derived.py:7-8
-no callees found — the index has no outgoing links for this symbol. Check the name, or run sieve grep speak
-[sieve] saved ≈ 45 tokens
+no callees found — the index has no outgoing links for this symbol. Check the name, or run sieve find speak
+🎯 0 exact callers · ~12 tokens saved

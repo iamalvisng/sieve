@@ -373,8 +373,9 @@ fn test_f6_mcp_sieve_why_gives_the_cli_text_and_runs_no_gh() {
     let cli = text(&run(&temp.path, &["why", "build_repo"], None).stdout);
     let replies = mcp(&temp.path, &[LIST, &why_call(r#"{"symbol":"build_repo"}"#)]);
     let names = tool_names(&replies[0]);
-    assert_eq!(names.len(), 7, "{names:?}");
+    assert_eq!(names.len(), 8, "{names:?}");
     assert_eq!(names[6], "sieve_why");
+    assert_eq!(names[7], "sieve_rename");
     let v: serde_json::Value = serde_json::from_str(&replies[1]).expect("json");
     assert_eq!(v["result"]["isError"], false, "{}", replies[1]);
     assert_eq!(v["result"]["content"][0]["text"], cli.as_str());

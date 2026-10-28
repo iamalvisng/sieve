@@ -438,7 +438,7 @@ pub struct Impacted {
     pub parent: Option<String>,
 }
 
-fn span_bounds(span: &str) -> Option<(u32, u32)> {
+pub(crate) fn span_bounds(span: &str) -> Option<(u32, u32)> {
     let rest = span.strip_prefix('L')?;
     let (start, rest) = rest.split_once("-L")?;
     Some((start.parse().ok()?, rest.parse().ok()?))
@@ -845,12 +845,11 @@ fn depth_as_u32(depth: Depth) -> Option<u32> {
     }
 }
 
-/// Groups dependents into modules by concept, else directory, skipping
-/// any hit whose path the diff already changed — that is the diff
-/// itself, not reach (section 3.5, `groupByModule`).
+/// Groups dependents into modules by concept, else directory. A caller in a
+/// changed file counts: the pane band counts every impacted symbol, so the
+/// tree must too (section 3.5, `groupByModule`).
 fn group_by_module(
     impacted: &[Impacted],
-    changed_paths: &HashSet<&str>,
     origins: &HashMap<String, Vec<String>>,
     index: &ModuleIndex,
 ) -> (Vec<ImpactedModule>, Vec<ImpactedModule>) {
@@ -858,9 +857,6 @@ fn group_by_module(
     let mut by_key: HashMap<String, ImpactedModule> = HashMap::new();
 
     for hit in impacted {
-        if changed_paths.contains(hit.path.as_str()) {
-            continue;
-        }
         let key = index
             .concept_of(&hit.path)
             .unwrap_or_else(|| dir_label(&hit.path));
@@ -1195,8 +1191,7 @@ fn blast_radius(
         .iter()
         .map(|id| (id.clone(), merged[id].1.clone()))
         .collect();
-    let changed_paths: HashSet<&str> = changed.iter().map(|c| c.path.as_str()).collect();
-    let (modules, test_modules) = group_by_module(&impacted, &changed_paths, &origins, &index);
+    let (modules, test_modules) = group_by_module(&impacted, &origins, &index);
 
     let changed_test_paths: HashSet<&str> = changed
         .iter()
@@ -1930,6 +1925,43 @@ mod tests {
         assert_eq!(short_label("concept:\u{85}Foo Bar"), "\u{85}Foo Bar");
     }
 
+    /// A caller in the changed file counts, as the pane band counts it.
+    #[test]
+    fn blast_radius_counts_callers_in_the_changed_file() {
+        let nodes = vec![
+            node("a.rs", Kind::File, "a.rs", "L1-L30"),
+            node("a.rs#seed", Kind::Function, "a.rs", "L1-L5"),
+            node("a.rs#scan", Kind::Function, "a.rs", "L10-L15"),
+            node("b.rs", Kind::File, "b.rs", "L1-L9"),
+            node("b.rs#other", Kind::Function, "b.rs", "L1-L9"),
+        ];
+        let call = |s: &str, t: &str| Edge {
+            source: s.to_string(),
+            target: t.to_string(),
+            relation: Relation::Calls,
+            confidence: sieve_core::Confidence::Extracted,
+        };
+        let graph = graph_with(
+            nodes,
+            vec![
+                call("a.rs#scan", "a.rs#seed"),
+                call("b.rs#other", "a.rs#seed"),
+            ],
+        );
+        let changed = vec![ChangedFile {
+            path: "a.rs".to_string(),
+            status: ChangeStatus::Modified,
+            old_path: None,
+            ranges: vec![LineRange { start: 2, end: 3 }],
+            hunks: Vec::new(),
+        }];
+        let dir = concept_dir("same-file");
+        let report = blast_radius(&graph, &dir, changed, "t".to_string(), Depth(None));
+        let listed: usize = report.modules.iter().map(|m| m.symbols.len()).sum();
+        assert_eq!(listed, report.impacted.len());
+        assert_eq!(listed, 2);
+    }
+
     /// DV6 (P3-25): the label tie-break is `localeCompare`, not byte order.
     #[test]
     fn test_p3_25_dv6_module_order_is_locale_compare() {
@@ -1949,9 +1981,9 @@ mod tests {
                 parent: None,
             });
         }
-        let changed: HashSet<&str> = [seed.path.as_str()].into_iter().collect();
+        let _ = &seed;
         let index = module_index_for(&concept_dir("order"));
-        let (modules, _) = group_by_module(&hits, &changed, &HashMap::new(), &index);
+        let (modules, _) = group_by_module(&hits, &HashMap::new(), &index);
         let labels: Vec<&str> = modules.iter().map(|m| m.label.as_str()).collect();
         assert_eq!(labels, vec!["alpha", "Zulu"]);
     }

@@ -1,4 +1,4 @@
-Usage: sieve blast [options] [dir]
+Usage: sieve impact [options] [dir]
 
 Blast radius of a diff: what depends on the lines this change touched ($0, no
 LLM). Built for CI — `--format markdown` is a PR comment with a Mermaid diagram.

@@ -1,4 +1,4 @@
-grep "render" · 14 hits in 11 symbols across 6 files · searched 7 files
+find "render" · 14 hits in 11 symbols across 6 files · searched 7 files
 
 renderPage  fn  packages/alpha/src/render.ts:1-3  · 1 link in
   1: export function renderPage(): string {
@@ -35,4 +35,4 @@ buildAlphaPage  fn  src/index.ts:4-6  · 0 links in
 
 buildBetaReport  fn  src/index.ts:8-10  · 0 links in
   9: return renderReport();
-[sieve] saved ≈ 11 tokens
+🎯 14 hits in 11 symbols

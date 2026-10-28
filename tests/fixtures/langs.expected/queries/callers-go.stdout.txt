@@ -14,7 +14,7 @@ greet  fn  cpp/app.cpp:10-12
       20: return g.greet();
 
 Greet  method  csharp/App.cs:6-6
-no callers found — the index has no incoming links for this symbol. 31 symbols share the name Greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve grep Greet
+no callers found — the index has no incoming links for this symbol. 31 symbols share the name Greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve find Greet
 
 Greet  method  csharp/App.cs:16-18
 1 caller
@@ -22,7 +22,7 @@ Greet  method  csharp/App.cs:16-18
       22: Console.WriteLine(app.Greet());
 
 greet  method  dart/app.dart:8-10
-no callers found — the index has no incoming links for this symbol. 31 symbols share the name greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve grep greet
+no callers found — the index has no incoming links for this symbol. 31 symbols share the name greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve find greet
 
 greet  fn  elixir/app.ex:2-4
 1 caller
@@ -40,16 +40,16 @@ greet  method  java/App.java:22-24
       32: System.out.println(app.greet());
 
 greet  method  java/App.java:5-5
-no callers found — the index has no incoming links for this symbol. 31 symbols share the name greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve grep greet
+no callers found — the index has no incoming links for this symbol. 31 symbols share the name greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve find greet
 
 greet  method  java/util/Helper.java:4-6
-no callers found — the index has no incoming links for this symbol. 31 symbols share the name greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve grep greet
+no callers found — the index has no incoming links for this symbol. 31 symbols share the name greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve find greet
 
 greet  method  kotlin/App.kt:20-22
-no callers found — the index has no incoming links for this symbol. 31 symbols share the name greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve grep greet
+no callers found — the index has no incoming links for this symbol. 31 symbols share the name greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve find greet
 
 greet  method  kotlin/App.kt:6-6
-no callers found — the index has no incoming links for this symbol. 31 symbols share the name greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve grep greet
+no callers found — the index has no incoming links for this symbol. 31 symbols share the name greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve find greet
 
 greet  method  lua/app.lua:10-12
 1 caller
@@ -62,10 +62,10 @@ greet  fn  nix/default.nix:4-4
       7: run = name: greet name;
 
 greet  var  ocaml/app.ml:3-3
-no callers found — the index has no incoming links for this symbol. 31 symbols share the name greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve grep greet
+no callers found — the index has no incoming links for this symbol. 31 symbols share the name greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve find greet
 
 greet  var  ocaml/app.ml:3-3
-no callers found — the index has no incoming links for this symbol. 31 symbols share the name greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve grep greet
+no callers found — the index has no incoming links for this symbol. 31 symbols share the name greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve find greet
 
 greet  method  php/App.php:25-27
 1 caller
@@ -73,13 +73,13 @@ greet  method  php/App.php:25-27
       32: echo $app->greet();
 
 greet  method  php/App.php:7-7
-no callers found — the index has no incoming links for this symbol. 31 symbols share the name greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve grep greet
+no callers found — the index has no incoming links for this symbol. 31 symbols share the name greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve find greet
 
 greet  method  r/app.R:16-18
-no callers found — the index has no incoming links for this symbol. 31 symbols share the name greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve grep greet
+no callers found — the index has no incoming links for this symbol. 31 symbols share the name greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve find greet
 
 greet  method  r/app.R:7-9
-no callers found — the index has no incoming links for this symbol. 31 symbols share the name greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve grep greet
+no callers found — the index has no incoming links for this symbol. 31 symbols share the name greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve find greet
 
 greet  fn  r/app.R:3-5
 1 caller
@@ -92,16 +92,16 @@ greet  method  ruby/app.rb:16-18
       23: app.greet
 
 greet  fn  rust/lib.rs:15-15
-no callers found — the index has no incoming links for this symbol. 31 symbols share the name greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve grep greet
+no callers found — the index has no incoming links for this symbol. 31 symbols share the name greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve find greet
 
 greet  fn  rust/lib.rs:23-25
-no callers found — the index has no incoming links for this symbol. 31 symbols share the name greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve grep greet
+no callers found — the index has no incoming links for this symbol. 31 symbols share the name greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve find greet
 
 greet  fn  scala/App.scala:6-6
-no callers found — the index has no incoming links for this symbol. 31 symbols share the name greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve grep greet
+no callers found — the index has no incoming links for this symbol. 31 symbols share the name greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve find greet
 
 greet  method  solidity/App.sol:11-13
-no callers found — the index has no incoming links for this symbol. 31 symbols share the name greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve grep greet
+no callers found — the index has no incoming links for this symbol. 31 symbols share the name greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve find greet
 
 greet  method  swift/App.swift:21-23
 1 caller
@@ -109,7 +109,7 @@ greet  method  swift/App.swift:21-23
       28: print(app.greet())
 
 greet  method  swift/App.swift:4-4
-no callers found — the index has no incoming links for this symbol. 31 symbols share the name greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve grep greet
+no callers found — the index has no incoming links for this symbol. 31 symbols share the name greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve find greet
 
 greet  method  vue/App.vue:13-15
 1 caller
@@ -117,5 +117,5 @@ greet  method  vue/App.vue:13-15
       20: return g.greet();
 
 greet  fn  zig/app.zig:6-8
-no callers found — the index has no incoming links for this symbol. 31 symbols share the name greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve grep greet
-[sieve] saved ≈ 175 tokens
+no callers found — the index has no incoming links for this symbol. 31 symbols share the name greet. A caller in another file is dropped, not guessed, so this may undercount. Check the name, or run sieve find greet
+🎯 14 exact callers

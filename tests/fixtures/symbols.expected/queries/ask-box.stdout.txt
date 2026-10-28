@@ -1,4 +1,4 @@
-ask  box value accessor · 3 hits
+query  box value accessor · 3 hits
 
 1  Box  class  ts/accessors.ts:1-15
    class Box
@@ -9,4 +9,5 @@ ask  box value accessor · 3 hits
 3  value  method  ts/accessors.ts:8-10
    set value(v: number)
 
-[sieve] only 3 hits — don't re-ask with new wording; switch tool: `sieve grep "<literal>"` for every occurrence · `sieve skeleton <file>` for a file's full API · `sieve callers <symbol>` for who-uses.
+[sieve] only 3 hits — don't re-ask with new wording; switch tool: `sieve find "<literal>"` for every occurrence · `sieve symbols <file>` for a file's full API · `sieve callers <symbol>` for who-uses.
+🎯 3 ranked hits

@@ -1,1 +1,1 @@
-sieve: no symbol named zzz in any of the 2 workspace repos — try sieve grep zzz
+sieve: no symbol named zzz in any of the 2 workspace repos — try sieve find zzz

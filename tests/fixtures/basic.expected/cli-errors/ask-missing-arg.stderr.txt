@@ -1,1 +1,1 @@
-sieve: ask needs a question — run sieve ask "how does login work"
+sieve: query needs a question — run sieve query "how does login work"

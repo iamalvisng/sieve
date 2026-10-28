@@ -1,4 +1,4 @@
-ask  bigwidget · 1 hit
+query  bigwidget · 1 hit
 
 1  bigwidget  fn  src/widget.ts:5-96
    function bigwidget(n: number): number
@@ -87,5 +87,5 @@ export function bigwidget(n: number): number {
 … (+12 more lines; open src/widget.ts:L5-L96)
 ```
 
-[sieve] only 1 hit — don't re-ask with new wording; switch tool: `sieve grep "<literal>"` for every occurrence · `sieve skeleton <file>` for a file's full API · `sieve callers <symbol>` for who-uses.
-[sieve] saved ≈ 19 tokens
+[sieve] only 1 hit — don't re-ask with new wording; switch tool: `sieve find "<literal>"` for every occurrence · `sieve symbols <file>` for a file's full API · `sieve callers <symbol>` for who-uses.
+🎯 1 ranked hits

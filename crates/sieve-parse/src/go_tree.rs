@@ -209,6 +209,7 @@ impl GoFile {
             default_export: false,
             reexport: None,
             ns_export: false,
+            by_value: false,
             rust: None,
             py: None,
             go: Some(crate::extract::GoRec::File(Box::new(GoFileRec {

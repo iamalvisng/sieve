@@ -5,8 +5,8 @@
 <p align="center"><img src="assets/banner.svg" alt="Six pixel mascots. Sieve, a kitchen sieve, is the default." width="480"></p>
 
 ```
-$ sieve ask "how does the dev server handle hot module replacement"
-ask  how does the dev server handle hot module replacement · 8 hits
+$ sieve query "how does the dev server handle hot module replacement"
+query  how does the dev server handle hot module replacement · 8 hits
 
 1  [packages/vite/] createServerModuleRunner  fn  packages/vite/src/node/ssr/runtime/serverModuleRunner.ts:143-160
    function createServerModuleRunner( environment: DevEnvironment, options: ServerModuleRunnerOptions = {}, ): ModuleRunner
@@ -36,7 +36,7 @@ cargo install --locked --git https://github.com/iamalvisng/sieve sieve-cli
 
 See [docs/guide/install.md](docs/guide/install.md) for each operating system.
 
-On vite (1,583 files), `sieve ask` answers in 158 ms median on an Apple M1 Pro. See [Proof](#proof).
+On vite (1,583 files), `sieve query` answers in 158 ms median on an Apple M1 Pro. See [Proof](#proof).
 
 <!-- DEMO: assets/pane-demo.gif, recorded by the owner. The caption names the Claude Code version. -->
 
@@ -44,8 +44,10 @@ Then run two commands in your repo:
 
 ```sh
 sieve build .
-sieve ask "how does login work"
+sieve query "how does login work"
 ```
+
+The old command names still work: `ask` for `query`, `grep` for `find`, `blast` for `impact` and `skeleton` for `symbols`.
 
 To wire Sieve into your agent, run `sieve init --dry-run`. The command lists every file `init` would write. Then run `sieve init`. For the Claude Code pane, run `sieve init --mod`.
 
@@ -75,7 +77,7 @@ The samples are real output from vite. A `...` line marks cut output.
 
 ### Find the code without grep
 
-`sieve ask` returns ranked symbols with exact file and line. The `--source` flag inlines the code. `sieve grep` finds every match and groups each hit under its symbol.
+`sieve query` returns ranked symbols with exact file and line. The `--source` flag inlines the code. `sieve find` finds every match and groups each hit under its symbol.
 
 ### See who calls a symbol
 
@@ -97,10 +99,10 @@ handleHMRUpdate  fn  packages/vite/src/node/server/hmr.ts:411-679
 
 ### See what a diff breaks before CI does
 
-`sieve blast` lists what depends on the lines your diff changed. It also says if a test reaches the code. This sample ran after one edited line in `handleHMRUpdate` (`hmr.ts`).
+`sieve impact` lists what depends on the lines your diff changed. It also says if a test reaches the code. This sample ran after one edited line in `handleHMRUpdate` (`hmr.ts`).
 
 ```
-$ sieve blast
+$ sieve impact
 your diff changes handleHMRUpdate · 1 symbol in 2 files · 1 of 1 reached by a test · working tree vs HEAD
 3 callers affected within 2 hops
 └─ onHMRUpdate  fn  packages/vite/src/node/server/index.ts:908-915
@@ -114,10 +116,10 @@ not indexed  1 file: .gitignore
 
 ### Read a file as an outline
 
-`sieve skeleton` prints the outline of one file with line ranges.
+`sieve symbols` prints the outline of one file with line ranges.
 
 ```
-$ sieve skeleton packages/vite/src/node/server/index.ts
+$ sieve symbols packages/vite/src/node/server/index.ts
 packages/vite/src/node/server/hmr.ts · 42 symbols
     48-56  WsOptions  iface
     58-88  HmrOptions  iface
@@ -175,7 +177,7 @@ Sieve denies every second read of an unchanged file. The read after a deny passe
 
 ### MCP
 
-`sieve mcp` serves the index to any MCP host over stdio. The server has seven tools: `sieve_find_code`, `sieve_find_all`, `sieve_trace_calls`, `sieve_file_api`, `sieve_repo_map`, `sieve_check_freshness` and `sieve_why`.
+`sieve mcp` serves the index to any MCP host over stdio. The server has seven tools: `sieve_query`, `sieve_find`, `sieve_callers`, `sieve_symbols`, `sieve_map`, `sieve_check` and `sieve_why`. The old tool names still work as hidden aliases.
 
 Register it with `{ "mcpServers": { "sieve": { "command": "sieve", "args": ["mcp"] } } }`. See [docs/guide/mcp.md](docs/guide/mcp.md).
 
@@ -189,8 +191,8 @@ Sieve 0.1.0 on an Apple M1 Pro with 16 GB of memory, macOS 26.5.2, except the cr
 | Cold build | vite 10033218 (1583 files) | 1.83 s | Median of 3 builds, each on a fresh copy. |
 | Warm build | ripgrep 3fce3b5 | 0.31 s | Median of 5 builds with no change. |
 | Warm build | vite 10033218 | 0.80 s | Median of 5 builds with no change. |
-| `ask` latency | ripgrep 3fce3b5 | 62 ms median, 101 ms max | Wall time of one `sieve ask` process. 30 timings: 10 questions, 3 runs each. |
-| `ask` latency | vite 10033218 | 158 ms median, 185 ms max | The same method. |
+| `query` latency | ripgrep 3fce3b5 | 62 ms median, 101 ms max | Wall time of one `sieve query` process. 30 timings: 10 questions, 3 runs each. |
+| `query` latency | vite 10033218 | 158 ms median, 185 ms max | The same method. |
 | Exact cross-file calls | vite 10033218 | 1,272 of 1,272 match the TypeScript compiler | Name-level match. Inferred calls are not counted. |
 | Cross-file rename | vite 10033218, execa v9.6.0 | 0 wrong edits; 162 of 300 and 283 of 300 renamed, the rest refused | Each plan compared with the TypeScript language service rename. |
 

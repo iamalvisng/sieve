@@ -106,15 +106,19 @@ enum Command {
     #[command(about = build_about())]
     Build(build::BuildArgs),
     /// Queries the indexed graph for ranked hits.
-    Ask(ask::AskArgs),
+    #[command(alias = "ask")]
+    Query(ask::AskArgs),
     /// Searches the indexed graph for a pattern.
-    Grep(grep::GrepArgs),
+    #[command(alias = "grep")]
+    Find(grep::GrepArgs),
     /// Summarizes one file's definitions, signatures only.
-    Skeleton(skeleton::SkeletonArgs),
+    #[command(alias = "skeleton")]
+    Symbols(skeleton::SkeletonArgs),
     /// Walks who calls, references, implements or extends a symbol.
     Callers(callers::CallersArgs),
     /// Reports what a diff's changed lines reach.
-    Blast(blast::BlastArgs),
+    #[command(alias = "blast")]
+    Impact(blast::BlastArgs),
     /// Reports a deterministic, token-budgeted repo orientation.
     Map(map::MapArgs),
     /// Checks whether the committed graph still matches the code.
@@ -171,14 +175,18 @@ const SUBCOMMAND_NAMES: &[&str] = &[
     "version",
     "upgrade",
     "build",
+    "query",
     "ask",
+    "symbols",
     "skeleton",
     "check",
     "stats",
     "viz",
     "mcp",
     "callers",
+    "impact",
     "blast",
+    "find",
     "grep",
     "map",
     "init",
@@ -499,11 +507,11 @@ fn main() -> ExitCode {
 fn run(cli: Cli) -> Result<(), String> {
     match cli.command {
         Command::Build(args) => build::run(&args, cli.context_dir.as_deref()),
-        Command::Ask(args) => ask::run(&args, cli.context_dir.as_deref()),
-        Command::Grep(args) => grep::run(&args, cli.context_dir.as_deref()),
-        Command::Skeleton(args) => skeleton::run(&args, cli.context_dir.as_deref()),
+        Command::Query(args) => ask::run(&args, cli.context_dir.as_deref()),
+        Command::Find(args) => grep::run(&args, cli.context_dir.as_deref()),
+        Command::Symbols(args) => skeleton::run(&args, cli.context_dir.as_deref()),
         Command::Callers(args) => callers::run(&args, cli.context_dir.as_deref()),
-        Command::Blast(args) => blast::run(&args, cli.context_dir.as_deref()),
+        Command::Impact(args) => blast::run(&args, cli.context_dir.as_deref()),
         Command::Map(args) => map::run(&args, cli.context_dir.as_deref()),
         Command::Check(args) => check::run(&args, cli.context_dir.as_deref()),
         Command::Mcp(args) => mcp::run(&args, cli.context_dir.as_deref()),
@@ -565,7 +573,7 @@ mod tests {
             let sub = root.find_subcommand(name).expect(name);
             let mut clap_flags: Vec<String> = sub
                 .get_arguments()
-                .filter(|a| !a.is_global_set())
+                .filter(|a| !a.is_global_set() && !a.is_hide_set())
                 .filter_map(|a| a.get_long())
                 // `--global` on `init` and `uninstall` is a Sieve-only flag
                 // (a deliberate design choice); the text does not list it.
@@ -618,7 +626,7 @@ mod tests {
             Some(std::path::Path::new("sieve"))
         );
         match cli.command {
-            Command::Ask(a) => assert_eq!(a.limit, 2),
+            Command::Query(a) => assert_eq!(a.limit, 2),
             _ => panic!("not ask"),
         }
     }

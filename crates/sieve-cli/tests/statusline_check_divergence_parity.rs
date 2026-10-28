@@ -132,7 +132,7 @@ fn test_p4_24_billed_session_keeps_the_billing_fields() {
         .to_string_lossy()
         .into_owned();
     let savings_json = format!(
-        r#"{{"session_id":"billed-session","transcript_path":"{transcript}","cwd":"{copy_str}","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{{"command":"sieve ask \"how does run work\" . --json -n 3"}},"tool_response":{{"stdout":"[sieve] tokens saved ≈ 12000 (72%); this pack ≈ 160 tok vs reading the 3 file(s) whole ≈ 580 tok (estimate).","stderr":""}}}}"#
+        r#"{{"session_id":"billed-session","transcript_path":"{transcript}","cwd":"{copy_str}","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{{"command":"sieve query \"how does run work\" . --json -n 3"}},"tool_response":{{"stdout":"[sieve] tokens saved ≈ 12000 (72%); this pack ≈ 160 tok vs reading the 3 file(s) whole ≈ 580 tok (estimate).","stderr":""}}}}"#
     );
     run_sieve(&copy, &home, &["hook", "tool-savings"], Some(&savings_json));
 

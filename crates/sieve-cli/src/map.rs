@@ -8,7 +8,7 @@ use serde::Serialize;
 
 use sieve_core::workspace;
 use sieve_query::map::{build_repo_map, format_repo_map, map_saved_paths, MapOptions};
-use sieve_savings::{savings_for, with_savings, with_savings_nl};
+use sieve_savings::savings_for;
 
 use crate::query;
 
@@ -108,33 +108,17 @@ pub fn run(args: &MapArgs, dir_override: Option<&Path>) -> Result<(), String> {
         return Ok(());
     }
 
-    // `format_repo_map` appends its own trailing newline, but
-    // `with_savings(body, saved)` plus a newline measures the savings pack on
-    // `body` with no trailing newline, then adds one newline after the
-    // whole header-plus-body string (section 4.6). Stripping it here
-    // before the pack measurement, then adding it back after, keeps the
-    // printed bytes identical while fixing the token count at the
-    // boundary where the extra `\n` would round differently.
-    let rendered = format_repo_map(&map);
-    let body = rendered.strip_suffix('\n').unwrap_or(&rendered);
-    let saved_paths = map_saved_paths(&graph);
-    let saved = savings_for(&graph, &saved_paths);
-    print!(
-        "{}",
-        with_savings_nl(sieve_core::product().name, body, saved.as_ref())
-    );
+    // `map` has no answer line: no narrow baseline exists for it.
+    print!("{}", format_repo_map(&map));
     Ok(())
 }
 
-/// The workspace `map` (P1-54): one section per built child, each with
-/// its own savings header, then the coverage note.
+/// The workspace `map` (P1-54): one section per built child, then the
+/// coverage note.
 fn run_workspace(root: &Path, context_dir: &Path, max_dirs: Option<usize>) -> Result<(), String> {
     let graphs = sieve_query::workspace::load_children(root, context_dir);
-    let text = sieve_query::workspace::federate_map(&graphs, max_dirs, |graph, body| {
-        let saved = savings_for(graph, &map_saved_paths(graph));
-        with_savings(sieve_core::product().name, body, saved.as_ref())
-            .trim_end_matches('\n')
-            .to_string()
+    let text = sieve_query::workspace::federate_map(&graphs, max_dirs, |_, body| {
+        body.trim_end_matches('\n').to_string()
     });
     print!("{text}");
     Ok(())

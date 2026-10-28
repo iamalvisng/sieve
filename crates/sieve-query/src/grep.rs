@@ -206,7 +206,7 @@ fn v8_reason(pattern: &str, raw: &str) -> String {
 }
 
 /// Maps a `regress` parse error to V8's `SyntaxError.message` wording,
-/// the text `sieve grep` prints for a bad pattern.
+/// the text `sieve find` prints for a bad pattern.
 pub fn v8_error_message(pattern: &str, err: &regress::Error) -> String {
     format!(
         "Invalid regular expression: /{pattern}/: {}",
@@ -507,7 +507,7 @@ pub fn format_grep_result(r: &GrepResult) -> String {
     let files_hit: std::collections::HashSet<&str> =
         r.groups.iter().map(|g| g.path.as_str()).collect();
     let header = format!(
-        "grep \"{}\" \u{b7} {} in {} across {} \u{b7} searched {}",
+        "find \"{}\" \u{b7} {} in {} across {} \u{b7} searched {}",
         r.pattern,
         sieve_core::voice::count(r.total_hits, "hit"),
         sieve_core::voice::count(r.groups.len(), "symbol"),
@@ -551,7 +551,7 @@ fn collapse_trailing_newlines(s: &str) -> String {
 pub fn zero_hit_note(r: &GrepResult) -> String {
     let mut note = format!(
         "no hits for \"{}\" in {} indexed files \u{2014} try a bare symbol name or a short \
-substring, or run {} ask \"<question>\". Use raw grep -rn only for files the index does not hold",
+substring, or run {} query \"<question>\". Use raw grep -rn only for files the index does not hold",
         r.pattern,
         r.files_searched,
         sieve_core::product().name
@@ -843,7 +843,7 @@ mod tests {
     #[test]
     fn test_p1_12_p3_19_default_cap_keeps_300_hits_and_cuts_text_at_160_units() {
         // Every literal below is the recorded output on the same tree:
-        // `sieve grep hit` and `sieve grep hit --json` over a.ts (301
+        // `sieve find hit` and `sieve find hit --json` over a.ts (301
         // matching lines, the long one first) and b.ts (one line, no hit).
         let mut graph = empty_graph();
         graph.nodes.push(file_node("a.ts", 301));
@@ -860,7 +860,7 @@ mod tests {
         assert_eq!(first.encode_utf16().count(), 160);
         assert_eq!(
             format_grep_result(&result).lines().next(),
-            Some("grep \"hit\" \u{b7} 300 hits in 1 symbol across 1 file \u{b7} searched 2 files")
+            Some("find \"hit\" \u{b7} 300 hits in 1 symbol across 1 file \u{b7} searched 2 files")
         );
     }
 

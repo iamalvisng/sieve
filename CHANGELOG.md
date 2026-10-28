@@ -5,6 +5,40 @@ All notable changes to this project are in this file.
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - 2026-10-28
+
+This release gives the commands names that state their intent, adds an MCP rename tool, and indexes shell scripts.
+
+### Changed
+
+- New command names: `ask` is now `query`, `grep` is now `find`, `blast` is now `impact`, and `skeleton` is now `symbols`. `callers`, `why`, `map`, `rename` and `check` keep their names.
+- The old command names still work as aliases.
+- New MCP tool names: `sieve_query`, `sieve_find`, `sieve_callers`, `sieve_symbols`, `sieve_map`, `sieve_why`, `sieve_rename` and `sieve_check`. A call with an old tool name still works. `tools/list` shows only the new names.
+- The answer line is `🎯 <answer> · ~N tokens saved`. The estimate uses a narrow baseline for each command. Totals count only answers made with this formula.
+- The status line shows `sieve · ~N this session · ~N today`, with the mascot face beside it. The mascot blinks.
+- The first build after the upgrade re-parses every file.
+
+### Added
+
+- `sieve symbols --json` gives `inDegree`, the caller count, for each entry.
+- The `sieve_rename` MCP tool. A call without `write` is a dry run. `write: true` changes files and needs the `plan_id` of a dry run in `expect`.
+- Sieve indexes shell scripts (`.sh`, `.bash`): functions, and the code outside them.
+- Exact Rust call links for calls inside format and assert macro arguments, such as `println!("{}", f(x))`.
+- Exact call links for a function passed as a value, such as `.map(helper)` or `sorted(xs, key=score)`, in Rust, TypeScript, JavaScript and Python. Sieve adds the link only when it proves the target.
+- The pane has SESSION, TODAY and 7 DAYS tiles that wrap, and new views for `why` and `map`. The pane draws no background of its own.
+- The `bin` key in `.sieve/config.json` picks the binary that the pane runs. The pane reads the key on each run.
+
+### Fixed
+
+- `sieve init --mod` no longer adds a second set of hooks when the existing hooks call Sieve by a quoted or `$VAR` path.
+- `query` ranks code above test functions when the question does not ask for tests. A "how does ... work" question no longer matches the word "work".
+- `impact` counts the callers in the changed file.
+- A lock whose owner process has stopped no longer blocks a graph refresh.
+- `map` keeps a space before each count and lists every indexed language.
+- The pane shows the error of a failed command, not "output that is not JSON". If the binary is too old for a command, the pane names the binary and its version.
+- The pane SESSION tile shows the current session. Before, it showed the newest session file.
+- The pane file view lists the most called symbols of every file. Before, it found them only for some folders.
+
 ## [0.1.9] - 2026-10-28
 
 This release adds `sieve rename`, a cross-file rename for TypeScript and JavaScript top-level functions.

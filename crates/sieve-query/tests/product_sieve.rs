@@ -72,7 +72,7 @@ fn rename_table_query_output_names_sieve() {
     let ask_result = ask(&graph, index.as_ref(), "double", &opts, &expected_dir).expect("ask runs");
     let ask_rendered = format_ask(&ask_result);
     assert!(
-        ask_rendered.starts_with("ask  double"),
+        ask_rendered.starts_with("query  double"),
         "rendered ask text: {ask_rendered}"
     );
 

@@ -1,4 +1,4 @@
-//! Parity tests for `sieve blast --format markdown`, `--format mermaid`
+//! Parity tests for `sieve impact --format markdown`, `--format mermaid`
 //! and the owner block (DV1 and DV5; P1-24, P1-25, P1-26, P3-25), against
 //! the goldens under `tests/fixtures/edges.expected/blast-fmt/`. Each
 //! case is one `tests/inputs/blast-fmt/<id>.sh` in the `blast-dv` shape.
@@ -147,7 +147,7 @@ fn run_case(id: &str) -> (String, String, i32) {
         .args(&argv)
         .current_dir(&temp.path)
         .output()
-        .expect("run sieve blast");
+        .expect("run sieve impact");
     let got = (
         mask_tmp(&String::from_utf8_lossy(&output.stdout), &temp.path),
         normalize_stderr(&mask_tmp(

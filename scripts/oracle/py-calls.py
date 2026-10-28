@@ -10,6 +10,8 @@ up the SCIP reference at each callee name, and writes one JSON row per call:
 dst_line is the line of the target definition name (the `def`/`class` line).
 A symbol with 2 or more definitions: every row has "ambiguous": true.
 A call to a class also writes a row for its __init__ when SCIP defines it.
+A function used as a value in an argument position writes a row with shape
+"ref_" + the call shape (ref_bare, ref_self_method, ...).
 Shapes: bare, local_def, from_import, alias, relative, reexport, star,
 module_attr, ctor, class_attr, self_method, typed_local, member.
 Env SCIP_PYTHON=<index.js> overrides the scip-python path; SCIP_KEEP=<path>
@@ -148,10 +150,13 @@ def main():
             if not o["role"] & 1 and "range" in o and o.get("sym"):
                 at[(o["range"][0], o["range"][1])] = o["sym"]
         froms, mods, star = build_ctx(tree)
+        sites = []  # (callee-or-argument node, is a function used as a value)
         for n in ast.walk(tree):
-            if not isinstance(n, ast.Call):
-                continue
-            f = n.func
+            if isinstance(n, ast.Call):
+                sites.append((n.func, False))
+                sites += [(a, True) for a in n.args + [k.value for k in n.keywords]
+                          if isinstance(a, (ast.Name, ast.Attribute))]
+        for f, ref in sites:
             if isinstance(f, ast.Name):
                 l0, c0, nm = f.lineno - 1, f.col_offset, f.id
             elif isinstance(f, ast.Attribute) and f.end_lineno == f.lineno:
@@ -163,6 +168,8 @@ def main():
                 continue
             ds = defs[sym]
             name, kind = sym_info(sym)
+            if ref and kind != "f":
+                continue
             if isinstance(f, ast.Name):
                 if kind == "c": shape = "ctor"
                 elif ds[0][0] == rel: shape = "local_def"
@@ -183,6 +190,8 @@ def main():
                     vs = at.get((v.lineno - 1, v.col_offset), "")
                     shape = "class_attr" if vs.endswith("#") else "typed_local"
                 else: shape = "member"
+            if ref:
+                shape = "ref_" + shape
             targets = [(ds, name)]
             if kind == "c":
                 init = sym + "__init__()."

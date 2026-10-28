@@ -1,4 +1,4 @@
-//! The `sieve ask` subcommand: a ranked-hit query over the indexed graph
+//! The `sieve query` subcommand: a ranked-hit query over the indexed graph
 //! (the `ask-ranking.md` note).
 
 use std::path::{Path, PathBuf};
@@ -11,13 +11,11 @@ use sieve_query::ask::{
     ask, define, format_ask, format_ask_json, format_def, single_ident, AskOptions, AskSaved, Ident,
 };
 use sieve_query::workspace::{federate_ask, FederateAskOptions};
-use sieve_savings::{
-    append_line, ask_pack_region, savings_for, sieve_header, to_tokens, utf16_len,
-};
+use sieve_savings::{append_line, def_line, ranked_line, savings_for};
 
 use crate::query;
 
-/// Flags for `sieve ask`.
+/// Flags for `sieve query`.
 #[derive(Args, Debug)]
 pub struct AskArgs {
     /// The natural-language question to search the graph for.
@@ -60,7 +58,7 @@ pub struct AskArgs {
     pub no_refresh: bool,
 }
 
-/// Runs `sieve ask`: the query prelude, the sidecar load, the scoring
+/// Runs `sieve query`: the query prelude, the sidecar load, the scoring
 /// engine, then the report.
 pub fn run(args: &AskArgs, dir_override: Option<&Path>) -> Result<(), String> {
     let (root, context_dir) =
@@ -113,8 +111,8 @@ pub fn run(args: &AskArgs, dir_override: Option<&Path>) -> Result<(), String> {
     Ok(())
 }
 
-/// The lean `--def` answer: the definition, then the savings line computed
-/// as `--source` computes it, over the top definition's file.
+/// The lean `--def` answer: the definition, then the answer line. The
+/// baseline is the top definition's whole file.
 fn render_def(
     graph: &sieve_core::wiring::Graph,
     root: &Path,
@@ -123,14 +121,12 @@ fn render_def(
 ) -> String {
     let def = define(graph, ident, in_prefix);
     let body = format_def(graph, root, ident, &def, in_prefix);
-    let saved = def
-        .nodes
-        .first()
-        .and_then(|top| savings_for(graph, std::slice::from_ref(&top.path)));
-    match saved.and_then(|s| savings_line(s.baseline_chars, &body)) {
-        Some(line) => append_line(&body, &line),
-        None => body,
-    }
+    let Some(top) = def.nodes.first() else {
+        return body;
+    };
+    let baseline =
+        savings_for(graph, std::slice::from_ref(&top.path)).map_or(0, |s| s.baseline_chars);
+    append_line(&body, &def_line(&top.name, baseline, &body))
 }
 
 /// The workspace `ask` (P1-56): each child answers, and the merged result
@@ -172,46 +168,15 @@ fn source_saved(
     })
 }
 
-/// Renders the text report, with the `ask --source` savings sentence
-/// as the last line when the rule in `ask-ranking.md` section 7.9 keeps it.
+/// Renders the text report, with the ranked answer line as the last line
+/// when the result holds a hit.
 fn render_text(result: &sieve_query::ask::AskResult) -> String {
     let body = format_ask(result);
-    match source_savings_line(result, &body) {
-        Some(line) => append_line(&body, &line),
-        None => body,
+    if result.hits.is_empty() {
+        body
+    } else {
+        append_line(&body, &ranked_line(result.hits.len()))
     }
-}
-
-/// The `ask --source` savings sentence (section 7.9), or `None` when the
-/// rule omits it: no `saved` (no `--source`, or no baseline), a zero
-/// baseline, or a pack that is not smaller than the baseline.
-fn source_savings_line(
-    result: &sieve_query::ask::AskResult,
-    rendered_body: &str,
-) -> Option<String> {
-    savings_line(result.saved?.baseline_chars, rendered_body)
-}
-
-/// The savings sentence for a baseline and a rendered body, or `None` when
-/// the baseline is zero or the pack is not smaller.
-fn savings_line(baseline_chars: u64, rendered_body: &str) -> Option<String> {
-    if baseline_chars == 0 {
-        return None;
-    }
-    let pack = to_tokens(utf16_len(&pack_region(rendered_body)));
-    let base = to_tokens(baseline_chars);
-    if base <= pack {
-        return None;
-    }
-    let delta = base - pack;
-    Some(sieve_header(sieve_core::product().name, delta))
-}
-
-/// The rendered body with the escalation nudge and the final newline cut
-/// away, for the `pack` measurement in section 7.9 (`ask_pack_region`,
-/// shared with `sieve-daemon`'s `find_code`).
-fn pack_region(rendered: &str) -> String {
-    ask_pack_region(sieve_core::product().name, rendered)
 }
 
 /// Every repo-relative file path a set of hits points into
@@ -295,95 +260,5 @@ mod tests {
                 "sourceless-slug".to_string(),
             ]
         );
-    }
-
-    #[test]
-    fn pack_region_strips_the_escalation_nudge_but_keeps_the_header() {
-        let rendered = "sieve ask — \"x\"  (lexical)\n\n1. a\n   b\n\n[sieve] only 1 hit — switch tool: `sieve grep \"x\"`\n";
-        assert_eq!(
-            pack_region(rendered),
-            "sieve ask — \"x\"  (lexical)\n\n1. a\n   b"
-        );
-    }
-
-    #[test]
-    fn pack_region_keeps_the_body_when_there_is_no_nudge() {
-        let rendered = "sieve ask — \"x\"  (lexical)\n\n1. a\n   b\n";
-        assert_eq!(
-            pack_region(rendered),
-            "sieve ask — \"x\"  (lexical)\n\n1. a\n   b"
-        );
-    }
-
-    /// Pins the pack measurement to the `formatAsk` rule:
-    /// `body = lines.join("\n").trimEnd()`, header included, nudge and the
-    /// final newline excluded. Built by hand from two hits — one with a
-    /// three-line `code` block — so the expected string is the exact region
-    /// the savings line measures.
-    #[test]
-    fn pack_region_matches_golden_body_length_with_a_code_hit() {
-        use sieve_query::ask::{AskHit, AskMode, AskResult};
-
-        let hits = vec![
-            AskHit {
-                id: "one".to_string(),
-                kind: "symbol".to_string(),
-                title: "one".to_string(),
-                pointer: "a.ts:L1-L3".to_string(),
-                snippet: String::new(),
-                related: Vec::new(),
-                relation: None,
-                score: 1.0,
-                scope: None,
-                code: Some("line1\nline2\nline3".to_string()),
-                scope_last: false,
-                path: "a.ts".to_string(),
-                span: Some("L1-L3".to_string()),
-            },
-            AskHit {
-                id: "two".to_string(),
-                kind: "symbol".to_string(),
-                title: "two".to_string(),
-                pointer: "b.ts:L1-L1".to_string(),
-                snippet: String::new(),
-                related: Vec::new(),
-                relation: None,
-                score: 1.0,
-                scope: None,
-                code: None,
-                scope_last: false,
-                path: "b.ts".to_string(),
-                span: Some("L1-L1".to_string()),
-            },
-        ];
-        let result = AskResult {
-            query: "q".to_string(),
-            mode: AskMode::Lexical,
-            subject: None,
-            hits,
-            scopes: None,
-            coverage: Some(0.0),
-            coverage_strong: Some(0.0),
-            ranking: None,
-            note: None,
-            saved: None,
-            pagerank_for_test: None,
-        };
-
-        let rendered = sieve_query::ask::format_ask(&result);
-
-        // Built by hand from the report rules: the header, a blank line,
-        // then each hit's row `"N  name  kind  path:start-end"`, its fenced
-        // `code` block when present, and a blank line after each hit. No
-        // scope footer (no `scopes`), no rules. `trimEnd()` then drops the
-        // last hit's trailing blank line. This is the exact `body` the
-        // `askSavingsLine` measures: header included, nudge excluded (4
-        // hits or fewer triggers the nudge, but it is appended after the
-        // measurement, so it never counts toward `pack`).
-        let expected = "ask  q \u{b7} 2 hits\n\n\
-1  one  symbol  a.ts:1-3\n\n```\nline1\nline2\nline3\n```\n\n\
-2  two  symbol  b.ts:1-1";
-
-        assert_eq!(pack_region(&rendered), expected);
     }
 }

@@ -1,7 +1,8 @@
-grep "dubble" · 2 hits in 2 symbols across 1 file · searched 7 files
+find "dubble" · 2 hits in 2 symbols across 1 file · searched 7 files
 
 dubble  fn  src/util.ts:1-3  · 1 link in
   1: export function dubble(n: number): number {
 
 quadruple  fn  src/util.ts:5-7  · 1 link in
   6: return dubble(dubble(n));
+🎯 2 hits in 2 symbols

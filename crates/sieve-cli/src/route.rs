@@ -855,7 +855,7 @@ fn render(
 }
 
 /// The innermost symbol around `line`: the greatest start wins, and a tie
-/// keeps the later node (the rule of `sieve grep`).
+/// keeps the later node (the rule of `sieve find`).
 fn enclosing(symbols: &[Sym], line: u32) -> Option<&Sym> {
     let mut best: Option<&Sym> = None;
     for sym in symbols {

@@ -1,4 +1,4 @@
-ask  parse config · 2 hits
+query  parse config · 2 hits
 
 1  [alpha/] parseConfigFile  fn  alpha/src/a.ts:9-11
    function parseConfigFile(path: string): string
@@ -20,4 +20,4 @@ export function parseConfigRoot(text: string): string {
 matched in: alpha/ (1) · gamma/ (1)
 also matched: beta/ — narrow with --in beta/
 
-[sieve] only 2 hits — don't re-ask with new wording; switch tool: `sieve grep "<literal>"` for every occurrence · `sieve skeleton <file>` for a file's full API · `sieve callers <symbol>` for who-uses.
+[sieve] only 2 hits — don't re-ask with new wording; switch tool: `sieve find "<literal>"` for every occurrence · `sieve symbols <file>` for a file's full API · `sieve callers <symbol>` for who-uses.

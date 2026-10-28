@@ -120,8 +120,8 @@ fn rename_table_cli_grep_savings_line_names_sieve() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("[sieve] saved \u{2248} "),
-        "grep stdout must open its savings line with [sieve], got: {stdout}"
+        stdout.contains("\u{1f3af} ") && stdout.contains(" hits in "),
+        "grep stdout must end with its answer line, got: {stdout}"
     );
 }
 
@@ -143,8 +143,8 @@ fn rename_table_cli_ask_source_savings_line_names_sieve() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("[sieve] saved \u{2248} "),
-        "ask --source stdout must open its savings line with [sieve], got: {stdout}"
+        stdout.contains("\u{1f3af} ") && stdout.contains(" ranked hits"),
+        "ask --source stdout must end with its answer line, got: {stdout}"
     );
     assert!(
         !stdout.contains("At the end of your reply"),
@@ -227,7 +227,7 @@ fn rename_table_cli_hook_tool_savings_sums_sieve_marker() {
 
     let stdin = format!(
         "{{\"session_id\":\"sess1\",\"cwd\":\"{}\",\"tool_name\":\"Bash\",\
-         \"tool_response\":{{\"stdout\":\"[sieve] saved \u{2248} 100 tokens\"}}}}",
+         \"tool_response\":{{\"stdout\":\"\u{1f3af} 1 signatures \u{b7} ~100 tokens saved\"}}}}",
         copy.path.display()
     );
     Command::new(sieve_bin())

@@ -2,4 +2,4 @@ latinString  fn  ts/latin.ts:2-4
 1 caller
 └─ latinCaller  fn  ts/latin.ts:5-7
       6: return latinString().length; // caf�
-[sieve] saved ≈ 15 tokens
+🎯 1 exact callers

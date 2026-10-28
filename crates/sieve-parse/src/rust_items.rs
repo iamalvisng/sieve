@@ -109,6 +109,7 @@ pub fn push_file_record(
         default_export: false,
         reexport: None,
         ns_export: false,
+        by_value: false,
         rust: Some(RustRec::File { items }),
         py: None,
         go: None,

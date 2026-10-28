@@ -8,7 +8,7 @@ use sieve_core::collate::collate;
 use sieve_core::{Kind, Node};
 
 use super::concept::ConceptDoc;
-use super::lexical::{has_exact, has_term, Corpus, DocBag};
+use super::lexical::{has_exact, has_term, inline_test_factor, Corpus, DocBag};
 use super::{kind_word, test_factor, AskHit, RankGroup, Ranking};
 
 fn clamp01(x: f64) -> f64 {
@@ -115,7 +115,11 @@ pub(crate) fn build_candidates<'a>(
             0.0
         };
         let graph = pr.get(id).copied().unwrap_or(0.0);
-        let rank_factor = test_factor(query_wants_tests, &node.path);
+        let inline = match docs.and_then(|(d, t)| d.get(id).map(|d| (d, t))) {
+            Some((d, t)) => inline_test_factor(query_wants_tests, d, t),
+            None => 1.0,
+        };
+        let rank_factor = test_factor(query_wants_tests, &node.path).min(inline);
         let baseline = (lexical + super::GRAPH_WEIGHT * graph) * rank_factor;
         if baseline <= 0.0 {
             continue;
@@ -875,6 +879,7 @@ mod tests {
                 path: bag(&["a", "rs"]),
                 body: Vec::new(),
                 body_len: 0,
+                inline_test: false,
             },
         );
         let lex: HashMap<String, f64> = [(n.id.clone(), 1.0)].into_iter().collect();
@@ -882,6 +887,33 @@ mod tests {
         let nodes = [&n];
         let cands = build_candidates(&nodes, &lex, &HashMap::new(), false, Some((&docs, &terms)));
         assert_eq!(cands[0].matched_terms, vec!["render".to_string()]);
+    }
+
+    #[test]
+    fn build_candidates_ranks_an_inline_test_below_a_code_symbol() {
+        let code = node("a.rs#run_code", "run_code", Kind::Function, "a.rs", "L1-L2");
+        let test = node("a.rs#run_test", "run_test", Kind::Function, "a.rs", "L5-L6");
+        let bag = |words: &[&str]| -> Vec<(String, u32)> {
+            words.iter().map(|w| (w.to_string(), 1)).collect()
+        };
+        let mk = |name: &[&str], inline_test| DocBag {
+            name: bag(name),
+            path: bag(&["a", "rs"]),
+            body: Vec::new(),
+            body_len: 0,
+            inline_test,
+        };
+        let mut docs: HashMap<&str, DocBag> = HashMap::new();
+        docs.insert(code.id.as_str(), mk(&["run", "code"], false));
+        docs.insert(test.id.as_str(), mk(&["run", "test"], true));
+        let lex: HashMap<String, f64> = [(code.id.clone(), 1.0), (test.id.clone(), 1.0)]
+            .into_iter()
+            .collect();
+        let terms = vec!["run".to_string(), "stop".to_string()];
+        let nodes = [&code, &test];
+        let cands = build_candidates(&nodes, &lex, &HashMap::new(), false, Some((&docs, &terms)));
+        let base = |id: &str| cands.iter().find(|c| c.node.id == id).unwrap().baseline;
+        assert!(base("a.rs#run_test") < base("a.rs#run_code"));
     }
 
     /// P3-08: two concepts with an equal score tie on title, so the one whose

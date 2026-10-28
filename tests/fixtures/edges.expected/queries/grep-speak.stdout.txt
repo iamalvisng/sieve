@@ -1,4 +1,4 @@
-grep "speak" · 5 hits in 4 symbols across 2 files · searched 12 files
+find "speak" · 5 hits in 4 symbols across 2 files · searched 12 files
 
 Dog.speak  method  py/derived.py:7-8  · 2 links in
   7: def speak(self):
@@ -12,3 +12,4 @@ Dog.twice  method  py/derived.py:10-11  · 0 links in
 
 make  fn  py/derived.py:14-16  · 0 links in
   16: return d.speak()
+🎯 5 hits in 4 symbols

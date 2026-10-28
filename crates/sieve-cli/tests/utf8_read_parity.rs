@@ -223,7 +223,7 @@ fn test_p3_26_dv7_blast_seeds_a_latin1_edit_like_golden() {
         .args(["blast", "--format", "text", "-d", "1"])
         .current_dir(&temp.path)
         .output()
-        .expect("run sieve blast");
+        .expect("run sieve impact");
     assert_matches_golden(
         "blast",
         (

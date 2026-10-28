@@ -1,7 +1,8 @@
-ask  notes · 1 hit
+query  notes · 1 hit
 
 1  Widget Notes  concept  src/widget.ts
    The widget helpers add one to a number and sum a fixed series.
    related: gadget-notes, sprocket-notes
 
-[sieve] only 1 hit — don't re-ask with new wording; switch tool: `sieve grep "<literal>"` for every occurrence · `sieve skeleton <file>` for a file's full API · `sieve callers <symbol>` for who-uses.
+[sieve] only 1 hit — don't re-ask with new wording; switch tool: `sieve find "<literal>"` for every occurrence · `sieve symbols <file>` for a file's full API · `sieve callers <symbol>` for who-uses.
+🎯 1 ranked hits

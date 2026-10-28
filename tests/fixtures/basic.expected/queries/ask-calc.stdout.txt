@@ -1,4 +1,4 @@
-ask  calculator total · 4 hits
+query  calculator total · 4 hits
 
 1  Calculator  class  py/main.py:4-6
    class Calculator
@@ -11,3 +11,4 @@ ask  calculator total · 4 hits
 
 4  run  fn  py/main.py:9-11
    def run()
+🎯 4 ranked hits

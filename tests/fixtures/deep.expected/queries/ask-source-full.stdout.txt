@@ -1,4 +1,4 @@
-ask  quadruple · 7 hits
+query  quadruple · 7 hits
 
 1  quadruple  fn  src/util.ts:5-7
    This function quadruples the input number by applying the double function twice, demonstrating function composition.
@@ -60,3 +60,4 @@ export function main(): void {
   z.string();
 }
 ```
+🎯 7 ranked hits

@@ -347,12 +347,22 @@ pub fn build_repo_map(graph: &Graph, opts: &MapOptions) -> RepoMap {
     let hotspots = top_hubs(&all_symbols, &in_degree, opts.hotspots);
 
     let file_paths: Vec<&str> = file_nodes.iter().map(|n| n.path.as_str()).collect();
+    // The depth-tier table in `lang.rs` omits the breadth-tier languages
+    // (rust, c, c#). The build records every indexed language label in
+    // `meta.languages`, so the total list takes the union of both.
+    let mut languages = sorted_languages(&file_paths);
+    for l in &graph.meta.languages {
+        if !languages.contains(l) {
+            languages.push(l.clone());
+        }
+    }
+    languages.sort();
     RepoMap {
         totals: Totals {
             files: total_files,
             symbols: all_symbols.len(),
             edges: graph.edges.len(),
-            languages: sorted_languages(&file_paths),
+            languages,
         },
         dirs,
         scopes: scope_groups,
@@ -401,7 +411,9 @@ fn format_dir_line(d: &DirEntry) -> String {
     } else {
         format!("{}/", d.path)
     };
-    let label = pad_end_utf16(&label, DIR_COL_WIDTH);
+    // Keep at least 2 spaces between a long label and its count.
+    let width = DIR_COL_WIDTH.max(label.encode_utf16().count() + 2);
+    let label = pad_end_utf16(&label, width);
     let counts = format!(
         "{} \u{b7} {}",
         sieve_core::voice::count(d.files, "file"),
@@ -540,6 +552,28 @@ mod tests {
             nodes,
             edges,
         }
+    }
+
+    #[test]
+    fn a_long_dir_label_keeps_two_spaces_before_the_count() {
+        let d = DirEntry {
+            path: "crates/sieve-savings/src/lib.rs".to_string(),
+            is_file: true,
+            files: 1,
+            symbols: 3,
+            languages: Vec::new(),
+            hubs: Vec::new(),
+        };
+        let line = format_dir_line(&d);
+        assert!(line.starts_with("crates/sieve-savings/src/lib.rs  1 file"));
+    }
+
+    #[test]
+    fn the_total_languages_include_the_graph_meta_languages() {
+        let mut g = empty_graph(vec![file_node("src/lib.rs")], Vec::new());
+        g.meta.languages = vec!["rust".to_string(), "c_sharp".to_string()];
+        let map = build_repo_map(&g, &MapOptions::default());
+        assert_eq!(map.totals.languages, vec!["c_sharp", "rust"]);
     }
 
     #[test]

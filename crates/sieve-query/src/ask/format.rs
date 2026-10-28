@@ -62,7 +62,7 @@ fn escalation_nudge(r: &AskResult) -> String {
     let product = sieve_core::product();
     format!(
         "\n\n{} {head} — don't re-ask with new wording; switch tool: \
-        `{} grep \"<literal>\"` for every occurrence · `{} skeleton <file>` for a file's \
+        `{} find \"<literal>\"` for every occurrence · `{} symbols <file>` for a file's \
         full API · `{} callers <symbol>` for who-uses.",
         product.prefix(),
         product.name,
@@ -125,7 +125,7 @@ pub fn format_ask(r: &AskResult) -> String {
         other => format!(" \u{b7} {}", mode_word(other)),
     };
     let head = format!(
-        "ask  {} \u{b7} {count} {}{mode}",
+        "query  {} \u{b7} {count} {}{mode}",
         r.query,
         if count == 1 { "hit" } else { "hits" },
     );
@@ -283,7 +283,7 @@ mod tests {
         let r = empty_result(AskMode::Lexical, vec![h; 4], None);
         let text = format_ask(&r);
         assert!(
-            text.starts_with("ask  q \u{b7} 4 hits\n\n1  run  fn  a.ts:4-9\n"),
+            text.starts_with("query  q \u{b7} 4 hits\n\n1  run  fn  a.ts:4-9\n"),
             "{text}"
         );
     }

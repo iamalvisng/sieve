@@ -43,6 +43,8 @@ pub struct GoModule {
 /// relation's resolution reads from.
 struct Indexes<'a> {
     node_ids: HashSet<&'a str>,
+    /// Ids of the function and method nodes.
+    callable_ids: HashSet<&'a str>,
     global_name: HashMap<&'a str, Vec<NodeRef<'a>>>,
     per_file_name: HashMap<&'a str, HashMap<&'a str, Vec<NodeRef<'a>>>>,
     owner_method: HashMap<String, Vec<NodeRef<'a>>>,
@@ -91,6 +93,9 @@ struct Indexes<'a> {
     /// A TS or JS file to the export names that mint no function node
     /// (`Local` records).
     local_exports: HashMap<&'a str, HashSet<&'a str>>,
+    /// Ids of TS and JS getters and setters. A value reference to one reads
+    /// a property and never passes a function.
+    accessors: HashSet<&'a str>,
 }
 
 /// Resolves every raw edge into a real graph edge, per the edge note,
@@ -151,6 +156,11 @@ pub fn resolve_edges_with_context(
 /// Builds the three name indexes and the `classParents` map, per section 7.
 fn build_indexes<'a>(nodes: &'a [Node], raw: &'a [RawEdge]) -> Indexes<'a> {
     let node_ids: HashSet<&str> = nodes.iter().map(|n| n.id.as_str()).collect();
+    let callable_ids: HashSet<&str> = nodes
+        .iter()
+        .filter(|n| matches!(n.kind, Kind::Function | Kind::Method))
+        .map(|n| n.id.as_str())
+        .collect();
 
     let mut global_name: HashMap<&str, Vec<NodeRef<'a>>> = HashMap::new();
     let mut per_file_name: HashMap<&str, HashMap<&str, Vec<NodeRef<'a>>>> = HashMap::new();
@@ -297,12 +307,20 @@ fn build_indexes<'a>(nodes: &'a [Node], raw: &'a [RawEdge]) -> Indexes<'a> {
         }
     }
 
+    let accessors: HashSet<&str> = nodes
+        .iter()
+        .filter(|n| n.kind == Kind::Method && is_accessor_signature(n.signature.as_deref()))
+        .map(|n| n.id.as_str())
+        .collect();
+
     Indexes {
+        accessors,
         direct_exports,
         default_exports,
         reexports,
         local_exports,
         node_ids,
+        callable_ids,
         global_name,
         per_file_name,
         owner_method,
@@ -320,6 +338,18 @@ fn build_indexes<'a>(nodes: &'a [Node], raw: &'a [RawEdge]) -> Indexes<'a> {
         cs: CsIndex::default(),
         kt: KtIndex::default(),
     }
+}
+
+/// Reports whether a method signature opens with `get` or `set` before
+/// its name, such as `static get size()`. A plain method named `get` has no
+/// word before its `(`.
+fn is_accessor_signature(signature: Option<&str>) -> bool {
+    let head = signature.and_then(|s| s.split('(').next()).unwrap_or("");
+    let words: Vec<&str> = head.split_whitespace().collect();
+    words.len() > 1
+        && words[..words.len() - 1]
+            .iter()
+            .any(|w| matches!(*w, "get" | "set"))
 }
 
 /// The posix directory holding `path`'s last segment, or `""` when `path`
@@ -399,7 +429,14 @@ fn resolve_one(raw: &RawEdge, idx: &Indexes, go_modules: &[GoModule]) -> Option<
                 confidence: Confidence::Extracted,
             })
         }
-        Relation::Calls => resolve_calls(raw, idx),
+        Relation::Calls => {
+            let edge = resolve_calls(raw, idx)?;
+            // A function passed as a value links only on an exact proof,
+            // and never to a getter or setter.
+            let exact = edge.confidence == Confidence::Extracted
+                && !idx.accessors.contains(edge.target.as_str());
+            (!raw.by_value || exact).then_some(edge)
+        }
         Relation::Extends => {
             resolve_heritage(raw, Relation::Extends, &[Kind::Class, Kind::Interface], idx)
         }
@@ -437,9 +474,25 @@ fn resolve_import_dispatch(
     }
 }
 
+/// Resolves a Python function used as a value. The link stays only for an
+/// exact proof, or a `self` or `cls` member, and only to a function or method.
+fn resolve_py_ref(raw: &RawEdge, inner: Option<&PyRec>, idx: &Indexes) -> Option<Edge> {
+    let call = RawEdge {
+        py: inner.cloned(),
+        ..raw.clone()
+    };
+    let edge = resolve_calls(&call, idx)?;
+    let exact =
+        edge.confidence == Confidence::Extracted || (raw.via_member && raw.recv_type.is_some());
+    (exact && idx.callable_ids.contains(edge.target.as_str())).then_some(edge)
+}
+
 /// Resolves a `calls` raw edge: a typed member call via `resolve_typed_member`,
 /// else a bare call via `resolve_name`, with a Python `Class` retry on miss.
 fn resolve_calls(raw: &RawEdge, idx: &Indexes) -> Option<Edge> {
+    if let Some(PyRec::Ref(inner)) = &raw.py {
+        return resolve_py_ref(raw, inner.as_deref(), idx);
+    }
     let name = raw.name.as_deref()?;
     if let Some(specifier) = raw.specifier.as_deref() {
         if is_node_builtin(specifier) {
@@ -1551,6 +1604,7 @@ mod tests {
             default_export: false,
             reexport: None,
             ns_export: false,
+            by_value: false,
             rust: None,
             py: None,
             go: None,
@@ -1619,6 +1673,7 @@ mod tests {
             default_export: false,
             reexport: None,
             ns_export: false,
+            by_value: false,
             rust: None,
             py: None,
             go: None,
@@ -1655,6 +1710,7 @@ mod tests {
             default_export: false,
             reexport: None,
             ns_export: false,
+            by_value: false,
             rust: None,
             py: None,
             go: None,
@@ -1685,6 +1741,7 @@ mod tests {
             default_export: false,
             reexport: None,
             ns_export: false,
+            by_value: false,
             rust: None,
             py: None,
             go: None,
@@ -1710,6 +1767,7 @@ mod tests {
                 default_export: false,
                 reexport: None,
                 ns_export: false,
+                by_value: false,
                 rust: None,
                 py: None,
                 go: None,
@@ -1752,6 +1810,7 @@ mod tests {
             default_export: false,
             reexport: None,
             ns_export: false,
+            by_value: false,
             rust: None,
             py: None,
             go: None,
@@ -1788,6 +1847,7 @@ mod tests {
             default_export: false,
             reexport: None,
             ns_export: false,
+            by_value: false,
             rust: None,
             py: None,
             go: None,
@@ -1898,6 +1958,7 @@ mod tests {
             default_export: false,
             reexport: None,
             ns_export: false,
+            by_value: false,
             rust: None,
             py: None,
             go: None,
@@ -1969,6 +2030,7 @@ mod tests {
             default_export: false,
             reexport: None,
             ns_export: false,
+            by_value: false,
             rust: None,
             py: None,
             go: None,
@@ -2001,6 +2063,7 @@ mod tests {
             default_export: false,
             reexport: None,
             ns_export: false,
+            by_value: false,
             rust: None,
             py: None,
             go: None,
@@ -2783,5 +2846,61 @@ mod xfile_tests {
         assert!(raw.iter().any(|e| e.reexport.is_some()));
         let edges = resolve_edges(&nodes, &raw);
         assert!(edges.iter().all(|e| e.relation != Relation::Imports));
+    }
+
+    #[test]
+    fn test_value_arg_same_file_function_links() {
+        let src = "function helper(x: number) { return x; }\nexport function run(items: number[]) { return items.map(helper); }\n";
+        assert_eq!(
+            main_call(&[("main.ts", src)]),
+            hit("main.ts#helper", Confidence::Extracted)
+        );
+    }
+
+    #[test]
+    fn test_value_arg_imported_function_links() {
+        let src = "import { helper } from \"./lib\";\nexport function run(items: number[]) { return items.map(helper); }\n";
+        assert_eq!(
+            main_call(&[LIB, ("main.ts", src)]),
+            hit("lib.ts#helper", Confidence::Extracted)
+        );
+    }
+
+    #[test]
+    fn test_value_arg_this_method_links_and_a_getter_does_not() {
+        let src = "export class K {\n  helper(x: number) { return x; }\n  get size() { return 1; }\n  run(items: number[]) { return items.map(this.helper); }\n  peek() { return use(this.size); }\n}\n";
+        let mut extractor = Extractor::new().expect("build extractor");
+        let (mut nodes, raw) = extractor.extract_file("main.ts", src, "typescript");
+        nodes.push(file_node("main.ts"));
+        let edges: Vec<(String, String)> = resolve_edges(&nodes, &raw)
+            .into_iter()
+            .filter(|e| e.relation == Relation::Calls)
+            .map(|e| (e.source, e.target))
+            .collect();
+        assert_eq!(
+            edges,
+            vec![("main.ts#K.run".to_string(), "main.ts#K.helper".to_string())]
+        );
+    }
+
+    #[test]
+    fn test_value_arg_parameter_named_helper_gives_no_link() {
+        let src = "function helper() {}\nexport function run(items: number[], helper: (x: number) => number) { return items.map(helper); }\n";
+        assert_eq!(main_call(&[("main.ts", src)]), None);
+    }
+
+    #[test]
+    fn test_value_arg_inner_binding_never_links_to_the_outer_function() {
+        let src = "function helper() {}\nexport function run(items: number[]) { const helper = (x: number) => x; return items.map(helper); }\n";
+        assert_eq!(main_call(&[("main.ts", src)]), None);
+        let cb = "function helper() {}\nexport function run(xs: number[][]) { return xs.map((helper) => [1].map(helper)); }\n";
+        assert_eq!(main_call(&[("main.ts", cb)]), None);
+    }
+
+    #[test]
+    fn test_value_arg_unproven_name_gives_no_link() {
+        // `helper` is not imported here: a repo-wide name match is only Inferred.
+        let src = "export function run(items: number[]) { return items.map(helper); }\n";
+        assert_eq!(main_call(&[LIB, ("main.ts", src)]), None);
     }
 }

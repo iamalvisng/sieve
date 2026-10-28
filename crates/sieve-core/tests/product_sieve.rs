@@ -49,11 +49,11 @@ const IGNORE_BLOCK_SIEVE: &str = "# sieve's cards are gitignored but should stay
 const INDEX_MD_SIEVE: &str = "# sieve — repo map\n\
 \n\
 Small markdown nodes summarising this repo. `grep` any term, symbol, or\n\
-filename here, or run `sieve ask \"<task>\"`. Each node carries prose plus exact\n\
+filename here, or run `sieve query \"<task>\"`. Each node carries prose plus exact\n\
 `file:line`; open a source file only to edit the named span.\n\
 \n\
-The same graph is queryable as MCP tools (`sieve_find_code`, `sieve_find_all`,\n\
-`sieve_trace_calls`, `sieve_file_api`, `sieve_repo_map`) where a host exposes them, and\n\
+The same graph is queryable as MCP tools (`sieve_query`, `sieve_find`,\n\
+`sieve_callers`, `sieve_symbols`, `sieve_map`) where a host exposes them, and\n\
 as the `sieve` CLI everywhere else. Edges — who calls what — live only in the\n\
 graph, not in these files: `sieve callers <symbol>` is the only way to read them.\n\
 \n\

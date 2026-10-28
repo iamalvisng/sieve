@@ -4,4 +4,4 @@ double  fn  src/calc.ts:3-5
 │     18: return double(n);
 └─ zed  fn  src/calc.ts:11-15
       14: return double(a) + w.size();
-[sieve] saved ≈ 48 tokens
+🎯 2 exact callers

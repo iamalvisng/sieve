@@ -84,6 +84,10 @@ pub const GENERIC_LANGS: &[GenericLang] = &[
         name: "lua",
         exts: &[".lua"],
     },
+    GenericLang {
+        name: "shell",
+        exts: &[".sh", ".bash"],
+    },
 ];
 
 /// Finds the breadth-tier language claiming `path`, by longest matching
@@ -259,6 +263,9 @@ impl GenericExtractor {
         let Some(lang) = GENERIC_LANGS.iter().find(|l| l.name == lang_name) else {
             return (Vec::new(), Vec::new());
         };
+        if lang.name == "shell" {
+            return (crate::shell::extract_shell(path, source), Vec::new());
+        }
         let slot = self
             .loaded
             .entry(lang.name)
@@ -342,6 +349,7 @@ fn push_cs_calls(
             default_export: false,
             reexport: None,
             ns_export: false,
+            by_value: false,
             rust: None,
             py: None,
             go: None,
@@ -535,6 +543,14 @@ fn tags_extract(
         }
     }
 
+    // A call in a macro argument needs the same proof as a call outside one.
+    let mut macro_calls: Vec<(String, usize)> = Vec::new();
+    if lang_name == "rust" {
+        crate::rust_proof::macro_arg_calls(root, source, &mut macro_calls);
+        crate::rust_proof::fn_value_args(root, source, &mut macro_calls);
+    }
+    let macro_at: HashSet<usize> = macro_calls.iter().map(|(_, at)| *at).collect();
+    calls.extend(macro_calls);
     for (name, at) in calls {
         if def_name_at.contains(&at) {
             continue;
@@ -545,6 +561,9 @@ fn tags_extract(
         } else {
             None
         };
+        if macro_at.contains(&at) && rust.is_none() {
+            continue;
+        }
         // An unproven `self.f()` makes no edge.
         if lang_name == "rust"
             && rust.is_none()
@@ -573,6 +592,7 @@ fn tags_extract(
             default_export: false,
             reexport: None,
             ns_export: false,
+            by_value: false,
             rust,
             py: None,
             go: None,
@@ -615,6 +635,7 @@ fn tags_extract(
             default_export: false,
             reexport: None,
             ns_export: false,
+            by_value: false,
             rust: None,
             py: None,
             go: None,
@@ -812,6 +833,7 @@ fn visit_includes(node: TsNode, path: &str, source: &str, raw_edges: &mut Vec<Ra
                             default_export: false,
                             reexport: None,
                             ns_export: false,
+                            by_value: false,
                             rust: None,
                             py: None,
                             go: None,
@@ -864,6 +886,7 @@ fn visit_uses(node: TsNode, path: &str, source: &str, raw_edges: &mut Vec<RawEdg
                     default_export: false,
                     reexport: None,
                     ns_export: false,
+                    by_value: false,
                     rust: None,
                     py: None,
                     go: None,

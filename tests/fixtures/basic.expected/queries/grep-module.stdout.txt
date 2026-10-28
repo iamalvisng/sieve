@@ -1,4 +1,4 @@
-grep "import" · 3 hits in 2 symbols across 2 files · searched 7 files
+find "import" · 3 hits in 2 symbols across 2 files · searched 7 files
 
 main.py  module  py/main.py  · 0 links in
   1: from py.helpers import add
@@ -6,4 +6,4 @@ main.py  module  py/main.py  · 0 links in
 app.ts  module  src/app.ts  · 0 links in
   1: import { quadruple } from "./util";
   2: import { z } from "zod";
-[sieve] saved ≈ 53 tokens
+🎯 3 hits in 2 symbols

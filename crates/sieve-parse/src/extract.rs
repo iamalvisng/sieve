@@ -76,6 +76,10 @@ pub struct RawEdge {
     /// `import_name` holds the receiver's export name.
     #[serde(default, skip_serializing_if = "is_false")]
     pub ns_export: bool,
+    /// A TS or JS `calls` edge only: the name is passed as a call argument,
+    /// not called. Resolution keeps it only when the proof is exact.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub by_value: bool,
     /// A Rust `calls` edge only: the static proof of its target. `None` for
     /// every other raw edge, so their cache bytes stay the same.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -841,6 +845,9 @@ pub enum PyRec {
     /// for a bare call. The first name of the chain is a module-level
     /// binding of the file.
     Call { chain: Vec<String> },
+    /// A function used as a value, in an argument position. The inner proof
+    /// is the proof of a call of the same name, or `None` for `self.name`.
+    Ref(Option<Box<PyRec>>),
     /// The module-level facts of one Python file. It rides on an `imports`
     /// raw edge that the resolver never turns into a graph edge.
     File {
@@ -1137,16 +1144,25 @@ impl Extractor {
 /// Turns each `PyRec::Def` into `PyRec::SameFile` with the id of the node
 /// that has the same name and start line, or drops it when none matches.
 fn resolve_py_defs(nodes: &[Node], edges: &mut [RawEdge]) {
-    for edge in edges.iter_mut() {
-        let Some(PyRec::Def { name, line }) = &edge.py else {
-            continue;
-        };
+    let find = |name: &str, line: u32| {
         let start = format!("L{line}-");
-        let target = nodes
+        nodes
             .iter()
-            .find(|n| n.name == *name && n.span.starts_with(&start))
-            .map(|n| n.id.clone());
-        edge.py = target.map(|target| PyRec::SameFile { target });
+            .find(|n| n.name == name && n.span.starts_with(&start))
+            .map(|n| PyRec::SameFile {
+                target: n.id.clone(),
+            })
+    };
+    for edge in edges.iter_mut() {
+        match &edge.py {
+            Some(PyRec::Def { name, line }) => edge.py = find(name, *line),
+            Some(PyRec::Ref(Some(inner))) => {
+                if let PyRec::Def { name, line } = &**inner {
+                    edge.py = Some(PyRec::Ref(find(name, *line).map(Box::new)));
+                }
+            }
+            _ => {}
+        }
     }
     for edge in edges.iter_mut() {
         let Some(PyRec::File { binds, .. }) = &mut edge.py else {
@@ -1367,6 +1383,7 @@ fn walk(node: TsNode, ctx: &Ctx, file: &FileCtx, sink: &mut Sink) {
                 default_export: false,
                 reexport: None,
                 ns_export: false,
+                by_value: false,
                 rust: None,
                 py: None,
                 go: None,
@@ -1411,6 +1428,7 @@ fn walk(node: TsNode, ctx: &Ctx, file: &FileCtx, sink: &mut Sink) {
                     default_export: false,
                     reexport: None,
                     ns_export: false,
+                    by_value: false,
                     rust: None,
                     py: None,
                     go: None,
@@ -1478,6 +1496,7 @@ fn walk(node: TsNode, ctx: &Ctx, file: &FileCtx, sink: &mut Sink) {
                     default_export: false,
                     reexport: None,
                     ns_export,
+                    by_value: false,
                     rust: None,
                     py,
                     go,
@@ -1487,6 +1506,13 @@ fn walk(node: TsNode, ctx: &Ctx, file: &FileCtx, sink: &mut Sink) {
                 });
             }
         }
+    }
+
+    if file.is_python && node.kind() == "call" {
+        emit_py_refs(node, ctx, file, sink);
+    }
+    if let Some(edge) = value_arg_edge(node, ctx, file) {
+        sink.edges.push(edge);
     }
 
     if node.kind() == "identifier" {
@@ -1510,6 +1536,144 @@ fn walk(node: TsNode, ctx: &Ctx, file: &FileCtx, sink: &mut Sink) {
     for child in node.named_children(&mut cursor) {
         walk(child, child_ctx, file, sink);
     }
+}
+
+/// Pushes one `calls` raw edge for each argument of the Python call `call`
+/// that is a name or an attribute path, as a function used as a value.
+/// The resolver keeps the edge only when it proves a function or method.
+fn emit_py_refs(call: TsNode, ctx: &Ctx, file: &FileCtx, sink: &mut Sink) {
+    let source = file.source;
+    let Some(args) = call.child_by_field_name("arguments") else {
+        return;
+    };
+    let mut cursor = args.walk();
+    for arg in args.named_children(&mut cursor) {
+        let arg = if arg.kind() == "keyword_argument" {
+            match arg.child_by_field_name("value") {
+                Some(v) => v,
+                None => continue,
+            }
+        } else {
+            arg
+        };
+        let (name, via_member, receiver) = match arg.kind() {
+            "identifier" => (arg.utf8_text(source.as_bytes()), false, None),
+            "attribute" => {
+                let (Some(attr), Some(obj)) = (
+                    arg.child_by_field_name("attribute"),
+                    arg.child_by_field_name("object"),
+                ) else {
+                    continue;
+                };
+                (
+                    attr.utf8_text(source.as_bytes()),
+                    true,
+                    py_receiver(obj, source),
+                )
+            }
+            _ => continue,
+        };
+        let Ok(name) = name else { continue };
+        let py = file.py.borrow_mut().ref_rec(arg, name, source);
+        let own = matches!(receiver.as_deref(), Some("self" | "cls"));
+        if via_member && !own && py.is_none() {
+            continue;
+        }
+        let recv_type = if own {
+            receiver.and_then(|r| {
+                ctx.bindings
+                    .resolve_recv_type(&r, &ctx.scope, ctx.enclosing_class.as_deref())
+            })
+        } else {
+            None
+        };
+        sink.edges.push(RawEdge {
+            source: ctx.parent_id.clone(),
+            relation: Relation::Calls,
+            file: file.path.to_string(),
+            target_id: None,
+            specifier: None,
+            name: Some(name.to_string()),
+            via_member,
+            recv_type,
+            arg_count: None,
+            kinds: None,
+            implicit_self: false,
+            direct_export: false,
+            import_name: None,
+            default_export: false,
+            reexport: None,
+            ns_export: false,
+            rust: None,
+            py: Some(PyRec::Ref(py.map(Box::new))),
+            go: None,
+            java: None,
+            cs: None,
+            kt: None,
+            by_value: false,
+        });
+    }
+}
+
+/// The `calls` edge for a TS or JS function passed as a call argument
+/// (`items.map(helper)`, `on(ev, this.handle)`). It carries the same
+/// specifier, receiver and shadow data as a call of the same name, and sets
+/// `by_value`, so resolution keeps only an exact link. A name that a
+/// parameter, a local or a callback binds gives no edge.
+fn value_arg_edge(node: TsNode, ctx: &Ctx, file: &FileCtx) -> Option<RawEdge> {
+    if !matches!(ctx.lang, "typescript" | "tsx") {
+        return None;
+    }
+    let args = node.parent().filter(|p| p.kind() == "arguments")?;
+    args.parent().filter(|c| c.kind() == "call_expression")?;
+    let source = file.source;
+    let text = |n: TsNode| n.utf8_text(source.as_bytes()).ok().map(str::to_string);
+    let (name, via_member, receiver) = match node.kind() {
+        "identifier" => (text(node)?, false, None),
+        "member_expression" => {
+            let name = text(node.child_by_field_name("property")?)?;
+            let receiver = ts_receiver(node.child_by_field_name("object")?, source);
+            (name, true, receiver)
+        }
+        _ => return None,
+    };
+    if !via_member && (ctx.shadowed.contains(&name) || ctx.callback_shadowed.contains(&name)) {
+        return None;
+    }
+    let (specifier, import_name, ns_export) =
+        match call_import_specifier(&name, via_member, receiver.as_deref(), ctx) {
+            Some((specifier, import_name, ns)) => (Some(specifier), import_name, ns),
+            None => (None, None, false),
+        };
+    let recv_type = receiver.and_then(|r| {
+        ctx.bindings
+            .resolve_recv_type(&r, &ctx.scope, ctx.enclosing_class.as_deref())
+    });
+    Some(RawEdge {
+        source: ctx.parent_id.clone(),
+        relation: Relation::Calls,
+        file: file.path.to_string(),
+        target_id: None,
+        specifier,
+        name: Some(name),
+        via_member,
+        recv_type,
+        arg_count: None,
+        kinds: None,
+        implicit_self: false,
+        direct_export: false,
+        import_name,
+        default_export: false,
+        reexport: None,
+        ns_export,
+        by_value: true,
+        rust: None,
+        py: None,
+        go: None,
+        java: None,
+        cs: None,
+        kt: None,
+    })
 }
 
 /// The `(specifier, import_name, ns_export)` a TS or JS call carries. A bare
@@ -1631,6 +1795,7 @@ fn export_record(path: &str, specifier: Option<String>, reexport: ReExport) -> R
         default_export: false,
         reexport: Some(reexport),
         ns_export: false,
+        by_value: false,
         rust: None,
         py: None,
         go: None,
@@ -1881,6 +2046,7 @@ fn emit_definition(node: TsNode, desc: Desc, ctx: &Ctx, file: &FileCtx, sink: &m
                 || (ctx.scope.is_empty() && ctx.default_local == Some(name.as_str()))),
         reexport: None,
         ns_export: false,
+        by_value: false,
         rust: None,
         py: None,
         go: None,
@@ -2278,6 +2444,7 @@ fn emit_heritage_edges(
             default_export: false,
             reexport: None,
             ns_export: false,
+            by_value: false,
             rust: None,
             py: None,
             go: None,
@@ -3085,6 +3252,7 @@ fn maybe_emit_reference(
         default_export: false,
         reexport: None,
         ns_export: false,
+        by_value: false,
         rust: None,
         py: None,
         go: None,

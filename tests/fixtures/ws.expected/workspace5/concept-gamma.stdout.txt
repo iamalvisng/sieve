@@ -1,4 +1,4 @@
-ask  parse config · 8 hits
+query  parse config · 8 hits
 
 1  [gamma/] Config pipeline  concept  gamma/src/root.ts
    Gamma parses a config, then passes the parsed config along.

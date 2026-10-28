@@ -328,7 +328,7 @@ fn dry_run_text(plan: &Plan, root: &Path, write_cmd: &str, diff: &str) -> String
         out.push_str(diff);
     }
     out.push_str(&report_rows(plan, root));
-    out
+    sieve_savings::append_line(&out, &sieve_savings::rename_line(files))
 }
 
 /// One source line, trimmed and cut to a short length.

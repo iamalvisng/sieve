@@ -1,4 +1,4 @@
-ask  parse config loader token · 8 hits
+query  parse config loader token · 8 hits
 
 1  [alpha/] parseConfigLoaderTokenAlpha  fn  alpha/src/a.ts:1-3
    function parseConfigLoaderTokenAlpha(text: string): string

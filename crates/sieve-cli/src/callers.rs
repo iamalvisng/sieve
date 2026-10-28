@@ -9,10 +9,10 @@ use serde::Serialize;
 
 use sieve_core::workspace;
 use sieve_query::callers::{
-    edge_walk, format_callers, parse_depth, parse_direction, resolve_symbol, to_callers_json,
-    CallersJson, Depth, Direction, FileReader, Hit,
+    callers_hit_count, edge_walk, format_callers, parse_depth, parse_direction, resolve_symbol,
+    to_callers_json, word_grep_chars, CallersJson, Depth, Direction, FileReader, Hit,
 };
-use sieve_savings::{savings_for, with_savings};
+use sieve_savings::{append_line, callers_line, savings_for};
 
 use crate::query;
 
@@ -111,12 +111,12 @@ pub fn run(args: &CallersArgs, dir_override: Option<&Path>) -> Result<(), String
         show_depth(depth),
         &mut reader,
     );
-    let saved_paths = sieve_query::callers::callers_saved_paths(&matches);
-    let saved = savings_for(&graph, &saved_paths);
-    print!(
-        "{}",
-        with_savings(sieve_core::product().name, &body, saved.as_ref())
-    );
+    let name = symbols
+        .first()
+        .map_or(args.symbol.as_str(), |s| s.name.as_str());
+    let baseline = word_grep_chars(&graph, &root, name);
+    let line = callers_line(callers_hit_count(&matches), baseline, &body);
+    print!("{}", append_line(&body, &line));
     Ok(())
 }
 
@@ -135,12 +135,7 @@ fn run_workspace(args: &CallersArgs, root: &Path, context_dir: &Path) -> Result<
         args.in_prefix.as_deref(),
         direction,
         depth,
-        |graph, body, paths| {
-            let saved = savings_for(graph, paths);
-            with_savings(sieve_core::product().name, body, saved.as_ref())
-                .trim_end_matches('\n')
-                .to_string()
-        },
+        |_, body, _| body.trim_end_matches('\n').to_string(),
     )
     .map_err(|e| e.to_string())?;
     if !fed.found {

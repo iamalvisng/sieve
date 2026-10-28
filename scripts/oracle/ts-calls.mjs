@@ -1,7 +1,8 @@
 // Oracle for cross-file calls. Usage: node ts-calls.mjs <repo>
 // The TypeScript compiler resolves each call that reaches a symbol in
 // another repo file through an import. The script prints one JSON row per
-// call: {src, line, shape, barrel, dst, name, dst_line}. Paths are relative
+// call: {src, line, shape, barrel, dst, name, dst_line}. A function passed as a call
+// argument (items.map(helper), fn(ns.helper)) is one more row with arg true. Paths are relative
 // to <repo>. The walk skips node_modules, dist and dot-directories.
 // shape is named, alias, default, namespace or nsexport. barrel is true when the
 // import chain passes a re-export. spec is the module specifier text.
@@ -76,9 +77,13 @@ function resolve(sym) {
 }
 
 const rows = [];
-function visit(node, sf) {
-  if (ts.isCallExpression(node)) {
-    const c = node.expression;
+const isFunctionDecl = (d) =>
+  !!d && (ts.isFunctionDeclaration(d) || ts.isMethodDeclaration(d) ||
+    (ts.isVariableDeclaration(d) && !!d.initializer && (ts.isArrowFunction(d.initializer) || ts.isFunctionExpression(d.initializer))));
+
+// One row for the expression c: a callee, or (arg true) a function passed as a call argument.
+function addRow(c, node, sf, arg) {
+  {
     let shape, target, bind;
     if (ts.isIdentifier(c)) {
       bind = checker.getSymbolAtLocation(c);
@@ -98,6 +103,8 @@ function visit(node, sf) {
       const dsf = d?.getSourceFile();
       const name = d && !ts.isSourceFile(d) ? (d.name?.text ?? null) : null;
       const imp = importOf(bind);
+      // A passed value counts only when the target declares a function.
+      if (arg && !isFunctionDecl(d)) return;
       // An nsexport row keeps a null name for an anonymous target. Other shapes skip it.
       if ((name || (shape === "nsexport" && d && !ts.isSourceFile(d))) && imp && inRepo(dsf.fileName) && dsf.fileName !== sf.fileName) {
         // The module file of the specifier joins the chain: it finds export * barrels.
@@ -108,6 +115,7 @@ function visit(node, sf) {
         rows.push({
           src: rel(sf.fileName),
           line: sf.getLineAndCharacterOfPosition(node.getStart()).line + 1,
+          ...(arg ? { arg: true } : {}),
           shape,
           spec: imp.moduleSpecifier.text,
           barrel: files.size > 0,
@@ -116,6 +124,16 @@ function visit(node, sf) {
           dst_line: dsf.getLineAndCharacterOfPosition(d.getStart()).line + 1,
         });
       }
+    }
+  }
+}
+
+function visit(node, sf) {
+  if (ts.isCallExpression(node)) {
+    addRow(node.expression, node, sf, false);
+    // A function passed as a value: an identifier or a ns.name path in an argument position.
+    for (const a of node.arguments) {
+      if (ts.isIdentifier(a) || (ts.isPropertyAccessExpression(a) && ts.isIdentifier(a.expression))) addRow(a, a, sf, true);
     }
   }
   ts.forEachChild(node, (n) => visit(n, sf));

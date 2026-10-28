@@ -1,4 +1,4 @@
-ask  parse config · 18 hits
+query  parse config · 18 hits
 
 1  [gamma/] parseConfigRb  fn  gamma/src/root2.ts:1-3
    function parseConfigRb(): number

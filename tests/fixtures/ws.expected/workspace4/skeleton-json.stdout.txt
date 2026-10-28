@@ -5,31 +5,36 @@
       "name": "alphaAdd",
       "kind": "function",
       "span": "L1-L3",
-      "signature": "function alphaAdd(a: number, b: number): number"
+      "signature": "function alphaAdd(a: number, b: number): number",
+      "inDegree": 1
     },
     {
       "name": "alphaTwice",
       "kind": "function",
       "span": "L5-L7",
-      "signature": "function alphaTwice(n: number): number"
+      "signature": "function alphaTwice(n: number): number",
+      "inDegree": 0
     },
     {
       "name": "shared",
       "kind": "function",
       "span": "L9-L11",
-      "signature": "function shared(): number"
+      "signature": "function shared(): number",
+      "inDegree": 1
     },
     {
       "name": "useShared",
       "kind": "function",
       "span": "L13-L15",
-      "signature": "function useShared(): number"
+      "signature": "function useShared(): number",
+      "inDegree": 1
     },
     {
       "name": "useSharedTwice",
       "kind": "function",
       "span": "L17-L19",
-      "signature": "function useSharedTwice(): number"
+      "signature": "function useSharedTwice(): number",
+      "inDegree": 0
     }
   ],
   "saved": {

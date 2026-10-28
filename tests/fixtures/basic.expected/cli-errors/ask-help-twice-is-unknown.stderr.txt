@@ -1,1 +1,1 @@
-sieve: ask has no -hh option — see sieve ask --help
+sieve: query has no -hh option — see sieve query --help

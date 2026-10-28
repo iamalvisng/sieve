@@ -4,6 +4,7 @@
   "perAgentQuery": {},
   "toolReads": 3,
   "sourceReads": 1,
+  "savingsFormula": 2,
   "savedTokens": 12345,
   "injectedPointers": [],
   "nudges": 0,

@@ -1,4 +1,4 @@
-ask  function · 6 hits
+query  function · 6 hits
 
 1  bigFive  fn  packages/big/index.ts:13-14
    function bigFive(): number
@@ -17,3 +17,4 @@ ask  function · 6 hits
 
 6  bigTwo  fn  packages/big/index.ts:4-5
    function bigTwo(): number
+🎯 6 ranked hits

@@ -206,6 +206,10 @@ fn call_path<'t>(name_node: TsNode<'t>, source: &str) -> Option<(TsNode<'t>, Vec
     if name_node.kind() != "identifier" {
         return None;
     }
+    if is_macro_arg_call(name_node, source) {
+        let text = name_node.utf8_text(source.as_bytes()).ok()?;
+        return Some((name_node, vec![text.to_string()]));
+    }
     let parent = name_node.parent()?;
     let scoped = parent.kind() == "scoped_identifier"
         && parent.child_by_field_name("name").map(|n| n.id()) == Some(name_node.id());
@@ -221,8 +225,9 @@ fn call_path<'t>(name_node: TsNode<'t>, source: &str) -> Option<(TsNode<'t>, Vec
         }
     }
     let call = head.parent()?;
-    let is_head = call.kind() == "call_expression"
-        && call.child_by_field_name("function").map(|n| n.id()) == Some(head.id());
+    let is_head = (call.kind() == "call_expression"
+        && call.child_by_field_name("function").map(|n| n.id()) == Some(head.id()))
+        || is_fn_value_arg(head);
     is_head.then_some((head, path))
 }
 
@@ -326,7 +331,7 @@ pub fn same_file_target(
     defs: &[(String, usize, usize)],
 ) -> Option<String> {
     let name_node = root.descendant_for_byte_range(at, at + name.len())?;
-    let head = call_head(name_node)?;
+    let head = call_head(name_node, source)?;
     let module = module_of(head);
     if scope_blocks(head, module, source, name, true) {
         return None;
@@ -349,11 +354,135 @@ pub fn same_file_target(
         .map(|(id, _, _)| id.clone())
 }
 
+/// Macros whose arguments are plain expressions. A call in their token
+/// tree reads like a call outside a macro.
+const EXPR_MACROS: &[&str] = &[
+    "format",
+    "print",
+    "println",
+    "eprint",
+    "eprintln",
+    "write",
+    "writeln",
+    "panic",
+    "assert",
+    "assert_eq",
+    "assert_ne",
+    "debug_assert",
+    "debug_assert_eq",
+    "debug_assert_ne",
+    "vec",
+    "format_args",
+    "todo",
+    "unimplemented",
+    "unreachable",
+    "dbg",
+];
+
+/// True when `name` is the last path segment of an `EXPR_MACROS` macro.
+fn is_expr_macro(path_text: &str) -> bool {
+    path_text
+        .rsplit("::")
+        .next()
+        .is_some_and(|t| EXPR_MACROS.contains(&t))
+}
+
+/// True when the macro name before the `!` node `bang` is in `EXPR_MACROS`.
+fn expr_macro_before(bang: TsNode, source: &str) -> bool {
+    bang.prev_sibling()
+        .filter(|n| matches!(n.kind(), "identifier" | "scoped_identifier"))
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .is_some_and(is_expr_macro)
+}
+
+/// True when every token tree around `tree` is an argument list of an
+/// `EXPR_MACROS` macro, or a plain bracket group inside one.
+fn trusted_tree(tree: TsNode, source: &str) -> bool {
+    let Some(parent) = tree.parent() else {
+        return false;
+    };
+    match parent.kind() {
+        "macro_invocation" => parent
+            .child_by_field_name("macro")
+            .and_then(|m| m.utf8_text(source.as_bytes()).ok())
+            .is_some_and(is_expr_macro),
+        "token_tree" => match tree.prev_sibling() {
+            Some(p) if p.kind() == "!" => {
+                expr_macro_before(p, source) && trusted_tree(parent, source)
+            }
+            _ => trusted_tree(parent, source),
+        },
+        _ => false,
+    }
+}
+
+/// True when `id` is the name of a bare call `f(..)` inside the arguments
+/// of an `EXPR_MACROS` macro. A method, a path, a `fn` name and a macro
+/// name do not count.
+fn is_macro_arg_call(id: TsNode, source: &str) -> bool {
+    let Some(tree) = id.parent().filter(|p| p.kind() == "token_tree") else {
+        return false;
+    };
+    let args_next = id
+        .next_sibling()
+        .is_some_and(|n| n.kind() == "token_tree" && n.child(0).is_some_and(|c| c.kind() == "("));
+    let prev_ok = id.prev_sibling().is_none_or(|p| {
+        !matches!(p.kind(), "." | "::" | "!")
+            && p.utf8_text(source.as_bytes()).is_ok_and(|t| t != "fn")
+    });
+    args_next && prev_ok && trusted_tree(tree, source)
+}
+
+/// Every bare call name in the arguments of an `EXPR_MACROS` macro under
+/// `node`, with its start byte.
+pub fn macro_arg_calls(node: TsNode, source: &str, out: &mut Vec<(String, usize)>) {
+    if node.kind() == "identifier" && is_macro_arg_call(node, source) {
+        if let Ok(t) = node.utf8_text(source.as_bytes()) {
+            out.push((t.to_string(), node.start_byte()));
+        }
+    }
+    let mut walk = node.walk();
+    for c in node.named_children(&mut walk) {
+        macro_arg_calls(c, source, out);
+    }
+}
+
+/// True when `node` is a whole argument of a call or a method call, as in
+/// `.map(f)` or `.map(m::f)`.
+fn is_fn_value_arg(node: TsNode) -> bool {
+    node.parent().is_some_and(|p| {
+        p.kind() == "arguments" && p.parent().is_some_and(|c| c.kind() == "call_expression")
+    })
+}
+
+/// Every name passed as a whole argument of a call or a method call under
+/// `node` (`f`, `m::f`, `Self::f`), with the start byte of its last segment.
+/// The resolver gives the link only if the same proof as for `f()` holds.
+pub fn fn_value_args(node: TsNode, source: &str, out: &mut Vec<(String, usize)>) {
+    let name = match node.kind() {
+        "identifier" => Some(node),
+        "scoped_identifier" => node.child_by_field_name("name"),
+        _ => None,
+    };
+    if let Some(n) = name.filter(|_| is_fn_value_arg(node)) {
+        if let Ok(t) = n.utf8_text(source.as_bytes()) {
+            out.push((t.to_string(), n.start_byte()));
+        }
+    }
+    let mut walk = node.walk();
+    for c in node.named_children(&mut walk) {
+        fn_value_args(c, source, out);
+    }
+}
+
 /// The node that is the head of a bare `f()` or `f::<T>()` call, or
 /// `None` for any other shape (a path, a macro, a method).
-fn call_head(name_node: TsNode) -> Option<TsNode> {
+fn call_head<'t>(name_node: TsNode<'t>, source: &str) -> Option<TsNode<'t>> {
     if name_node.kind() != "identifier" {
         return None;
+    }
+    if is_macro_arg_call(name_node, source) {
+        return Some(name_node);
     }
     let mut head = name_node;
     let parent = name_node.parent()?;
@@ -361,8 +490,9 @@ fn call_head(name_node: TsNode) -> Option<TsNode> {
         head = parent;
     }
     let call = head.parent()?;
-    let is_head = call.kind() == "call_expression"
-        && call.child_by_field_name("function").map(|n| n.id()) == Some(head.id());
+    let is_head = (call.kind() == "call_expression"
+        && call.child_by_field_name("function").map(|n| n.id()) == Some(head.id()))
+        || is_fn_value_arg(head);
     is_head.then_some(head)
 }
 
@@ -458,12 +588,14 @@ fn mentions(node: TsNode, source: &str, name: &str, skip: Option<usize>) -> bool
     ) && node.utf8_text(source.as_bytes()) == Ok(name)
     {
         // A path segment (`f::g`) is not a binding either.
-        let is_call_head = node.parent().is_some_and(|p| {
-            p.kind() == "scoped_identifier"
-                || p.kind() == "generic_function"
-                || (p.kind() == "call_expression"
-                    && p.child_by_field_name("function").map(|n| n.id()) == Some(node.id()))
-        });
+        let is_call_head = is_macro_arg_call(node, source)
+            || is_fn_value_arg(node)
+            || node.parent().is_some_and(|p| {
+                p.kind() == "scoped_identifier"
+                    || p.kind() == "generic_function"
+                    || (p.kind() == "call_expression"
+                        && p.child_by_field_name("function").map(|n| n.id()) == Some(node.id()))
+            });
         return !is_call_head;
     }
     let mut walk = node.walk();
@@ -505,6 +637,66 @@ mod tests {
                 .any(|(s, t, c)| s == "a.rs#g" && t == "a.rs#f" && *c == Confidence::Extracted),
             "{got:?}"
         );
+    }
+
+    #[test]
+    fn test_macro_arg_call_is_extracted() {
+        one_extracted("fn f() -> i32 { 1 }\nfn g() { eprintln!(\"{}\", f()); }\n");
+        one_extracted("fn f(x: i32) -> i32 { x }\nfn g() { let v = vec![f(1), 2]; assert_eq!(f(1), v[0]); }\n");
+    }
+
+    fn links_helper(src: &str) -> bool {
+        calls(src)
+            .iter()
+            .any(|(s, t, c)| s == "a.rs#g" && t.ends_with("helper") && *c == Confidence::Extracted)
+    }
+
+    #[test]
+    fn test_fn_value_arg_bare_is_extracted() {
+        assert!(links_helper(
+            "fn helper(x: i32) -> i32 { x }\nfn g(v: Vec<i32>) { let _ = v.into_iter().map(helper); }\n"
+        ));
+    }
+
+    #[test]
+    fn test_fn_value_arg_path_is_extracted() {
+        let got = calls(
+            "struct S;\nimpl S {\n fn helper(x: i32) -> i32 { x }\n fn g(v: Vec<i32>) { let _ = v.into_iter().map(Self::helper); }\n}\n",
+        );
+        assert!(got.iter().any(|(_, t, _)| t.ends_with("helper")), "{got:?}");
+        let got = calls(
+            "mod m { pub fn helper(x: i32) -> i32 { x } }\nfn g(v: Vec<i32>) { let _ = v.into_iter().map(m::helper); }\n",
+        );
+        assert!(got.iter().any(|(_, t, _)| t.ends_with("helper")), "{got:?}");
+    }
+
+    #[test]
+    fn test_fn_value_arg_local_closure_is_no_edge() {
+        assert!(!links_helper(
+            "fn helper(x: i32) -> i32 { x }\nfn g(v: Vec<i32>) { let helper = |x| x; let _ = v.into_iter().map(helper); }\n"
+        ));
+    }
+
+    #[test]
+    fn test_fn_value_arg_param_is_no_edge() {
+        assert!(!links_helper(
+            "fn helper(x: i32) -> i32 { x }\nfn g(v: Vec<i32>, helper: fn(i32) -> i32) { let _ = v.into_iter().map(helper); }\n"
+        ));
+    }
+
+    #[test]
+    fn test_macro_arg_local_name_is_no_edge() {
+        let src = "fn f() -> i32 { 1 }\nfn g() { let f = 3; println!(\"{}\", f); }\n";
+        assert!(calls(src).is_empty(), "{:?}", calls(src));
+        let src = "fn f() -> i32 { 1 }\nfn g() { let f = |x: i32| x; println!(\"{}\", f(1)); }\n";
+        none_extracted(src);
+        assert!(calls(src).is_empty(), "{:?}", calls(src));
+    }
+
+    #[test]
+    fn test_macro_arg_method_and_unknown_macro_give_no_edge() {
+        let src = "fn f() -> i32 { 1 }\nfn g(o: O) { println!(\"{}\", o.f()); mine!(f()); }\n";
+        assert!(calls(src).is_empty(), "{:?}", calls(src));
     }
 
     #[test]

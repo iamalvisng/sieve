@@ -1,4 +1,4 @@
-ask  render · 8 hits
+query  render · 8 hits
 
 1  [packages/alpha/] renderPage  fn  packages/alpha/src/render.ts:1-3
    function renderPage(): string
@@ -27,3 +27,4 @@ ask  render · 8 hits
 matched in: packages/alpha/ (4) · packages/beta/ (4)
 also matched: (root) — narrow with --in (root)
 also matched: packages/gamma/ — narrow with --in packages/gamma/
+🎯 8 ranked hits

@@ -1,4 +1,4 @@
-ask  format row · 4 hits
+query  format row · 4 hits
 
 1  [packages/beta/] formatRow  fn  packages/beta/src/format.ts:5-7
    function formatRow(): string
@@ -13,3 +13,4 @@ ask  format row · 4 hits
 
 matched in: packages/beta/ (4)
 also matched: packages/alpha/ — narrow with --in packages/alpha/
+🎯 4 ranked hits

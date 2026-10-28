@@ -171,7 +171,7 @@ fn test_p4_13_to_23_p4_43_hooks_match_golden() {
         r#"{{"session_id":"golden-session","transcript_path":"{transcript}","cwd":"{copy_str}","hook_event_name":"PostToolUse","tool_name":"Read","tool_input":{{"file_path":"{copy_str}/src/app.ts"}},"tool_response":{{"type":"text","file":{{"filePath":"{copy_str}/src/app.ts","content":"see src/app.ts"}}}}}}"#
     );
     let savings_bash = format!(
-        r#"{{"session_id":"golden-session","transcript_path":"{transcript}","cwd":"{copy_str}","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{{"command":"sieve ask \"how does run work\" . --json -n 3"}},"tool_response":{{"stdout":"[sieve] tokens saved ≈ 420 (72%); this pack ≈ 160 tok vs reading the 3 file(s) whole ≈ 580 tok (estimate).","stderr":""}}}}"#
+        r#"{{"session_id":"golden-session","transcript_path":"{transcript}","cwd":"{copy_str}","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{{"command":"sieve query \"how does run work\" . --json -n 3"}},"tool_response":{{"stdout":"[sieve] tokens saved ≈ 420 (72%); this pack ≈ 160 tok vs reading the 3 file(s) whole ≈ 580 tok (estimate).","stderr":""}}}}"#
     );
     let stop = format!(
         r#"{{"session_id":"golden-session","transcript_path":"{transcript}","cwd":"{copy_str}","hook_event_name":"Stop"}}"#
@@ -393,7 +393,7 @@ fn test_p4_16_stop_counts_the_tally_turn() {
         "p4-16-session",
         &transcript,
         &copy,
-        r#""hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"sieve ask \"how does run work\" . --json -n 3"},"tool_response":{"stdout":"[sieve] tokens saved ≈ 420 (72%); this pack ≈ 160 tok vs reading the 3 file(s) whole ≈ 580 tok (estimate).","stderr":""}"#,
+        r#""hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"sieve query \"how does run work\" . --json -n 3"},"tool_response":{"stdout":"[sieve] tokens saved ≈ 420 (72%); this pack ≈ 160 tok vs reading the 3 file(s) whole ≈ 580 tok (estimate).","stderr":""}"#,
     );
     let output = run_hook(&copy, "tool-savings", &bash);
     assert_hook_matches_golden("p4-16-bash", &output);
@@ -497,7 +497,7 @@ fn tally_session(tmp: &Path, session: &str) -> (PathBuf, String) {
         session,
         &transcript,
         &copy,
-        r#""hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"sieve ask \"how does run work\" . --json -n 3"},"tool_response":{"stdout":"[sieve] tokens saved ≈ 420 (72%); this pack ≈ 160 tok vs reading the 3 file(s) whole ≈ 580 tok (estimate).","stderr":""}"#,
+        r#""hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"sieve query \"how does run work\" . --json -n 3"},"tool_response":{"stdout":"[sieve] tokens saved ≈ 420 (72%); this pack ≈ 160 tok vs reading the 3 file(s) whole ≈ 580 tok (estimate).","stderr":""}"#,
     );
     run_hook(&copy, "tool-savings", &bash);
     (copy, transcript)
@@ -547,6 +547,7 @@ fn session_json(copy: &Path, id: &str) -> Option<serde_json::Value> {
     let mut value: serde_json::Value = serde_json::from_str(&raw).expect("parse the session file");
     if let Some(map) = value.as_object_mut() {
         map.remove("savedByDay");
+        map.remove("savingsFormula");
     }
     Some(value)
 }
@@ -579,7 +580,7 @@ fn test_p4_54_cursor_post_tool_scores_each_tool_use() {
         // A Shell command that runs sieve, with a footer in `tool_output`.
         (
             "c1",
-            r#"{"conversation_id":"c1","tool_name":"Shell","tool_input":{"command":"sieve ask x"},"tool_output":"{\"stdout\":\"[sieve] tokens saved ≈ 420 (72%)\"}"}"#,
+            r#"{"conversation_id":"c1","tool_name":"Shell","tool_input":{"command":"sieve query x"},"tool_output":"{\"stdout\":\"[sieve] tokens saved ≈ 420 (72%)\"}"}"#,
             Some(cursor_session(1, 0, 420, true)),
         ),
         // A source read.
@@ -622,12 +623,12 @@ fn test_p4_54_cursor_post_tool_scores_each_tool_use() {
         // An MCP tool name belongs to `cursor-mcp`, in both name shapes.
         (
             "c4",
-            r#"{"conversation_id":"c4","tool_name":"MCP:sieve_find_code","tool_input":{},"tool_output":"[sieve] tokens saved ≈ 99"}"#,
+            r#"{"conversation_id":"c4","tool_name":"MCP:sieve_query","tool_input":{},"tool_output":"[sieve] tokens saved ≈ 99"}"#,
             None,
         ),
         (
             "c5",
-            r#"{"conversation_id":"c5","tool_name":"sieve_find_code","tool_input":{},"tool_output":"[sieve] tokens saved ≈ 99"}"#,
+            r#"{"conversation_id":"c5","tool_name":"sieve_query","tool_input":{},"tool_output":"[sieve] tokens saved ≈ 99"}"#,
             None,
         ),
     ];
@@ -647,19 +648,19 @@ fn test_p4_54_cursor_mcp_counts_a_sieve_tool_call() {
         // The savings sit in `result_json`.
         (
             "c3",
-            r#"{"conversation_id":"c3","tool_name":"sieve_find_code","tool_input":{},"result_json":"{\"content\":[{\"text\":\"[sieve] tokens saved ≈ 1,500\"}]}"}"#,
+            r#"{"conversation_id":"c3","tool_name":"sieve_query","tool_input":{},"result_json":"{\"content\":[{\"text\":\"[sieve] tokens saved ≈ 1,500\"}]}"}"#,
             Some(cursor_session(1, 0, 1500, true)),
         ),
         // `result` stands in for `result_json`; the name carries a prefix.
         (
             "c9",
-            r#"{"conversation_id":"c9","tool_name":"MCP:sieve_repo_map","result":{"t":"[sieve] tokens saved ≈ 7"}}"#,
+            r#"{"conversation_id":"c9","tool_name":"MCP:sieve_map","result":{"t":"[sieve] tokens saved ≈ 7"}}"#,
             Some(cursor_session(1, 0, 7, true)),
         ),
         // A call to a sieve tool with no footer still counts as a read.
         (
             "c11",
-            r#"{"conversation_id":"c11","tool_name":"mcp__sieve__sieve_trace_calls","result_json":"nothing"}"#,
+            r#"{"conversation_id":"c11","tool_name":"mcp__sieve__sieve_callers","result_json":"nothing"}"#,
             Some(cursor_session(1, 0, 0, true)),
         ),
         // A tool that is not a sieve tool is ignored, footer or not.
@@ -726,7 +727,7 @@ fn test_p4_54_session_id_never_leaves_the_session_dir_through_a_hook() {
     let tmp = TempDir::new("hooks-p4-54d");
     let copy = bare_copy(&tmp);
     let escape =
-        r#"{"conversation_id":"../../../../ESC","tool_name":"sieve_find_code","result_json":"x"}"#;
+        r#"{"conversation_id":"../../../../ESC","tool_name":"sieve_query","result_json":"x"}"#;
     run_hook(&copy, "cursor-mcp", escape);
     let claude =
         r#"{"session_id":"../../../../ESC4","tool_name":"Read","tool_input":{"file_path":"x"}}"#;
@@ -762,7 +763,7 @@ fn test_p4_54_cursor_keys_pick_in_golden_order() {
     );
     assert_eq!(session_json(&copy, "B"), None);
     // result_json wins over result.
-    let mcp = r#"{"conversation_id":"M","tool_name":"sieve_find_code","result_json":"[sieve] tokens saved ≈ 5","result":"[sieve] tokens saved ≈ 9"}"#;
+    let mcp = r#"{"conversation_id":"M","tool_name":"sieve_query","result_json":"[sieve] tokens saved ≈ 5","result":"[sieve] tokens saved ≈ 9"}"#;
     run_hook(&copy, "cursor-mcp", mcp);
     assert_eq!(
         session_json(&copy, "M"),
@@ -823,7 +824,7 @@ fn test_p4_24_25_statusline_matches_its_golden() {
     let copy_str = copy.to_string_lossy().into_owned();
     let transcript = transcript_path(&copy);
     let savings_bash = format!(
-        r#"{{"session_id":"golden-session","transcript_path":"{transcript}","cwd":"{copy_str}","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{{"command":"sieve ask \"how does run work\" . --json -n 3"}},"tool_response":{{"stdout":"[sieve] tokens saved ≈ 420 (72%); this pack ≈ 160 tok vs reading the 3 file(s) whole ≈ 580 tok (estimate).","stderr":""}}}}"#
+        r#"{{"session_id":"golden-session","transcript_path":"{transcript}","cwd":"{copy_str}","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{{"command":"sieve query \"how does run work\" . --json -n 3"}},"tool_response":{{"stdout":"[sieve] tokens saved ≈ 420 (72%); this pack ≈ 160 tok vs reading the 3 file(s) whole ≈ 580 tok (estimate).","stderr":""}}}}"#
     );
     run_hook(&copy, "tool-savings", &savings_bash);
 

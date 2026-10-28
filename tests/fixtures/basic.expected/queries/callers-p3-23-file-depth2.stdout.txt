@@ -3,4 +3,4 @@ util.ts  file  src/util.ts:1-8
 ├─ app.ts  file  src/app.ts:1-21  · imports
 └─ run  method  src/app.ts:11-13
    └─ main  fn  src/app.ts:16-20
-[sieve] saved ≈ 70 tokens
+🎯 3 exact callers

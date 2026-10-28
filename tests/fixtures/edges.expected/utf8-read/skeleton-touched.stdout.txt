@@ -1,4 +1,4 @@
 ts/latin.ts · 2 symbols
 2-4  latinString  fn  (): string  · 1 caller
 5-7  latinCaller  fn  (): number
-[sieve] saved ≈ 21 tokens
+🎯 2 signatures · ~21 tokens saved

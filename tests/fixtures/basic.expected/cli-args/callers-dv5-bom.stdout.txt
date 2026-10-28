@@ -4,4 +4,4 @@ add  fn  py/helpers.py:1-2
 │     1: def go(): return add(1, 2)
 └─ total  method  py/main.py:5-6
       6: return add(a, b)
-[sieve] saved ≈ 33 tokens
+🎯 2 exact callers · ~6 tokens saved

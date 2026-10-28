@@ -33,6 +33,7 @@ pub mod resolve;
 mod rust_items;
 mod rust_proof;
 mod rust_tree;
+pub mod shell;
 pub mod stamp;
 pub mod timing;
 mod ts_scope;

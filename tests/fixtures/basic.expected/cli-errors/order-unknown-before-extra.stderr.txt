@@ -1,1 +1,1 @@
-sieve: ask has no --bad option — see sieve ask --help
+sieve: query has no --bad option — see sieve query --help

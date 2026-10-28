@@ -1,1 +1,1 @@
-no hits for "nothingHere" in 2 indexed files — try a bare symbol name or a short substring, or run sieve ask "<question>". Use raw grep -rn only for files the index does not hold
+no hits for "nothingHere" in 2 indexed files — try a bare symbol name or a short substring, or run sieve query "<question>". Use raw grep -rn only for files the index does not hold

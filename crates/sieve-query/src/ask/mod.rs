@@ -410,7 +410,7 @@ fn wants_tests_re() -> Option<&'static Regex> {
 fn is_test_path_re() -> Option<&'static Regex> {
     static RE: OnceLock<Option<Regex>> = OnceLock::new();
     RE.get_or_init(|| {
-        Regex::new(r"(?i-u)(^|/)(tests?|__tests__|spec)/|(_test|\.test|\.spec)\.[a-z]+$|(^|/)(test_(?u:[^/])+|conftest)\.py$")
+        Regex::new(r"(?i-u)(^|/)(tests?|__tests__|spec)/|(_test|\.test|\.spec)\.[a-z]+$|_tests\.rs$|(^|/)tests?\.rs$|(^|/)(test_(?u:[^/])+|conftest)\.py$")
             .ok()
     })
     .as_ref()
@@ -433,6 +433,22 @@ pub(crate) fn test_factor(query_wants_tests: bool, path: &str) -> f64 {
     } else {
         1.0
     }
+}
+
+/// Whether a Python class name marks a test class: `Test`, `Test` plus an
+/// uppercase letter or digit, or a `Test` or `Tests` suffix.
+pub(crate) fn is_test_class_name(name: &str) -> bool {
+    name.strip_prefix("Test").is_some_and(|rest| {
+        rest.chars()
+            .next()
+            .is_none_or(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
+    }) || name.ends_with("Test")
+        || name.ends_with("Tests")
+}
+
+/// Whether a Rust module name marks a test module.
+pub(crate) fn is_test_module_name(name: &str) -> bool {
+    matches!(name, "tests" | "test") || name.ends_with("_tests")
 }
 
 /// Runs one `ask` query over `graph`, reading each hit's source under
@@ -535,7 +551,8 @@ fn ask_inner(
     let terms = lexical::query_terms(query);
     let query_wants_tests = wants_tests(query);
 
-    let all_docs = lexical::build_docs(graph, index);
+    let mut all_docs = lexical::build_docs(graph, index);
+    lexical::mark_inline_tests(&graph.nodes, &mut all_docs);
     let active_nodes: Vec<&Node> = graph
         .nodes
         .iter()
@@ -928,7 +945,30 @@ mod regex_tests {
         assert!(wants_tests("MOCKS"));
         assert!(!wants_tests("moc\u{212A}s"));
         assert!(is_test_path("src/a.TEST.ts"));
+        assert!(is_test_path("crates/x/src/kt_proof_tests.rs"));
+        assert!(is_test_path("crates/x/src/kt_proof_test.rs"));
+        assert!(is_test_path("pkg/test_a.py"));
+        assert!(is_test_path("pkg/a_test.py"));
+        assert!(!is_test_path("crates/x/src/contests.rs"));
+        assert!(is_test_path("src/tests.rs"));
+        assert!(is_test_path("test.rs"));
         assert!(!is_test_path("src/a.test.\u{212A}"));
+    }
+}
+
+#[cfg(test)]
+mod class_name_tests {
+    use super::is_test_class_name;
+
+    #[test]
+    fn test_class_name_needs_a_word_boundary() {
+        assert!(!is_test_class_name("Testimonial"));
+        assert!(!is_test_class_name("Testable"));
+        assert!(is_test_class_name("TestParser"));
+        assert!(is_test_class_name("Test"));
+        assert!(is_test_class_name("Test2"));
+        assert!(is_test_class_name("FooTests"));
+        assert!(is_test_class_name("FooTest"));
     }
 }
 

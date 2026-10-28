@@ -1,4 +1,4 @@
-ask  parse config · 8 hits
+query  parse config · 8 hits
 
 2 of 3 workspace repos have graphs; run sieve build to cover beta
 

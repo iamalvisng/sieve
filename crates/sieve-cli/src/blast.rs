@@ -1,4 +1,4 @@
-//! The `sieve blast` subcommand: what a diff's changed lines reach
+//! The `sieve impact` subcommand: what a diff's changed lines reach
 //! (the `query-commands.md` note section 3).
 //!
 //! `blast` never prepends a savings header (section 0). All four
@@ -19,7 +19,7 @@ use crate::build::resolve_abs;
 use crate::query;
 use crate::viz::VIEWER;
 
-/// Flags for `sieve blast`.
+/// Flags for `sieve impact`.
 #[derive(Args, Debug)]
 pub struct BlastArgs {
     /// The repo root. Default: the nearest ancestor with a graph.
@@ -56,7 +56,7 @@ pub struct BlastArgs {
     pub no_refresh: bool,
 }
 
-/// Runs `sieve blast`: refreshes the graph, validates `--format` then
+/// Runs `sieve impact`: refreshes the graph, validates `--format` then
 /// `--depth`, loads the graph, then runs the diff and the walk (section
 /// 3.1).
 ///
@@ -128,7 +128,7 @@ fn export_radius(
     std::fs::write(&file, &out.page).map_err(|e| e.to_string())?;
     let kb = (out.page.len() as f64 / 1024.0).round();
     eprintln!(
-        "sieve blast wrote {} \u{b7} {kb} kB \u{b7} {} areas \u{b7} {} symbols",
+        "sieve impact wrote {} \u{b7} {kb} kB \u{b7} {} areas \u{b7} {} symbols",
         file.display(),
         out.context_nodes,
         out.code_nodes

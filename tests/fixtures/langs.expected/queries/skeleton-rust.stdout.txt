@@ -9,4 +9,4 @@ rust/lib.rs · 10 symbols
 29-31  fmt  fn  (&self, f: &mut fmt::Formatter) -> fmt::Result
 34-38  util  module  mod util
 35-37  run  fn  (app: &super::App) -> String
-[sieve] saved ≈ 43 tokens
+🎯 10 signatures · ~43 tokens saved

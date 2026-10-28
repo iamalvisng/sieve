@@ -115,7 +115,7 @@ fn test_p3_02_refresh_rewrites_the_ask_sidecar() {
         .args(["grep", "add", "--fixed"])
         .current_dir(&temp.path)
         .output()
-        .expect("run sieve grep");
+        .expect("run sieve find");
     assert_eq!(output.status.code(), Some(0));
 
     let text = fs::read_to_string(&sidecar_path).expect("read rewritten ask-index.json");
@@ -156,7 +156,7 @@ fn test_p2_37_build_writes_covers_and_a_query_never_rewrites_them() {
         .args(["grep", "double", "--fixed"])
         .current_dir(&temp.path)
         .output()
-        .expect("run sieve grep");
+        .expect("run sieve find");
     assert_eq!(output.status.code(), Some(0));
 
     let text_after_query =

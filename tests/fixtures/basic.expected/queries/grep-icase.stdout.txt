@@ -1,4 +1,4 @@
-grep "APP" · 3 hits in 2 symbols across 1 file · searched 7 files
+find "APP" · 3 hits in 2 symbols across 1 file · searched 7 files
 
 App  class  src/app.ts:4-14  · 0 links in
   4: export class App {
@@ -6,4 +6,4 @@ App  class  src/app.ts:4-14  · 0 links in
 main  fn  src/app.ts:16-20  · 0 links in
   17: const app = new App("sieve");
   18: app.run(1);
-[sieve] saved ≈ 20 tokens
+🎯 3 hits in 2 symbols

@@ -1,7 +1,8 @@
-grep "latinString" · 2 hits in 2 symbols across 1 file · searched 14 files
+find "latinString" · 2 hits in 2 symbols across 1 file · searched 14 files
 
 latinString  fn  ts/latin.ts:2-4  · 1 link in
   2: export function latinString(): string {
 
 latinCaller  fn  ts/latin.ts:5-7  · 0 links in
   6: return latinString().length; // caf�
+🎯 2 hits in 2 symbols

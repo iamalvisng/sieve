@@ -3,3 +3,4 @@ src/app.ts · 4 symbols
   7-9  constructor  method  (name: string) — The constructor initializes the App instance with a given name.
 11-13  run  method  (n: number): number — The run method executes a quadrupling operation on a given number.  · 1 caller
 16-20  main  fn  (): void — The main function serves as the entry point for the application, creating an App instance and invoking its run method.
+🎯 4 signatures

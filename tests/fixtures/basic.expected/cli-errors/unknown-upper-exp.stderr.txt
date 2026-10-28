@@ -1,1 +1,1 @@
-sieve: grep has no -1E5 option — see sieve grep --help
+sieve: find has no -1E5 option — see sieve find --help

@@ -22,10 +22,10 @@ Commands:
   version                           Print the installed version
   build [options] [dir]             Build sieve/ from your code — symbol graph +
                                     per-file pages ($0, no key).
-  ask [options] <query> [dir]       Query the sieve/ graph — returns ranked
+  query [options] <query> [dir]     Query the sieve/ graph — returns ranked
                                     symbols + exact file:line, routed to prose or
                                     code ($0, no key)
-  skeleton [options] <file> [dir]   Signatures-only view of one file from the
+  symbols [options] <file> [dir]    Signatures-only view of one file from the
                                     symbol graph — the cheapest way to see a
                                     file's API surface
   check [options] [dir]             Fail if sieve/ is stale relative to the code
@@ -35,19 +35,18 @@ Commands:
   viz [options] [dir]               Serve an interactive visualization of the
                                     context graph (and graph.json when present)
   mcp [dir]                         Serve the graph over MCP (stdio) — exposes
-                                    sieve_find_code, sieve_trace_calls,
-                                    sieve_find_all, sieve_file_api,
-                                    sieve_repo_map, sieve_why and
-                                    sieve_check_freshness as tools
+                                    sieve_query, sieve_callers, sieve_find,
+                                    sieve_symbols, sieve_map, sieve_why and
+                                    sieve_check as tools
   callers [options] <symbol> [dir]  Who calls/references a symbol ($0, no LLM).
                                     --direction out gives callees (what it
                                     calls); --depth N (or all) walks
                                     transitively for full blast radius
-  blast [options] [dir]             Blast radius of a diff: what depends on the
+  impact [options] [dir]            Blast radius of a diff: what depends on the
                                     lines this change touched ($0, no LLM).
                                     Built for CI — `--format markdown` is a PR
                                     comment with a Mermaid diagram.
-  grep [options] <pattern> [dir]    Regex search over indexed files, hits
+  find [options] <pattern> [dir]    Regex search over indexed files, hits
                                     grouped by enclosing symbol and ranked by
                                     coupling ($0, no LLM)
   map [options] [dir]               Token-budgeted repo orientation — directory
@@ -149,8 +148,8 @@ Options:
 "#,
     ),
     (
-        "ask",
-        r#"Usage: sieve ask [options] <query> [dir]
+        "query",
+        r#"Usage: sieve query [options] <query> [dir]
 
 Query the sieve/ graph — returns ranked symbols + exact file:line, routed to prose
 or code ($0, no key)
@@ -178,8 +177,8 @@ Options:
 "#,
     ),
     (
-        "skeleton",
-        r#"Usage: sieve skeleton [options] <file> [dir]
+        "symbols",
+        r#"Usage: sieve symbols [options] <file> [dir]
 
 Signatures-only view of one file from the symbol graph — the cheapest way to see
 a file's API surface
@@ -251,9 +250,8 @@ Options:
         "mcp",
         r#"Usage: sieve mcp [options] [dir]
 
-Serve the graph over MCP (stdio) — exposes sieve_find_code, sieve_trace_calls,
-sieve_find_all, sieve_file_api, sieve_repo_map, sieve_why and
-sieve_check_freshness as tools
+Serve the graph over MCP (stdio) — exposes sieve_query, sieve_callers,
+sieve_find, sieve_symbols, sieve_map, sieve_why and sieve_check as tools
 
 Arguments:
   dir         repository root (default: nearest ancestor with a sieve/ index)
@@ -287,8 +285,8 @@ Options:
 "#,
     ),
     (
-        "blast",
-        r#"Usage: sieve blast [options] [dir]
+        "impact",
+        r#"Usage: sieve impact [options] [dir]
 
 Blast radius of a diff: what depends on the lines this change touched ($0, no
 LLM). Built for CI — `--format markdown` is a PR comment with a Mermaid diagram.
@@ -317,8 +315,8 @@ Options:
 "#,
     ),
     (
-        "grep",
-        r#"Usage: sieve grep [options] <pattern> [dir]
+        "find",
+        r#"Usage: sieve find [options] <pattern> [dir]
 
 Regex search over indexed files, hits grouped by enclosing symbol and ranked by
 coupling ($0, no LLM)
@@ -445,6 +443,14 @@ Options:
 /// The branded commander help for one subcommand, or `None` when there
 /// is no text for it (the caller then lets clap print its own help).
 pub fn sub_help_text(name: &str) -> Option<String> {
+    // The old names `ask`, `grep` and `blast` are aliases of the new ones.
+    let name = match name {
+        "ask" => "query",
+        "grep" => "find",
+        "blast" => "impact",
+        "skeleton" => "symbols",
+        other => other,
+    };
     let (_, text) = SUB_HELP.iter().find(|(n, _)| *n == name)?;
     // The base `init` text does not list `--mod`; add it here.
     if name == "init" {

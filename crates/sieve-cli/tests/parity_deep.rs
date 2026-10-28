@@ -388,7 +388,7 @@ fn test_p1_02_p3_14_p3_15_ask_source_replays_the_crux_and_full_bypasses_it() {
     assert_query_matches_golden(&temp.path, "ask-source-full");
 }
 
-/// P2-10: `sieve skeleton` prints the stored summary line, matching
+/// P2-10: `sieve symbols` prints the stored summary line, matching
 /// The `skeleton-deep` golden.
 #[test]
 fn test_p1_18_p2_10_skeleton_prints_the_summary_line() {

@@ -471,7 +471,27 @@ mod tests {
         );
         let value: Value = serde_json::from_str(out.trim_end()).unwrap();
         let text = value["result"]["content"][0]["text"].as_str().unwrap();
-        assert_eq!(text, "sieve_find_code requires a query");
+        assert_eq!(text, "sieve_query requires a query");
+    }
+
+    /// Each old tool name still runs the tool that took its place.
+    #[test]
+    fn an_old_tool_name_still_runs() {
+        for (old, want) in [
+            ("sieve_find_code", "sieve_query requires a query"),
+            ("sieve_file_api", "sieve_symbols requires a file"),
+            ("sieve_skeleton", "sieve_symbols requires a file"),
+            ("sieve_trace_calls", "sieve_callers requires a symbol"),
+            ("sieve_find_all", "sieve_find requires a pattern"),
+        ] {
+            let line = format!(
+                "{{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{{\"name\":\"{old}\",\"arguments\":{{}}}}}}\n"
+            );
+            let (out, _) = run(&line);
+            let value: Value = serde_json::from_str(out.trim_end()).unwrap();
+            let text = value["result"]["content"][0]["text"].as_str().unwrap();
+            assert_eq!(text, want, "{old}");
+        }
     }
 
     #[test]

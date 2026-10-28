@@ -4,4 +4,4 @@ src/a.ts · 5 symbols
  9-11  shared  fn  (): number  · 1 caller
 13-15  useShared  fn  (): number  · 1 caller
 17-19  useSharedTwice  fn  (): number
-[sieve] saved ≈ 23 tokens
+🎯 5 signatures · ~23 tokens saved

@@ -71,7 +71,34 @@ fn lock_is_stale(path: &Path) -> io::Result<bool> {
         .duration_since(modified)
         .unwrap_or(Duration::ZERO)
         .as_millis() as u64;
-    Ok(age_ms >= LOCK_STALE_MS)
+    Ok(age_ms >= LOCK_STALE_MS || owner_is_dead(path))
+}
+
+/// Returns `true` when the lock file names an owner process that is gone.
+///
+/// An unreadable body, or a pid that does not parse, counts as alive: the
+/// age limit then decides. The check runs `kill -0`, which sends no signal.
+fn owner_is_dead(path: &Path) -> bool {
+    let Ok(body) = fs::read_to_string(path) else {
+        return false;
+    };
+    let Some(pid) = serde_json::from_str::<serde_json::Value>(&body)
+        .ok()
+        .and_then(|v| v["pid"].as_u64())
+    else {
+        return false;
+    };
+    if pid == u64::from(std::process::id()) {
+        return false;
+    }
+    std::process::Command::new("kill")
+        .args(["-0", &pid.to_string()])
+        .output()
+        // A denied signal (EPERM) means the process exists, so it is alive.
+        .map(|o| {
+            !o.status.success() && !String::from_utf8_lossy(&o.stderr).contains("not permitted")
+        })
+        .unwrap_or(false)
 }
 
 /// Waits for the lock, trying then sleeping, until [`LOCK_WAIT_MS`] pass.
@@ -217,6 +244,35 @@ mod tests {
         let _ = file.set_modified(stale);
 
         assert!(try_acquire(&dir.path).expect("acquire over a stale lock"));
+    }
+
+    #[test]
+    fn a_lock_with_a_dead_owner_is_taken_over() {
+        let dir = TempDir::new("dead-owner");
+        let path = lock_path(&dir.path);
+        fs::create_dir_all(path.parent().expect("parent")).expect("mkdir");
+        // A child that already exited gives a pid that is not alive.
+        let mut child = std::process::Command::new("true").spawn().expect("spawn");
+        let pid = child.id();
+        child.wait().expect("wait");
+        fs::write(&path, format!("{{\"pid\":{pid},\"at\":\"x\"}}")).expect("write lock");
+        assert!(try_acquire(&dir.path).expect("acquire over a dead owner"));
+    }
+
+    #[test]
+    fn a_lock_with_a_live_owner_blocks() {
+        let dir = TempDir::new("live-owner");
+        let path = lock_path(&dir.path);
+        fs::create_dir_all(path.parent().expect("parent")).expect("mkdir");
+        let mut child = std::process::Command::new("sleep")
+            .arg("30")
+            .spawn()
+            .expect("spawn");
+        fs::write(&path, format!("{{\"pid\":{},\"at\":\"x\"}}", child.id())).expect("write lock");
+        let got = try_acquire(&dir.path).expect("try acquire");
+        let _ = child.kill();
+        let _ = child.wait();
+        assert!(!got);
     }
 
     #[test]

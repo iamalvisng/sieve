@@ -12,7 +12,7 @@ the definition in the reference's own crate target; if that is not unique,
 one row per candidate is written with "ambiguous": true.
 Env SCIP_KEEP=<path> keeps the SCIP file.
 Shapes: bare, path, use_alias, glob, crate, self_ty, type_assoc, self_method,
-method, macro_arg.
+method, macro_arg, fn_arg (a fn passed as a whole argument).
 """
 import json, os, re, subprocess, sys, tempfile
 
@@ -227,7 +227,11 @@ def main():
             if l0 != l1 or l0 >= len(lines):
                 continue
             line = lines[l0]
-            if not re.match(r"\s*(::\s*<[^()]*>)?\s*\(", line[c1:]):
+            is_call = re.match(r"\s*(::\s*<[^()]*>)?\s*\(", line[c1:])
+            # A fn passed as a whole argument: `.map(f)`, `g(a, m::f)`.
+            is_arg = (not is_call and re.match(r"\s*[,)]", line[c1:])
+                      and re.search(r"(?:^|[(,])\s*(?:[A-Za-z_][A-Za-z0-9_]*::)*$", line[:c0]))
+            if not (is_call or is_arg):
                 continue  # not a call
             if re.match(r"\s*(pub(\([^)]*\))?\s+)?use\b", line):
                 continue
@@ -239,7 +243,7 @@ def main():
             name = line[c0:c1]
             dstname = FN.search(sym).group(1)
             for d in ds:
-                shape = classify(text, lines, l0, c0, c1, name, dstname, rel, d[0], inm(l0, c0), globs, imported)
+                shape = "fn_arg" if is_arg else classify(text, lines, l0, c0, c1, name, dstname, rel, d[0], inm(l0, c0), globs, imported)
                 row = {"src": rel, "line": l0 + 1, "shape": shape, "dst": d[0], "name": dstname,
                        "dst_start": d[1], "dst_end": d[2], "owner": owner(sym)}
                 if amb:

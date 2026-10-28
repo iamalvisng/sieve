@@ -6,7 +6,10 @@ use std::collections::{HashMap, HashSet};
 use sieve_core::askindex::{bag, body_len, tokenize, AskDoc, AskIndex, Bag};
 use sieve_core::{Graph, Kind, Node};
 
-use super::test_factor;
+use super::{
+    is_test_class_name, is_test_module_name, is_test_path, test_factor, TEST_RANK_PENALTY,
+};
+use crate::blast::span_bounds;
 
 /// One node's three token bags, built either from the sidecar or live.
 #[derive(Debug, Clone)]
@@ -15,6 +18,8 @@ pub(crate) struct DocBag {
     pub path: Bag,
     pub body: Bag,
     pub body_len: u32,
+    /// Set when the node sits inside a Rust test module of its own file.
+    pub inline_test: bool,
 }
 
 fn doc_bag_from_node(node: &Node) -> DocBag {
@@ -32,6 +37,7 @@ fn doc_bag_from_node(node: &Node) -> DocBag {
         path,
         body,
         body_len: body_len_val,
+        inline_test: false,
     }
 }
 
@@ -41,6 +47,7 @@ fn doc_bag_from_ask_doc(doc: &AskDoc) -> DocBag {
         path: doc.path.clone(),
         body: doc.body.clone(),
         body_len: body_len(doc),
+        inline_test: false,
     }
 }
 
@@ -81,7 +88,24 @@ pub fn query_terms(query: &str) -> Vec<String> {
             out.push(t);
         }
     }
+    if is_how_does_work(query) {
+        out.retain(|t| t != "work" && t != "works");
+    }
     out
+}
+
+/// Whether the query has the shape "how does X work". The last word is a
+/// verb that frames the question, not a name to find, so it is no term.
+fn is_how_does_work(query: &str) -> bool {
+    let words: Vec<String> = query
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .map(str::to_ascii_lowercase)
+        .collect();
+    let [first, second, .., last] = words.as_slice() else {
+        return false;
+    };
+    first == "how" && (second == "does" || second == "do") && (last == "work" || last == "works")
 }
 
 /// The document-frequency table and average body length over one active
@@ -261,6 +285,75 @@ pub(crate) fn bm25(terms: &[String], body: &Bag, corpus: &Corpus, dl: u32) -> f6
         .sum()
 }
 
+/// Whether `n` opens a test scope: a Rust test module or a Python
+/// `Test*` class.
+fn is_test_scope(n: &Node) -> bool {
+    (n.kind == Kind::Module && n.path.ends_with(".rs") && is_test_module_name(&n.name))
+        || (n.kind == Kind::Class && n.path.ends_with(".py") && is_test_class_name(&n.name))
+}
+
+/// Whether `n` is a Python `test_*` function in a test file. Elsewhere the
+/// function is code unless it lies inside a test class.
+fn is_py_test_fn(n: &Node) -> bool {
+    matches!(n.kind, Kind::Function | Kind::Method)
+        && n.path.ends_with(".py")
+        && n.name.starts_with("test_")
+        && is_test_path(&n.path)
+}
+
+/// Sets `inline_test` on every doc whose node lies inside a test scope of
+/// the same file: a Rust test module (`tests`, `test` or `*_tests`) or a
+/// Python `Test*` class. A Python `test_*` function is a test too. The id
+/// has no scope, so the scope node's line span is the only signal.
+/// Runs once per ask run.
+pub(crate) fn mark_inline_tests(nodes: &[Node], docs: &mut HashMap<&str, DocBag>) {
+    let mut scopes: HashMap<&str, Vec<(u32, u32)>> = HashMap::new();
+    for n in nodes {
+        if is_test_scope(n) {
+            if let Some(b) = span_bounds(&n.span) {
+                scopes.entry(n.path.as_str()).or_default().push(b);
+            }
+        }
+    }
+    let mut test_ids: HashSet<&str> = HashSet::new();
+    let mut code_ids: HashSet<&str> = HashSet::new();
+    for n in nodes {
+        if is_test_scope(n) {
+            continue;
+        }
+        if is_py_test_fn(n) {
+            test_ids.insert(n.id.as_str());
+            continue;
+        }
+        let inside = match (scopes.get(n.path.as_str()), span_bounds(&n.span)) {
+            (Some(spans), Some(b)) => spans.iter().any(|&(s, e)| b.0 >= s && b.1 <= e),
+            _ => false,
+        };
+        if inside {
+            test_ids.insert(n.id.as_str());
+        } else {
+            code_ids.insert(n.id.as_str());
+        }
+    }
+    // The id has no scope: a code node that shares an id with a test node
+    // keeps its rank.
+    for (id, d) in docs.iter_mut() {
+        if test_ids.contains(id) && !code_ids.contains(id) {
+            d.inline_test = true;
+        }
+    }
+}
+
+/// The rank factor of a test in a Rust source file. A test whose name
+/// holds every query term keeps its rank, so an exact-name lookup works.
+pub(crate) fn inline_test_factor(query_wants_tests: bool, doc: &DocBag, terms: &[String]) -> f64 {
+    if !query_wants_tests && doc.inline_test && !terms.iter().all(|t| has_exact(&doc.name, t)) {
+        TEST_RANK_PENALTY
+    } else {
+        1.0
+    }
+}
+
 /// One node's lexical total (section 3.4).
 pub(crate) fn node_total(
     terms: &[String],
@@ -272,7 +365,8 @@ pub(crate) fn node_total(
     let name_score = score(terms, &doc.name, corpus) * 3.0;
     let path_score = score(terms, &doc.path, corpus) * 2.0;
     let body_score = bm25(terms, &doc.body, corpus, doc.body_len);
-    let factor = test_factor(query_wants_tests, path);
+    let factor =
+        test_factor(query_wants_tests, path).min(inline_test_factor(query_wants_tests, doc, terms));
     (name_score + path_score + body_score) * factor
 }
 
@@ -362,7 +456,218 @@ mod tests {
             path: to_bag(path),
             body: body_bag,
             body_len: body_len_val,
+            inline_test: false,
         }
+    }
+
+    fn mod_node(id: &str, name: &str, kind: Kind, path: &str, span: &str) -> Node {
+        Node {
+            id: id.to_string(),
+            name: name.to_string(),
+            kind,
+            owner: None,
+            path: path.to_string(),
+            span: span.to_string(),
+            signature: None,
+            exported: false,
+            origin: sieve_core::Origin::Ast,
+            body_hash: "0".repeat(64),
+            chars: None,
+            body_text: None,
+            arity: None,
+            variadic: None,
+            summary_state: sieve_core::SummaryState::Pending,
+            summary: None,
+            crux: None,
+        }
+    }
+
+    /// Nodes shaped like the extractor output for a file with `fn code`
+    /// and `mod tests { fn code_name_words_test }`: the Rust ids carry no
+    /// module scope.
+    fn sample_nodes(path: &str) -> Vec<Node> {
+        let id = |n: &str| format!("{path}#{n}");
+        vec![
+            mod_node(&id("code"), "code", Kind::Function, path, "L1-L1"),
+            mod_node(&id("tests"), "tests", Kind::Module, path, "L3-L6"),
+            mod_node(
+                &id("code_name_words_test"),
+                "code_name_words_test",
+                Kind::Function,
+                path,
+                "L5-L5",
+            ),
+        ]
+    }
+
+    fn marked(nodes: &[Node]) -> HashMap<&str, DocBag> {
+        let mut docs: HashMap<&str, DocBag> = nodes
+            .iter()
+            .map(|n| (n.id.as_str(), doc_bag_from_node(n)))
+            .collect();
+        mark_inline_tests(nodes, &mut docs);
+        docs
+    }
+
+    #[test]
+    fn mark_inline_tests_marks_the_fn_inside_a_test_module_only() {
+        let nodes = sample_nodes("src/a.rs");
+        let docs = marked(&nodes);
+        assert!(!docs["src/a.rs#code"].inline_test);
+        assert!(!docs["src/a.rs#tests"].inline_test);
+        assert!(docs["src/a.rs#code_name_words_test"].inline_test);
+    }
+
+    #[test]
+    fn mark_inline_tests_skips_a_non_rust_file_and_a_plain_module() {
+        let nodes = sample_nodes("src/a.ts");
+        assert!(!marked(&nodes)["src/a.ts#code_name_words_test"].inline_test);
+        let mut nodes = sample_nodes("src/a.rs");
+        nodes[1].name = "helpers".to_string();
+        assert!(!marked(&nodes)["src/a.rs#code_name_words_test"].inline_test);
+    }
+
+    #[test]
+    fn mark_inline_tests_skips_a_module_named_contests() {
+        let mut nodes = sample_nodes("src/a.rs");
+        nodes[1].name = "contests".to_string();
+        assert!(!marked(&nodes)["src/a.rs#code_name_words_test"].inline_test);
+    }
+
+    #[test]
+    fn mark_inline_tests_marks_a_fn_in_a_one_line_test_module() {
+        let mut nodes = sample_nodes("src/a.rs");
+        nodes[1].span = "L3-L3".to_string();
+        nodes[2].span = "L3-L3".to_string();
+        let docs = marked(&nodes);
+        assert!(docs["src/a.rs#code_name_words_test"].inline_test);
+        assert!(!docs["src/a.rs#tests"].inline_test);
+    }
+
+    #[test]
+    fn mark_inline_tests_keeps_a_code_fn_that_shares_an_id_with_a_test_fn() {
+        let mut nodes = sample_nodes("src/a.rs");
+        nodes.push(mod_node(
+            "src/a.rs#code_name_words_test",
+            "code_name_words_test",
+            Kind::Function,
+            "src/a.rs",
+            "L8-L9",
+        ));
+        assert!(!marked(&nodes)["src/a.rs#code_name_words_test"].inline_test);
+    }
+
+    #[test]
+    fn mark_inline_tests_marks_a_python_test_class_and_its_methods() {
+        let nodes = vec![
+            mod_node("a.py#code", "code", Kind::Function, "a.py", "L1-L2"),
+            mod_node("a.py#TestA", "TestA", Kind::Class, "a.py", "L4-L9"),
+            mod_node("a.py#TestA.check", "check", Kind::Method, "a.py", "L5-L6"),
+            mod_node("a.py#Latest", "Latest", Kind::Class, "a.py", "L11-L12"),
+        ];
+        let docs = marked(&nodes);
+        assert!(!docs["a.py#code"].inline_test);
+        assert!(!docs["a.py#TestA"].inline_test);
+        assert!(docs["a.py#TestA.check"].inline_test);
+        assert!(!docs["a.py#Latest"].inline_test);
+    }
+
+    #[test]
+    fn mark_inline_tests_marks_a_python_test_fn_only_in_py() {
+        let nodes = vec![
+            mod_node(
+                "tests/a.py#test_x",
+                "test_x",
+                Kind::Function,
+                "tests/test_a.py",
+                "L1-L2",
+            ),
+            mod_node("a.py#run", "run", Kind::Function, "a.py", "L4-L5"),
+            mod_node("a.ts#test_x", "test_x", Kind::Function, "a.ts", "L1-L2"),
+        ];
+        let docs = marked(&nodes);
+        assert!(docs["tests/a.py#test_x"].inline_test);
+        assert!(!docs["a.py#run"].inline_test);
+        assert!(!docs["a.ts#test_x"].inline_test);
+    }
+
+    #[test]
+    fn mark_inline_tests_keeps_a_test_named_fn_in_a_code_module() {
+        let nodes = vec![mod_node(
+            "db.py#test_connection",
+            "test_connection",
+            Kind::Function,
+            "pkg/db.py",
+            "L1-L2",
+        )];
+        assert!(!marked(&nodes)["db.py#test_connection"].inline_test);
+    }
+
+    #[test]
+    fn mark_inline_tests_keeps_a_python_code_fn_that_shares_an_id() {
+        let nodes = vec![
+            mod_node("a.py#TestA", "TestA", Kind::Class, "a.py", "L1-L4"),
+            mod_node("a.py#helper", "helper", Kind::Method, "a.py", "L2-L3"),
+            mod_node("a.py#helper", "helper", Kind::Function, "a.py", "L6-L7"),
+        ];
+        assert!(!marked(&nodes)["a.py#helper"].inline_test);
+    }
+
+    #[test]
+    fn exact_name_query_keeps_a_python_test_rank() {
+        let nodes = vec![mod_node(
+            "a.py#test_x",
+            "test_parse_name",
+            Kind::Function,
+            "tests/test_a.py",
+            "L1-L2",
+        )];
+        let docs = marked(&nodes);
+        let d = &docs["a.py#test_x"];
+        let other = vec!["stop".to_string()];
+        assert_eq!(inline_test_factor(false, d, &other), TEST_RANK_PENALTY);
+        let exact = vec!["parse".to_string(), "name".to_string()];
+        assert_eq!(inline_test_factor(false, d, &exact), 1.0);
+    }
+
+    #[test]
+    fn inline_test_with_more_name_terms_ranks_below_a_code_symbol() {
+        let corpus = Corpus {
+            idf: [("code".to_string(), 1.0), ("query".to_string(), 1.0)]
+                .into_iter()
+                .collect(),
+            dflt_idf: 1.0,
+            avg_body_len: 0.0,
+        };
+        let terms = vec!["code".to_string(), "query".to_string(), "stop".to_string()];
+        let nodes = sample_nodes("src/a.rs");
+        let mut docs = marked(&nodes);
+        docs.get_mut("src/a.rs#code").unwrap().name = bag(&["query".to_string()]);
+        docs.get_mut("src/a.rs#code_name_words_test").unwrap().name =
+            bag(&["code".to_string(), "query".to_string()]);
+        let total = |id: &str, path: &str| node_total(&terms, &docs[id], &corpus, false, path);
+        let code = total("src/a.rs#code", "src/a.rs");
+        let test = total("src/a.rs#code_name_words_test", "src/a.rs");
+        assert!(code > test, "{code} {test}");
+    }
+
+    #[test]
+    fn query_that_names_tests_keeps_an_inline_test_rank() {
+        let terms = vec!["stop".to_string()];
+        let nodes = sample_nodes("src/a.rs");
+        let docs = marked(&nodes);
+        let d = &docs["src/a.rs#code_name_words_test"];
+        assert_eq!(inline_test_factor(true, d, &terms), 1.0);
+        assert_eq!(inline_test_factor(false, d, &terms), TEST_RANK_PENALTY);
+    }
+
+    #[test]
+    fn exact_name_query_keeps_an_inline_test_rank() {
+        let terms = vec!["code".to_string(), "words".to_string()];
+        let nodes = sample_nodes("src/a.rs");
+        let docs = marked(&nodes);
+        let d = &docs["src/a.rs#code_name_words_test"];
+        assert_eq!(inline_test_factor(false, d, &terms), 1.0);
     }
 
     #[test]
@@ -499,6 +804,13 @@ mod tests {
     fn wants_tests_matches_a_whole_word() {
         assert!(super::super::wants_tests("run the tests"));
         assert!(!super::super::wants_tests("run the greatest"));
+    }
+
+    #[test]
+    fn how_does_x_work_drops_the_framing_verb_only_in_that_shape() {
+        assert_eq!(query_terms("how does the build work"), ["build"]);
+        assert_eq!(query_terms("how do hooks work"), ["hooks"]);
+        assert_eq!(query_terms("git work tree"), ["git", "work", "tree"]);
     }
 
     #[test]

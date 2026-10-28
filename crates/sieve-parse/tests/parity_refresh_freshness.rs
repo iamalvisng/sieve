@@ -109,7 +109,7 @@ fn test_p1_46_a_query_after_a_build_does_not_refresh_on_breadth_files() {
     let first = rebuild_graph_only(&dir.path, &context_dir).expect("first build");
     assert!(first.files > 0, "the langs fixture should claim files");
 
-    // "sieve grep ..." (the query prelude's pre-query refresh): a clean
+    // "sieve find ..." (the query prelude's pre-query refresh): a clean
     // tree must not rebuild, and must carry no refresh note.
     let outcome = ensure_fresh_graph(&dir.path, &context_dir, &RefreshOptions::default());
     assert_eq!(

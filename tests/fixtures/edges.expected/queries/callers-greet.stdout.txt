@@ -3,4 +3,4 @@ greet  method  ts/base.ts:6-8
 └─ area  method  ts/derived.ts:4-6
    │  5: return this.greet().length;
    └─ outer  fn  ts/calls.ts:7-19
-[sieve] saved ≈ 135 tokens
+🎯 2 exact callers

@@ -1,1 +1,1 @@
-sieve: ask has no --jsn option — did you mean --json, or see sieve ask --help
+sieve: query has no --jsn option — did you mean --json, or see sieve query --help

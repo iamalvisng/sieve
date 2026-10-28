@@ -299,6 +299,7 @@ mod tests {
                 path: bag(&tokenize("a.ts")),
                 body: bag(&tokenize("")),
                 body_len: 0,
+                inline_test: false,
             },
         );
 

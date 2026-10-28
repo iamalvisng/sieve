@@ -1,1 +1,1 @@
-sieve: too many arguments for 'grep'. Expected 2 arguments but got 3: a, b, c. — see sieve grep --help
+sieve: too many arguments for 'find'. Expected 2 arguments but got 3: a, b, c. — see sieve find --help

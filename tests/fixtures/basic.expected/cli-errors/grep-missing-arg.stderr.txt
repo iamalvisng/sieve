@@ -1,1 +1,1 @@
-sieve: grep needs a pattern — see sieve grep --help
+sieve: find needs a pattern — see sieve find --help

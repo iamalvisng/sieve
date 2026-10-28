@@ -107,8 +107,17 @@ impl PyScopes {
     /// first name is a module-level binding gives `PyRec::Call`, for the
     /// module map to prove.
     pub fn call_rec(&mut self, call: TsNode, name: &str, source: &str) -> Option<PyRec> {
-        let src = source.as_bytes();
         let func = call.child_by_field_name("function")?;
+        self.func_rec(func, call, name, source.as_bytes())
+    }
+
+    /// The proof for the name or attribute `arg` used as a value, by the
+    /// same rules as a call of `name` at that place.
+    pub fn ref_rec(&mut self, arg: TsNode, name: &str, source: &str) -> Option<PyRec> {
+        self.func_rec(arg, arg, name, source.as_bytes())
+    }
+
+    fn func_rec(&mut self, func: TsNode, call: TsNode, name: &str, src: &[u8]) -> Option<PyRec> {
         match func.kind() {
             "identifier" => match self.locate(call, name, src) {
                 Loc::Def(rec) => Some(rec),
@@ -166,6 +175,7 @@ impl PyScopes {
             default_export: false,
             reexport: None,
             ns_export: false,
+            by_value: false,
             rust: None,
             py: Some(rec),
             go: None,
@@ -831,7 +841,7 @@ fn bind_imports(n: TsNode, src: &[u8], t: &mut Table, weight: u32) {
 mod tests {
     use crate::extract::Extractor;
     use crate::resolve::resolve_edges;
-    use sieve_core::{Confidence, Relation};
+    use sieve_core::{span, Confidence, Kind, Node, Origin, Relation, SummaryState};
 
     /// The `calls` edges of one `a.py` source as `(caller, callee, confidence)`.
     fn calls(src: &str) -> Vec<(String, String, Confidence)> {
@@ -856,6 +866,112 @@ mod tests {
             got.iter().all(|(_, _, c)| *c != Confidence::Extracted),
             "{got:?}"
         );
+    }
+
+    /// The `calls` edges of several `.py` files as `(caller, callee, confidence)`.
+    fn calls_in(files: &[(&str, &str)]) -> Vec<(String, String, Confidence)> {
+        let mut ext = Extractor::new().expect("extractor builds");
+        let (mut nodes, mut raw) = (Vec::new(), Vec::new());
+        for (path, src) in files {
+            nodes.push(Node {
+                id: path.to_string(),
+                name: path.to_string(),
+                kind: Kind::File,
+                owner: None,
+                path: path.to_string(),
+                span: span(1, 1),
+                signature: None,
+                exported: true,
+                origin: Origin::Ast,
+                body_hash: String::new(),
+                chars: None,
+                body_text: None,
+                arity: None,
+                variadic: None,
+                summary_state: SummaryState::Pending,
+                summary: None,
+                crux: None,
+            });
+            let (n, r) = ext.extract_file(path, src, "python");
+            nodes.extend(n);
+            raw.extend(r);
+        }
+        resolve_edges(&nodes, &raw)
+            .into_iter()
+            .filter(|e| e.relation == Relation::Calls)
+            .map(|e| (e.source, e.target, e.confidence))
+            .collect()
+    }
+
+    fn linked(got: &[(String, String, Confidence)], from: &str, to: &str) -> bool {
+        got.iter().any(|(s, t, _)| s == from && t == to)
+    }
+
+    #[test]
+    fn test_pyref_map_arg_links() {
+        let src = "def helper(x):\n    pass\ndef g(xs):\n    return map(helper, xs)\n";
+        assert!(extracted(src, "a.py#g", "a.py#helper"));
+    }
+
+    #[test]
+    fn test_pyref_keyword_arg_links() {
+        let src = "def score(x):\n    pass\ndef g(xs):\n    return sorted(xs, key=score)\n";
+        assert!(extracted(src, "a.py#g", "a.py#score"));
+    }
+
+    #[test]
+    fn test_pyref_imported_function_links() {
+        let got = calls_in(&[
+            ("b.py", "def helper(x):\n    pass\n"),
+            (
+                "a.py",
+                "from b import helper\ndef g(xs):\n    return map(helper, xs)\n",
+            ),
+        ]);
+        assert!(linked(&got, "a.py#g", "b.py#helper"), "{got:?}");
+    }
+
+    #[test]
+    fn test_pyref_module_attr_links() {
+        let got = calls_in(&[
+            ("b.py", "def helper(x):\n    pass\n"),
+            (
+                "a.py",
+                "import b\ndef g(xs):\n    return map(b.helper, xs)\n",
+            ),
+        ]);
+        assert!(linked(&got, "a.py#g", "b.py#helper"), "{got:?}");
+    }
+
+    #[test]
+    fn test_pyref_self_method_links() {
+        let src = "class A:\n    def helper(self, x):\n        pass\n    def g(self, xs):\n        return filter(self.helper, xs)\n";
+        assert!(linked(&calls(src), "a.py#A.g", "a.py#A.helper"));
+    }
+
+    #[test]
+    fn test_pyref_parameter_gives_no_link() {
+        let src = "def helper(x):\n    pass\ndef g(helper, xs):\n    return map(helper, xs)\n";
+        assert!(calls(src).is_empty());
+    }
+
+    #[test]
+    fn test_pyref_lambda_binding_gives_no_link() {
+        let src = "def helper(x):\n    pass\ndef g(xs):\n    helper = lambda x: x\n    return map(helper, xs)\n";
+        assert!(calls(src).is_empty());
+    }
+
+    #[test]
+    fn test_pyref_class_arg_gives_no_link() {
+        let src = "class Box:\n    pass\ndef g(xs):\n    return map(Box, xs)\n";
+        assert!(calls(src).is_empty());
+    }
+
+    #[test]
+    fn test_pyref_conditional_def_gives_no_link() {
+        let src =
+            "if c:\n    def helper(x):\n        pass\ndef g(xs):\n    return map(helper, xs)\n";
+        assert!(calls(src).is_empty());
     }
 
     #[test]

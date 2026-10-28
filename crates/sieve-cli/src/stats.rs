@@ -23,6 +23,9 @@ pub struct StatsArgs {
     /// output the session stats as JSON
     #[arg(long)]
     pub json: bool,
+    /// read this session id, not the newest session file
+    #[arg(long, value_name = "id", hide = true)]
+    pub session: Option<String>,
 }
 
 /// The context dir `stats` reads sessions under: `SIEVE_DIR` (absolute, or
@@ -62,7 +65,23 @@ fn empty_session() -> Vec<(String, Json)> {
 /// The newest session file's contents, with the session id in front
 /// (`latestSession`). `None` when no `*.json` file exists.
 pub fn latest_session(root: &Path) -> Option<Json> {
-    let path = sieve_core::session::latest_session_path(&stats_context_dir(root))?;
+    session_at(&sieve_core::session::latest_session_path(
+        &stats_context_dir(root),
+    )?)
+}
+
+/// The session `id`, as the status line reads it. A session with no file has no rows: its saved tokens are 0.
+pub fn session_by_id(root: &Path, id: &str) -> Option<Json> {
+    let name = Path::new(id)
+        .file_name()?
+        .to_str()
+        .filter(|n| *n == id && *n != "..")?;
+    let dir = stats_context_dir(root).join(".cache").join("session");
+    session_at(&dir.join(format!("{name}.json")))
+}
+
+/// The session file at `path`, with the session id (the file stem) in front.
+fn session_at(path: &Path) -> Option<Json> {
     let id = path.file_stem()?.to_str()?.to_string();
     // `readJson(...) ?? emptySession()`: a `null` literal also falls back.
     let file = std::fs::read_to_string(path)
@@ -245,6 +264,10 @@ pub fn savings_report(
         else {
             continue;
         };
+        // Only the current formula counts. An old file adds 0.
+        if num(&file, "savingsFormula") != crate::hook::SAVINGS_FORMULA as f64 {
+            continue;
+        }
         let cost = num(&file, "inputCostMicros");
         let billed = num(&file, "inputTokensBilled");
         for (day, tokens) in file.get("savedByDay").map_or(&[][..], Json::pairs) {
@@ -263,7 +286,11 @@ pub fn savings_report(
     let (id, tokens, usd) = match latest {
         Some(s) => (
             s.get("id").cloned().unwrap_or(Json::Null),
-            num(s, "savedTokens"),
+            if num(s, "savingsFormula") == crate::hook::SAVINGS_FORMULA as f64 {
+                num(s, "savedTokens")
+            } else {
+                0.0
+            },
             dollars_saved(
                 num(s, "savedTokens"),
                 num(s, "inputCostMicros"),
@@ -308,7 +335,10 @@ pub fn savings_report(
 pub fn run(args: &StatsArgs, dir_override: Option<&Path>) -> Result<(), String> {
     let cwd = std::env::current_dir().map_err(|e| format!("cwd: {e}"))?;
     let root = query::query_root(args.dir.as_deref(), dir_override, &cwd);
-    let session = latest_session(&root);
+    let session = match &args.session {
+        Some(id) => session_by_id(&root, id),
+        None => latest_session(&root),
+    };
     if args.json {
         let now = crate::telemetry::now_secs();
         let mut pairs = session
@@ -400,6 +430,20 @@ mod tests {
     }
 
     #[test]
+    fn test_stats_session_flag_reads_that_session_not_the_newest() {
+        let s = Scratch::new("byid");
+        s.write("old.json", r#"{"savedTokens":500,"savingsFormula":1}"#);
+        let mine = session_by_id(&s.0, "mine").expect("session");
+        assert_eq!(mine.get("id"), Some(&Json::s("mine")));
+        assert_eq!(num(&mine, "savedTokens"), 0.0, "no file: no rows");
+        assert_eq!(
+            num(&session_by_id(&s.0, "old").expect("old"), "savedTokens"),
+            500.0
+        );
+        assert_eq!(session_by_id(&s.0, "../old"), None);
+    }
+
+    #[test]
     fn test_p1_64_one_session_text_and_json_keep_file_order() {
         let s = Scratch::new("one");
         s.write(
@@ -452,15 +496,15 @@ mod tests {
         let now = 1_791_115_200u64;
         s.write(
             "a.json",
-            r#"{"savedTokens":3000,"savedByDay":{"2026-10-04":1000,"2026-10-02":2000},"inputCostMicros":5000000,"inputTokensBilled":1000000}"#,
+            r#"{"savingsFormula":2,"savedTokens":3000,"savedByDay":{"2026-10-04":1000,"2026-10-02":2000},"inputCostMicros":5000000,"inputTokensBilled":1000000}"#,
         );
         s.write(
             "b.json",
-            r#"{"savedTokens":500,"savedByDay":{"2026-10-04":500}}"#,
+            r#"{"savingsFormula":2,"savedTokens":500,"savedByDay":{"2026-10-04":500}}"#,
         );
         s.write(
             "c.json",
-            r#"{"savedTokens":9,"savedByDay":{"2026-09-01":9}}"#,
+            r#"{"savingsFormula":2,"savedTokens":9,"savedByDay":{"2026-09-01":9}}"#,
         );
         let latest = latest_session(&s.0);
         let report = Json::Obj(savings_report(&s.0.join("sieve"), latest.as_ref(), now, 0));
@@ -485,6 +529,31 @@ mod tests {
             .get("basis")
             .and_then(Json::as_str)
             .is_some_and(|b| b.contains("input")));
+    }
+
+    #[test]
+    fn test_savings_report_ignores_old_formula_entries() {
+        let s = Scratch::new("oldformula");
+        let now = 1_791_115_200u64;
+        s.write(
+            "old.json",
+            r#"{"savedTokens":66689,"savedByDay":{"2026-10-04":66689}}"#,
+        );
+        s.write(
+            "v1.json",
+            r#"{"savingsFormula":1,"savedTokens":5,"savedByDay":{"2026-10-04":5}}"#,
+        );
+        let latest = latest_session(&s.0);
+        let report = Json::Obj(savings_report(&s.0.join("sieve"), latest.as_ref(), now, 0));
+        let tokens = |k: &str| {
+            report
+                .get(k)
+                .and_then(|v| v.get("tokens"))
+                .and_then(Json::as_f64)
+        };
+        assert_eq!(tokens("today"), Some(0.0));
+        assert_eq!(tokens("last7daysTotal"), Some(0.0));
+        assert_eq!(tokens("session"), Some(0.0));
     }
 
     #[test]

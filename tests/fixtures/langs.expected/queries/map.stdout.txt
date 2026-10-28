@@ -1,4 +1,4 @@
-map · 39 files · 237 symbols · 166 links · go, java, kotlin, php, python, r, swift, typescript
+map · 39 files · 237 symbols · 166 links · c, c_sharp, clojure, cpp, dart, elixir, go, java, kotlin, lua, nix, ocaml, php, python, r, ruby, rust, scala, solidity, swift, typescript, vue, zig
 
 kotlin/             3 files · 27 symbols   hubs: Box (Calls.kt, 1←), FamAWidget (App.kt, 1←), Greeter (App.kt, 1←)
 php/                3 files · 26 symbols   hubs: helper (Closures.php, 3←), mk (Closures.php, 2←), Base (Closures.php, 1←)
@@ -31,4 +31,3 @@ apply  fn  c/rich.c:24-26  · 1 link in
 Area  method  csharp/Rich.cs:21-23  · 1 link in
 Base  class  php/Closures.php:9-13  · 1 link in
 Box  class  kotlin/Calls.kt:1-11  · 1 link in
-[sieve] saved ≈ 2,242 tokens

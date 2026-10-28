@@ -1,4 +1,4 @@
-Usage: sieve skeleton [options] <file> [dir]
+Usage: sieve symbols [options] <file> [dir]
 
 Signatures-only view of one file from the symbol graph — the cheapest way to see
 a file's API surface

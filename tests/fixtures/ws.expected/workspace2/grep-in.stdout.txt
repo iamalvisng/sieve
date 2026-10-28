@@ -1,4 +1,4 @@
-grep "return" · 4 hits in 4 symbols across 2 files · searched 2 files
+find "return" · 4 hits in 4 symbols across 2 files · searched 2 files
 
 alphaAdd  fn  alpha/src/a.ts:1-3  · 1 link in
   2: return a + b;
@@ -11,3 +11,4 @@ alphaTwice  fn  alpha/src/a.ts:5-7  · 0 links in
 
 betaShout  fn  beta/src/b.ts:5-7  · 0 links in
   6: return betaGreet(name).toUpperCase();
+🎯 4 hits in 4 symbols

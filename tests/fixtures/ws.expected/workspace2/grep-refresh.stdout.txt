@@ -1,5 +1,5 @@
-grep "alphaExtra" · 1 hit in 1 symbol across 1 file · searched 2 files
+find "alphaExtra" · 1 hit in 1 symbol across 1 file · searched 2 files
 
 alphaExtra  fn  alpha/src/a.ts:9-11  · 0 links in
   9: export function alphaExtra(): number {
-[sieve] saved ≈ 9 tokens
+🎯 1 hits in 1 symbols

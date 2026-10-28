@@ -1,1 +1,1 @@
-sieve: grep has no --fixd option — did you mean --fixed, or see sieve grep --help
+sieve: find has no --fixd option — did you mean --fixed, or see sieve find --help

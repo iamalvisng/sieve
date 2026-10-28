@@ -5,7 +5,7 @@
 //!
 //! The compare is by reply id: sieve answers the calls of one session in
 //! completion order, so line order is not part of the oracle.
-//! `sieve_find_code` is not in these sessions. It federates with `ask`;
+//! `sieve_query` is not in these sessions. It federates with `ask`;
 //! its tests are in `crates/sieve-cli/tests/workspace_step5_parity.rs`.
 
 #[path = "support/golden.rs"]

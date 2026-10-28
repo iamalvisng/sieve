@@ -1,4 +1,4 @@
-grep "big" · 6 hits in 6 symbols across 1 file · searched 3 files
+find "big" · 6 hits in 6 symbols across 1 file · searched 3 files
 
 bigOne  fn  packages/big/index.ts:1-2  · 0 links in
   1: export function bigOne(): number {
@@ -17,3 +17,4 @@ bigFive  fn  packages/big/index.ts:13-14  · 0 links in
 
 bigSix  fn  packages/big/index.ts:16-17  · 0 links in
   16: export function bigSix(): number {
+🎯 6 hits in 6 symbols

@@ -1,1 +1,1 @@
-sieve: --format needs a value — see sieve blast --help
+sieve: --format needs a value — see sieve impact --help

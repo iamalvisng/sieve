@@ -1,1 +1,1 @@
-sieve: no symbol named zzz_nope — try sieve grep zzz_nope
+sieve: no symbol named zzz_nope — try sieve find zzz_nope

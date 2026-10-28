@@ -1,4 +1,4 @@
-ask  who calls parseConfig · 8 hits
+query  who calls parseConfig · 8 hits
 
 1  [gamma/] parseConfigRoot  fn  gamma/src/root.ts:1-3
    function parseConfigRoot(text: string): string

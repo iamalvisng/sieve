@@ -1,4 +1,4 @@
-//! Parity tests for the `sieve blast` divergences from a recorded run
+//! Parity tests for the `sieve impact` divergences from a recorded run
 //! (DV2, DV4, DV6, DV7 and DV12; P1-24, P1-27, P3-25, P3-26), against
 //! the goldens under `tests/fixtures/edges.expected/blast-dv/`. Each case
 //! is one `tests/inputs/blast-dv/<id>.sh`: its first line names the
@@ -145,7 +145,7 @@ fn run_case(id: &str) -> (String, String, i32) {
         .args(&argv)
         .current_dir(&temp.path)
         .output()
-        .expect("run sieve blast");
+        .expect("run sieve impact");
     let got = (
         mask_tmp(&String::from_utf8_lossy(&output.stdout), &temp.path),
         normalize_stderr(&mask_tmp(

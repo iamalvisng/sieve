@@ -4,4 +4,4 @@ calls 4
 ├─ double  fn  src/calc.ts:3-5
 ├─ doubled  fn  src/calc.ts:7-9
 └─ Widget  class  src/base.ts:1-5  · references
-[sieve] saved ≈ 60 tokens
+🎯 4 exact callers
