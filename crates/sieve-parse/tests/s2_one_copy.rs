@@ -1,4 +1,4 @@
-//! S2 (one copy of each node): the warm build keeps the cold build's bytes
+//! One copy of each node: the warm build keeps the cold build's bytes
 //! and order after the nodes move out of the cache instead of cloning.
 
 use std::fs;

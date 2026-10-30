@@ -1,7 +1,6 @@
 //! Parity test: `grep_graph` plus `format_grep_result` against the
 //! `grep-*` goldens, for every fixture in `tests/inputs/queries/`.
 //!
-//! Cites P1-12 to P1-16 and P3-16 to P3-19.
 
 use std::fs;
 use std::path::PathBuf;

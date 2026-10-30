@@ -1,5 +1,5 @@
 //! `skeleton`: a signatures-only view of one file, straight from the graph
-//! (the `query-commands.md` note section 1).
+//!.
 
 use std::cmp::Ordering;
 
@@ -14,10 +14,10 @@ pub struct SkeletonEntry {
     pub name: String,
     pub kind: Kind,
     pub span: String,
-    /// The node's signature, or `null` when it has none (section 1.7).
+    /// The node's signature, or `null` when it has none.
     pub signature: Option<String>,
     /// The first line of the node's summary, trimmed, when it has one
-    /// (section 1.7). Omitted, not `null`, when there is none.
+    ///. Omitted, not `null`, when there is none.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
     /// How many symbols link to this one. Both reports show it. The JSON
@@ -28,7 +28,7 @@ pub struct SkeletonEntry {
 
 /// The full result of one `skeleton` run. `saved` is not part of this
 /// struct: the CLI computes and attaches it, the same way `ask` does
-/// (section 1.7).
+///.
 #[derive(Debug, Clone, Serialize)]
 pub struct SkeletonResult {
     pub file: String,
@@ -39,13 +39,13 @@ pub struct SkeletonResult {
 
 /// Compares two strings by UTF-16 code unit, matching JavaScript's default
 /// `Array.sort()` (no `localeCompare`), for the skeleton ambiguity note
-/// (section 6, "Spec corrections").
+///.
 fn code_unit_cmp(a: &str, b: &str) -> Ordering {
     a.encode_utf16().cmp(b.encode_utf16())
 }
 
 /// The first line of `summary`, trimmed, or `None` when it is empty
-/// (section 1.7, `summary.split("\n")[0].trim() || undefined`).
+///.
 fn first_summary_line(summary: &str) -> Option<String> {
     let first = summary.lines().next().unwrap_or("").trim();
     if first.is_empty() {
@@ -56,7 +56,7 @@ fn first_summary_line(summary: &str) -> Option<String> {
 }
 
 /// Builds the skeleton view of `file`: every non-file definition at that
-/// path, sorted by start line, or a note when none resolve (section 1.2).
+/// path, sorted by start line, or a note when none resolve.
 /// `graph: None` gives the no-graph note.
 pub fn skeleton(graph: Option<&Graph>, file: &str) -> SkeletonResult {
     let Some(graph) = graph else {
@@ -181,7 +181,7 @@ fn trim_signature(name: &str, signature: &str) -> Option<String> {
 }
 
 /// Renders a [`SkeletonResult`] as the plain-text `skeleton` report,
-/// without the savings line; the CLI adds that last (section 1.4 to 1.6).
+/// without the savings line; the CLI adds that last.
 ///
 /// The first line names the file and the symbol count. Each row starts
 /// with the start line, then the name, the kind, the signature and the
@@ -240,7 +240,7 @@ pub fn format_skeleton(r: &SkeletonResult) -> String {
 }
 
 /// The paths `skeleton`'s tokens-saved baseline reads: the resolved file
-/// alone, or none when the result holds no entries (section 0).
+/// alone, or none when the result holds no entries.
 pub fn skeleton_saved_paths(r: &SkeletonResult) -> Vec<String> {
     if r.entries.is_empty() {
         Vec::new()
@@ -379,7 +379,7 @@ mod tests {
 
     /// `skeleton` appends the summary's first line, trimmed, after the
     /// signature; a whitespace-only summary drops the key entirely
-    /// (the `deep-tier.md` note section 2.10).
+    ///.
     #[test]
     fn test_p2_10_skeleton_appends_the_summarys_first_line() {
         let mut n = node(

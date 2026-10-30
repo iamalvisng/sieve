@@ -1,4 +1,4 @@
-//! Unit tests for the rename plan, one group per design rule S1 to S13.
+//! Unit tests for the rename plan, one group per design rule.
 
 use std::fs;
 use std::path::PathBuf;
@@ -139,7 +139,7 @@ fn test_rn2_symbol_forms_and_ambiguity() {
     assert!(matches!(none, Err(RenameError::Symbol(_))));
 }
 
-// ---- S1 ----
+// ---- Target rule ----
 
 #[test]
 fn test_rn2_s1_merged_declaration_refuses() {
@@ -195,7 +195,7 @@ fn test_rn2_s1_arrow_const_target_passes() {
     assert_eq!(count_edits(&plan), 3);
 }
 
-// ---- S2 ----
+// ---- Stale-file rule ----
 
 #[test]
 fn test_rn2_s2_changed_file_is_stale() {
@@ -211,7 +211,7 @@ fn test_rn2_s2_changed_file_is_stale() {
     assert_refused(&plan, Reason::StaleIndex);
 }
 
-// ---- S3 ----
+// ---- Clean-file rule ----
 
 #[test]
 fn test_rn2_s3_utf16_importer_is_unproven() {
@@ -262,7 +262,7 @@ fn test_rn2_s3_file_without_a_hit_may_be_broken() {
     assert_ready(&repo.plan("f", "g"));
 }
 
-// ---- S4 ----
+// ---- Nested-name rule ----
 
 #[test]
 fn test_rn2_s4_nested_declaration_in_importer_is_unproven() {
@@ -311,7 +311,7 @@ fn test_rn2_s4_nested_new_name_in_importer_is_unproven() {
     assert_refused(&repo.plan("f", "g"), Reason::Unproven);
 }
 
-// ---- S5 ----
+// ---- Import rule ----
 
 #[test]
 fn test_rn2_s5_alias_import_edits_only_the_specifier() {
@@ -470,7 +470,7 @@ fn test_rn2_s5_default_import_of_chain_module_is_unproven() {
     assert_refused(&repo.plan("def.ts#f", "g"), Reason::Unproven);
 }
 
-// ---- S6 ----
+// ---- Graph-scan rule ----
 
 #[test]
 fn test_rn2_s6_shadowed_call_does_not_refuse() {
@@ -494,7 +494,7 @@ fn test_rn2_s6_inferred_link_from_another_language_is_a_report() {
     assert!(plan.report.iter().any(|r| r.path == "tool.py"));
 }
 
-// ---- S7 ----
+// ---- Reach rule ----
 
 #[test]
 fn test_rn2_s7_namespace_import_refuses() {
@@ -548,7 +548,7 @@ fn test_rn2_s7_import_meta_glob_refuses() {
     assert_refused(&opaque.plan("f", "g"), Reason::DynamicImport);
 }
 
-/// A file with an old-name property hit `o.f` (design S7d).
+/// A file with an old-name property hit `o.f` (the reach rule).
 const PROP_HIT: (&str, &str) = ("hit/prop.ts", "export const k = (o: any) => o.f;\n");
 
 /// A repo with `src/def.ts` and one more file; plans the rename of `f`.
@@ -920,7 +920,7 @@ fn test_rn2_s7_commonjs_exports_in_a_chain_file_refuse() {
     assert_refused(&repo.plan("f", "g"), Reason::UnsupportedSite);
 }
 
-// ---- S8 ----
+// ---- Property rule ----
 
 #[test]
 fn test_rn2_s8_property_of_a_local_is_other() {
@@ -974,7 +974,7 @@ fn test_rn2_s8_object_key_and_class_member_are_other() {
     assert_eq!(count_edits(&plan), 1);
 }
 
-// ---- S9 ----
+// ---- New-name rule ----
 
 #[test]
 fn test_rn2_s9_bad_names_refuse() {
@@ -1074,7 +1074,7 @@ fn test_rn2_s9_barrel_that_exports_the_new_name_refuses() {
     assert_refused(&repo.plan("def.ts#f", "g"), Reason::Collision);
 }
 
-// ---- S10 ----
+// ---- Export-form rule ----
 
 #[test]
 fn test_rn2_s10_shorthand_property_refuses() {
@@ -1135,7 +1135,7 @@ fn test_rn2_s10_declare_module_of_a_chain_file_refuses() {
     assert_refused(&repo.plan("f", "g"), Reason::UnsupportedSite);
 }
 
-// ---- S11 ----
+// ---- JSDoc rule ----
 
 #[test]
 fn test_rn2_s11_jsdoc_link_is_edit() {
@@ -1214,7 +1214,7 @@ fn test_rn2_s11_container_file_hit_is_unproven() {
     assert_refused(&repo.plan("f", "g"), Reason::Unproven);
 }
 
-// ---- S12 ----
+// ---- Script-file rule ----
 
 #[test]
 fn test_rn2_s12_script_file_with_a_hit_is_not_a_module() {
@@ -1222,7 +1222,7 @@ fn test_rn2_s12_script_file_with_a_hit_is_not_a_module() {
     assert_refused(&repo.plan("f", "g"), Reason::NotModule);
 }
 
-// ---- S13 ----
+// ---- Symlink rule ----
 
 #[test]
 fn test_rn2_s13_symlinked_file_or_ancestor_is_found() {

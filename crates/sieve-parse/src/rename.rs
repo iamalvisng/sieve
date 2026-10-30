@@ -1,7 +1,5 @@
-//! The cross-file rename plan for TS and JS top-level functions (design
-//! `docs/design/rename.md`, slice RN2). This is a dry run: it never writes a
-//! source file. It may refresh the index under the build lock, as design
-//! section D steps 1 and 2 say.
+//! The cross-file rename plan for TS and JS top-level functions. This is a dry run: it never writes a
+//! source file. It may refresh the index under the build lock before it plans.
 //!
 //! The plan proves each edit site with the conservative scope scan
 //! (`ts_scope`) and the existing barrel walk. Any doubt refuses the whole
@@ -46,7 +44,7 @@ use crate::ts_scope::{
 const JOURNAL_PATH: &str = ".cache/rename-journal.json";
 
 /// Words that a strict-mode identifier cannot be, and names the rename
-/// refuses (design S9).
+/// refuses (the new-name rule).
 const RESERVED: [&str; 45] = [
     "break",
     "case",
@@ -95,7 +93,7 @@ const RESERVED: [&str; 45] = [
     "public",
 ];
 
-/// More names that the rename refuses (design S9).
+/// More names that the rename refuses (the new-name rule).
 const RESERVED_EXTRA: [&str; 3] = ["arguments", "eval", "await"];
 
 /// A failure that stops the plan before it can say "refused".
@@ -193,7 +191,7 @@ pub enum Reason {
     Collision,
     /// An edit site would bind to an existing declaration of the new name.
     Capture,
-    /// A construct that slice 1 does not support.
+    /// A construct that the rename plan does not support.
     UnsupportedSite,
     /// A file with a hit that does not parse cleanly.
     ParseError,
@@ -501,7 +499,7 @@ fn span_lines(span: &str) -> (u32, u32) {
 
 // ---- text helpers ----
 
-/// Design S7d: is the word at `at` a whole string in a data or doc file? That
+/// The reach rule: is the word at `at` a whole string in a data or doc file? That
 /// is a quoted `"name"` or `'name'`, or a YAML or TOML value that is exactly
 /// the name after `: ` or `= `.
 fn string_form(text: &str, name: &str, at: usize) -> bool {
@@ -721,15 +719,15 @@ struct Run<'a> {
     kept_hits: BTreeSet<(String, usize)>,
     /// The (file, line) of each structural Other hit.
     structural: Vec<(String, usize)>,
-    /// Design S13b: the repo paths of the symlinks that do not refuse by
+    /// The symlink rule: the repo paths of the symlinks that do not refuse by
     /// themselves. An import that goes through one is Unproven.
     links: Vec<String>,
     /// For each link in `links`, the repo path of its real target.
     link_real: BTreeMap<String, String>,
-    /// Design S7d: the (file, line, column) of each dynamic module access
+    /// The reach rule: the (file, line, column) of each dynamic module access
     /// that the scan cannot trace.
     untraceable: Vec<(String, usize, usize)>,
-    /// Design S7d: the (file, line) of the first old-name form that a dynamic
+    /// The reach rule: the (file, line) of the first old-name form that a dynamic
     /// access could read: a property, a destructuring key or a whole string.
     old_form: Option<(String, usize)>,
 }
@@ -795,9 +793,9 @@ impl<'a> Run<'a> {
         }
     }
 
-    // ---- S1 and S9 name checks ----
+    // ---- Target and new-name checks ----
 
-    /// Design S1, the part that needs only the graph.
+    /// The target rule, the part that needs only the graph.
     fn check_target(&mut self) -> bool {
         let t = self.target;
         if t.kind != Kind::Function || t.owner.is_some() || grammar_of(&t.path).is_none() {
@@ -819,7 +817,7 @@ impl<'a> Run<'a> {
         true
     }
 
-    /// Design S9, the part that needs only the names.
+    /// The new-name rule, the part that needs only the names.
     fn check_new_name(&mut self) -> bool {
         let new = self.new;
         let why = if new == self.old {
@@ -855,7 +853,7 @@ impl<'a> Run<'a> {
         let mut unindexed: Vec<String> = Vec::new();
         self.symlink_walk(context_dir, &files);
 
-        // Pass 1: read, check the print, probe S7 over every TS and JS file.
+        // Pass 1: read, check the print, probe the reach rule over every TS and JS file.
         for path in &files {
             let Some(grammar) = grammar_of(path) else {
                 if is_markup_name(path) {
@@ -891,7 +889,7 @@ impl<'a> Run<'a> {
                         "a UTF-16BE file holds a hit and cannot be parsed",
                     );
                 }
-                // The S7 probe still reads the decoded text.
+                // The reach probe still reads the decoded text.
                 if let Some(tree) = parse(&mut parsers, grammar, &text) {
                     let scopes = scope_file(&tree, &text, self.old);
                     self.probe_s7(path, &text, &tree, &scopes, has_text_hit);
@@ -999,14 +997,14 @@ impl<'a> Run<'a> {
         Ok(())
     }
 
-    /// Design S7, for a markup file. The scan does not parse it, so any text
+    /// The reach rule, for a markup file. The scan does not parse it, so any text
     /// of a glob or context call refuses.
     fn probe_markup(&mut self, path: &str) {
         let Ok(bytes) = fs::read(self.root.join(path)) else {
             return;
         };
         let text = decode_any(&bytes);
-        // Design S7d: a markup file is not parsed, so any whole word is a hit.
+        // The reach rule: a markup file is not parsed, so any whole word is a hit.
         if self.old_form.is_none() {
             if let Some(at) = word_matches(&text, self.old).next() {
                 self.old_form = Some((path.to_string(), line_col(&text, at).0));
@@ -1021,7 +1019,7 @@ impl<'a> Run<'a> {
         }
     }
 
-    /// Design S7d: an untraceable dynamic access refuses only when the repo
+    /// The reach rule: an untraceable dynamic access refuses only when the repo
     /// also holds an old-name form that the plan does not edit.
     fn refuse_untraceable(&mut self) {
         let Some((hit_path, hit_line)) = self.old_form.clone() else {
@@ -1036,7 +1034,7 @@ impl<'a> Run<'a> {
         }
     }
 
-    /// Design S7d: records the first old-name form of a TS or JS file.
+    /// The reach rule: records the first old-name form of a TS or JS file.
     fn note_old_form(&mut self, path: &str, tree: &Tree, scopes: &FileScopes) {
         if self.old_form.is_some() {
             return;
@@ -1059,7 +1057,7 @@ impl<'a> Run<'a> {
         }
     }
 
-    /// Design S7, for one file.
+    /// The reach rule, for one file.
     fn probe_s7(
         &mut self,
         path: &str,
@@ -1172,7 +1170,7 @@ impl<'a> Run<'a> {
         if defining && !self.check_defining(fc) {
             return;
         }
-        // S3: a file that is not clean gives Unproven for every hit.
+        // Clean-file rule: a file that is not clean gives Unproven for every hit.
         let unclean = if !utf8_ok {
             Some((
                 Reason::Unproven,
@@ -1252,7 +1250,7 @@ impl<'a> Run<'a> {
         }
     }
 
-    /// Design S1, the part that needs the defining file.
+    /// The target rule, the part that needs the defining file.
     fn check_defining(&mut self, fc: &Fc) -> bool {
         let mb = fc.scopes.module_bindings(self.old);
         if !fc.scopes.flags.is_module {
@@ -1306,7 +1304,7 @@ impl<'a> Run<'a> {
         }
     }
 
-    /// Design S5 for one import binding.
+    /// The import rule for one import binding.
     fn import_class(&self, from: &str, b: &ImportBinding) -> ImpClass {
         if b.kind == ImportKind::Named {
             if b.imported.as_deref() == Some(self.old) {
@@ -1333,7 +1331,7 @@ impl<'a> Run<'a> {
         }
     }
 
-    /// Design S5: where does `import { old } from source` point?
+    /// The import rule: where does `import { old } from source` point?
     fn source_class(&self, from: &str, source: &str) -> ImpClass {
         if !source.starts_with('.') {
             return match self.policy.classify(source) {
@@ -1357,7 +1355,7 @@ impl<'a> Run<'a> {
         }
     }
 
-    /// Decides one site (design S4 to S12).
+    /// Decides one site (the site rules).
     fn decide(&self, fc: &Fc, link: &Link, site: &ScanSite) -> Out {
         use SiteKind as K;
         let unproven = |t: &str| Out::Bad(Reason::Unproven, t.to_string());
@@ -1485,7 +1483,7 @@ impl<'a> Run<'a> {
         }
     }
 
-    /// Design S5 and S10, for a token in an import statement.
+    /// The import and export-form rules, for a token in an import statement.
     fn import_out(&self, fc: &Fc, site: &ScanSite) -> Out {
         // A nested declaration of the name turns the binder of a declaring
         // token into Unknown. The import is still the declaration at this token.
@@ -1596,7 +1594,7 @@ impl<'a> Run<'a> {
         Out::Other
     }
 
-    /// Design S8, for `x.name` and qualified names.
+    /// The property rule, for `x.name` and qualified names.
     fn member_out(&self, fc: &Fc, site: &ScanSite) -> Out {
         let bad = |t: &str| Out::Bad(Reason::Unproven, t.to_string());
         let Some(node) = fc
@@ -1657,7 +1655,7 @@ impl<'a> Run<'a> {
         Out::Other
     }
 
-    /// Design S11, for a JSDoc site.
+    /// The JSDoc rule, for a JSDoc site.
     fn jsdoc_out(&self, fc: &Fc, link: &Link, site: &ScanSite) -> Out {
         if site.kind == SiteKind::JsDocType && !fc.is_js {
             return Out::Bad(Reason::Unproven, "a JSDoc type in a TS file".into());
@@ -1732,7 +1730,7 @@ impl<'a> Run<'a> {
 
     // ---- other files ----
 
-    /// Design S11 for files that are not TS or JS.
+    /// The JSDoc rule for files that are not TS or JS.
     fn scan_others(&mut self, others: &[&String]) {
         for path in others {
             let Ok(bytes) = fs::read(self.root.join(path.as_str())) else {
@@ -1778,7 +1776,7 @@ impl<'a> Run<'a> {
         }
     }
 
-    // ---- S9, S13, S6 ----
+    // ---- New-name, symlink and graph-scan rules ----
 
     fn post_checks(&mut self, parsers: &mut Parsers) {
         let touched: Vec<String> = self.edits.keys().cloned().collect();
@@ -1858,7 +1856,7 @@ impl<'a> Run<'a> {
         }
     }
 
-    /// Design S13b, the repo walk. The build walk drops symlinks. A link
+    /// The symlink rule, the repo walk. The build walk drops symlinks. A link
     /// refuses only when files behind it escape the scan. A link whose
     /// target the scan reads at its real path is safe. An import that goes
     /// through such a link is Unproven (see `link_crossed`).
@@ -1889,7 +1887,7 @@ impl<'a> Run<'a> {
         }
     }
 
-    /// Design S13b: a config keeps link paths in resolution, so the in-repo
+    /// The symlink rule: a config keeps link paths in resolution, so the in-repo
     /// exemption is off for every link to a directory or a source file.
     fn refuse_kept_links(&mut self) {
         for path in std::mem::take(&mut self.links) {
@@ -1905,7 +1903,7 @@ impl<'a> Run<'a> {
         }
     }
 
-    /// Design S13b rule 3: the in-repo link that the import specifier
+    /// The symlink rule, part 3: the in-repo link that the import specifier
     /// passes, if any. The walk checks each step, so `./link/../x` counts.
     fn link_crossed(&self, from: &str, spec: &str) -> Option<String> {
         if self.links.is_empty() || !spec.starts_with('.') {
@@ -1935,7 +1933,7 @@ impl<'a> Run<'a> {
         None
     }
 
-    /// Design S13b rule 3 for a star export or a dynamic import: the link
+    /// The symlink rule, part 3 for a star export or a dynamic import: the link
     /// the specifier crosses, when the file has a hit or the link leads to
     /// a chain file.
     fn link_for_dynamic(&self, from: &str, spec: &str, has_hit: bool) -> Option<String> {
@@ -1959,7 +1957,7 @@ impl<'a> Run<'a> {
         ))
     }
 
-    /// Design S13: no touched path or ancestor may be a symlink.
+    /// The symlink rule: no touched path or ancestor may be a symlink.
     fn symlink_check(&mut self) {
         let touched: Vec<(String, usize, usize)> = self
             .edits
@@ -1979,7 +1977,7 @@ impl<'a> Run<'a> {
         }
     }
 
-    /// Design S6: the graph and the scan must agree.
+    /// The graph-scan rule: the graph and the scan must agree.
     fn graph_checks(&mut self) {
         let graph = &self.kept.graph;
         let by_id: HashMap<&str, &Node> = graph.nodes.iter().map(|n| (n.id.as_str(), n)).collect();
@@ -2244,7 +2242,7 @@ fn chain_end(link: &Path) -> Option<String> {
     None
 }
 
-/// Design S13b rules 1 and 2 for one link. It gives `None` when the link is
+/// The symlink rule, parts 1 and 2 for one link. It gives `None` when the link is
 /// safe, else the reason as a phrase. `root` and `ctx` are canonical.
 fn judge_link(
     root: &Path,
@@ -2277,7 +2275,7 @@ fn judge_link(
                     .components()
                     .any(|c| skipped_part(&c.as_os_str().to_string_lossy(), includes));
             if !hidden {
-                // Design S13b rule 2, exact: the build file list must hold
+                // The symlink rule, part 2, exact: the build file list must hold
                 // every source file behind the link at its real path.
                 let missing = if last.is_dir() {
                     unclaimed_source(&last, root, includes, claimed)

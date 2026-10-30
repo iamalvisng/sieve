@@ -1,5 +1,5 @@
 # args: blast --format text -d 1 --pr-author other@example.com
-# DV5 (P1-24, P1-25): --pr-author drops "Other Person" by email, so only
+# --pr-author drops "Other Person" by email, so only
 # "Third Person" is left to tag.
 mkdir -p lib lib2
 printf 'import { extra } from "../ts/derived";\nexport function alpha(): number { return extra(); }\n' >lib/alpha.ts

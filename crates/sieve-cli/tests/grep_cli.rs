@@ -1,5 +1,4 @@
-//! Parity tests for `sieve find` (P1-12 to P1-16, P1-46, P1-48, P1-49,
-//! P2-29): the query prelude and the `grep` report, against Sieve's
+//! Parity tests for `sieve find`: the query prelude and the `grep` report, against Sieve's
 //! goldens under `tests/fixtures/<name>.expected/queries/`.
 
 mod support;

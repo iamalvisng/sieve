@@ -7,7 +7,7 @@
 //! scope declares gets the binder `Unknown`, never "shadowed". A construct
 //! that the scan does not model also gives `Unknown`. The scan over-counts on
 //! purpose. It may refuse where an exact resolver would prove a site. It must
-//! never hide a site. The design is `docs/design/rename.md`, rule S4.
+//! never hide a site. The scan keeps that rule.
 //!
 //! The rename plan (RN2) uses these facts. Nothing in the graph build calls
 //! this module yet.
@@ -1372,7 +1372,7 @@ impl Walker<'_> {
         self.whole_ranges.push((node.start_byte(), node.end_byte()));
     }
 
-    /// Words in a comment, with the JSDoc rule of design S11.
+    /// Words in a comment, with the JSDoc rule for JSDoc.
     fn comment_token(&mut self, node: Node) {
         let text = self.text(node).to_string();
         for at in word_matches(&text, self.name) {

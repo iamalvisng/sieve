@@ -1,5 +1,5 @@
-//! Parity tests for workspace step 4: the MCP tools at a workspace
-//! parent (P4-44), against the recorded sessions under
+//! Parity tests for the workspace: the MCP tools at a workspace
+//! parent, against the recorded sessions under
 //! `tests/fixtures/ws.expected/workspace4/mcp-*` (the requests are
 //! `tests/inputs/mcp-ws/*.ndjson`).
 //!
@@ -204,7 +204,7 @@ fn assert_session_matches(id: &str, root: &Path) {
     }
 }
 
-/// P4-44: at a parent with built children, `tools/list` lists the tools;
+/// At a parent with built children, `tools/list` lists the tools;
 /// `trace_calls`, `find_all`, `repo_map` and `check_freshness` federate,
 /// each result labeled `<child>/`; `file_api` and an empty `trace_calls`
 /// answer as in a single repo.
@@ -214,7 +214,7 @@ fn test_p4_44_mcp_tools_federate_at_a_workspace_parent() {
     assert_session_matches("workspace4", &temp.path);
 }
 
-/// P4-44: an unbuilt child drops out of each result, and the coverage
+/// An unbuilt child drops out of each result, and the coverage
 /// note closes it.
 #[test]
 fn test_p4_44_mcp_tools_add_the_coverage_note_with_a_child_unbuilt() {
@@ -223,7 +223,7 @@ fn test_p4_44_mcp_tools_add_the_coverage_note_with_a_child_unbuilt() {
     assert_session_matches("workspace4-unbuilt", &temp.path);
 }
 
-/// P4-44: `check_freshness` at a parent names the stale child, with no
+/// `check_freshness` at a parent names the stale child, with no
 /// refresh first.
 #[test]
 fn test_p4_44_mcp_check_freshness_names_the_stale_child() {
@@ -236,7 +236,7 @@ fn test_p4_44_mcp_check_freshness_names_the_stale_child() {
     assert_session_matches("workspace4-stale", &temp.path);
 }
 
-/// P4-44: a federated tool refreshes each child first and prefixes the
+/// A federated tool refreshes each child first and prefixes the
 /// per-child refresh note.
 #[test]
 fn test_p4_44_mcp_find_all_refreshes_the_children_first() {
@@ -271,7 +271,7 @@ fn built_single_repo(label: &str) -> TempDir {
     temp
 }
 
-/// P4-31: in a single repo, `find_all` starts with the savings header,
+/// In a single repo, `find_all` starts with the savings header,
 /// as the grep result does.
 #[test]
 fn test_p4_31_find_all_adds_the_savings_header_in_a_single_repo() {

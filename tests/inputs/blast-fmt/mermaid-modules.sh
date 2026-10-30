@@ -1,5 +1,5 @@
 # args: blast --format mermaid -d 1
-# DV1 (P1-24): mermaid with two dependent modules, alpha and Zulu.
+# Mermaid with two dependent modules, alpha and Zulu.
 mkdir -p lib lib2
 printf 'import { extra } from "../ts/derived";\nexport function alpha(): number { return extra(); }\n' >lib/alpha.ts
 printf 'import { extra } from "../ts/derived";\nexport function Zulu(): number { return extra(); }\n' >lib2/zulu.ts

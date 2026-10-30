@@ -1,12 +1,11 @@
 //! The container tier: a file that is not itself a language but a
-//! wrapper around one. `.vue`, `.svelte` and `.astro` are the rows. See
-//! the `languages-lsp.md` note section 2.
+//! wrapper around one. `.vue`, `.svelte` and `.astro` are the rows.
 //!
 //! A WASM Vue grammar would only find where a `<script>`
 //! block starts and ends; the block itself goes to the depth-tier
 //! TypeScript extractor. No Vue grammar crate loads at the `tree-sitter`
 //! 0.23 ABI this workspace pins, so Sieve finds that same block by a
-//! byte scan over the source instead (`languages-lsp.md` line 126).
+//! byte scan over the source instead.
 
 use std::collections::{HashMap, HashSet};
 
@@ -284,7 +283,7 @@ fn template_ranges(source: &str) -> Vec<(usize, usize)> {
 /// Finds every direct `<script ...>` ... `</script>` block, in document
 /// order. `raw_text`'s offset is the byte right after the opening tag's
 /// `>`; an empty `<script></script>` yields an empty block, which the
-/// caller skips (`languages-lsp.md` line 118). A `<script` inside a
+/// caller skips. A `<script` inside a
 /// `<template>...</template>` range is skipped, matching a Vue grammar:
 /// that text is nested under `template_element` there, never a
 /// `script_element` at the document root.
@@ -322,7 +321,7 @@ fn scan_blocks(source: &str) -> Vec<Block> {
 }
 
 /// Shifts a `L<start>-L<end>` span down by `lines`. A span in any other
-/// shape is returned untouched (`languages-lsp.md` line 120).
+/// shape is returned untouched.
 fn shift_span(span_text: &str, lines: u32) -> String {
     let Some(rest) = span_text.strip_prefix('L') else {
         return span_text.to_string();
@@ -340,7 +339,7 @@ fn shift_span(span_text: &str, lines: u32) -> String {
 /// node, every symbol from its `<script>` block(s) run through the depth-tier
 /// TypeScript extractor with shifted spans, and every raw edge from those
 /// blocks with ids rewritten to match. Never fails: a block the inner extractor
-/// cannot parse degrades to fewer nodes. (`languages-lsp.md` note).
+/// cannot parse degrades to fewer nodes..
 pub fn extract_container(
     rel: &str,
     source: &str,

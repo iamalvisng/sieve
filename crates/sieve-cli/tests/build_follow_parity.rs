@@ -1,5 +1,5 @@
 //! Parity tests for `build --follow-submodules`, `--no-follow-submodules`,
-//! `--follow-nested-repos` and `--no-follow-nested-repos` (P1-69).
+//! `--follow-nested-repos` and `--no-follow-nested-repos`.
 //!
 //! The expected values come from recorded builds of the same fixture:
 //! one repo with `a.ts`, a submodule at `libsub` (`s.ts`) and an
@@ -113,13 +113,13 @@ const ONE: &str = "1 file \u{2192} 2 symbols \u{b7} 1 link";
 const TWO: &str = "2 files \u{2192} 4 symbols \u{b7} 2 links";
 const THREE: &str = "3 files \u{2192} 6 symbols \u{b7} 3 links";
 
-/// P1-69: with no flag, a submodule and a nested clone stay out.
+/// With no flag, a submodule and a nested clone stay out.
 #[test]
 fn test_p1_69_default_excludes_submodule_and_nested() {
     case(&[], ONE, &["a.ts"], None);
 }
 
-/// P1-69: each follow flag adds its own child and persists its choice.
+/// Each follow flag adds its own child and persists its choice.
 #[test]
 fn test_p1_69_follow_flags_add_children_and_persist() {
     case(
@@ -142,7 +142,7 @@ fn test_p1_69_follow_flags_add_children_and_persist() {
     );
 }
 
-/// P1-69: a `--no-` flag excludes the child and persists `false`; the
+/// A `--no-` flag excludes the child and persists `false`; the
 /// last flag of a pair wins.
 #[test]
 fn test_p1_69_no_follow_flags_exclude_and_persist_false() {
@@ -172,7 +172,7 @@ fn test_p1_69_no_follow_flags_exclude_and_persist_false() {
     );
 }
 
-/// P1-69: a later plain build reads the persisted choice.
+/// A later plain build reads the persisted choice.
 #[test]
 fn test_p1_69_plain_build_reads_the_persisted_choice() {
     let base = TempDir::new("follow-persist");

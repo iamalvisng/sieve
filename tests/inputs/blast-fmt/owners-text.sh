@@ -1,5 +1,5 @@
 # args: blast --format text -d 1
-# DV5 (P1-25, P3-25): a second author on a dependent module. The text
+# A second author on a dependent module. The text
 # report ends with a "who to tag" block naming "Other Person". The commit
 # is made at run time, so the block reads "last today" on every run.
 mkdir -p lib

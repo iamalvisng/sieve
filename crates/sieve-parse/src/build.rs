@@ -1,4 +1,4 @@
-//! Builds a `Graph` from a repo on disk (P2-01 to P2-11). This first pass
+//! Builds a `Graph` from a repo on disk. This first pass
 //! emits one node per file with a known language. Symbol nodes and edges
 //! come later.
 
@@ -26,7 +26,7 @@ use crate::resolve::{resolve_edges_with_context, GoModule};
 use crate::rust_tree::{packages, RustPackage};
 use crate::stamp::extractor_stamp;
 
-/// Marker file names that mark a monorepo scope root (P2-06).
+/// Marker file names that mark a monorepo scope root.
 const SCOPE_MARKERS: [&str; 9] = [
     "package.json",
     "go.mod",
@@ -47,7 +47,7 @@ fn wiring_path(context_dir: &Path) -> PathBuf {
     context_dir.join(".graph").join("wiring.json")
 }
 
-/// The slice of a prior wiring node that the meaning carry reads (P1-34).
+/// The slice of a prior wiring node that the meaning carry reads.
 #[derive(Debug, Clone, serde::Deserialize)]
 struct PriorNode {
     id: String,
@@ -64,7 +64,7 @@ struct PriorWiring {
 }
 
 /// Reads the prior build's nodes that have a summary, keyed by `id`, for
-/// the meaning-tier carry (P1-34, P3-14). Returns an empty map on a missing
+/// the meaning-tier carry. Returns an empty map on a missing
 /// file or a parse error: a first build, or a corrupt prior file, never
 /// blocks a fresh build; it only means every node starts `pending`.
 fn read_prior_nodes(context_dir: &Path) -> HashMap<String, PriorNode> {
@@ -131,7 +131,7 @@ fn carry_meaning_layer(nodes: &mut [Node], prior: &HashMap<String, PriorNode>) {
 ///
 /// `context_dir` is Sieve's own output dir. A file under it, or under any
 /// sibling dir that shares its name as a string prefix, is dropped from the
-/// walk (see the `build-cards-freshness.md` note section 10), so a dir named
+/// walk, so a dir named
 /// e.g. `sieve-tools/` is excluded on purpose when `context_dir` is `sieve`.
 pub fn build_graph(root: &Path, context_dir: &Path) -> std::io::Result<Graph> {
     let files = collect_files(root, context_dir, None)?;
@@ -422,7 +422,7 @@ pub fn build_graph_with_raw(
 type ExtractedWithLabel = (Node, Vec<Node>, Vec<RawEdge>, String);
 
 /// Extracts one file by tier priority: native (depth) first, container second,
-/// breadth third (see `languages-lsp.md` line 131). Returns `Ok(None)` for a
+/// breadth third. Returns `Ok(None)` for a
 /// file no tier claims, or that is not valid UTF-8.
 pub(crate) fn extract_one(
     root: &Path,
@@ -511,7 +511,7 @@ pub fn read_at_link(rel: &Path) -> bool {
 /// [`sieve_core::fingerprint::probe_drift`] needs this predicate. A build
 /// (`build_graph_cached`) fingerprints every tier, so a drift probe that
 /// checks only the native tier misreads every breadth-tier file as
-/// `removed` on every call (P1-46, P2-35): that file is in `fp.files` but
+/// `removed` on every call: that file is in `fp.files` but
 /// never reaches the probe's `seen` set.
 pub(crate) fn is_claimed(rel: &Path) -> bool {
     claim_label(rel, &to_slash(rel)).is_some() || is_manifest(rel)
@@ -532,8 +532,7 @@ pub(crate) fn claimed_count(files: &[PathBuf]) -> usize {
 }
 
 /// A breadth-tier file's own node: `origin: generic`, `chars` in UTF-8
-/// bytes, and no residual `body_text` (`languages-lsp.md` line 139,
-/// `generic.ts` `fileNode`, `:207-214`).
+/// bytes, and no residual `body_text`.
 fn generic_file_node(id: &str, source: &str) -> Node {
     let name = id.rsplit('/').next().unwrap_or(id).to_string();
     let end_line = source.matches('\n').count() as u32 + 1;
@@ -574,7 +573,7 @@ pub struct BuildReport {
     /// never re-reads a file to fingerprint it.
     pub prints: BTreeMap<String, Print>,
     /// One line per file this build could not read, in walk order:
-    /// `<rel>: <Node error text>` (P2-01).
+    /// `<rel>: <Node error text>`.
     pub errors: Vec<String>,
     /// Every raw edge of the build, in claimed order. Empty unless
     /// [`BuildOptions::keep_raw`] is set.
@@ -582,12 +581,12 @@ pub struct BuildReport {
 }
 
 /// Builds the symbol graph the way [`build_graph`] does, but replays a
-/// file's nodes and raw edges from the extraction cache (P2-35) when the
+/// file's nodes and raw edges from the extraction cache when the
 /// hash of its decoded text still matches the cache entry. Every file is
 /// read and hashed on every build. A file whose hash changed, or that the
 /// cache has not seen, is parsed as usual, then written back to the cache.
 /// A file this cannot read is reported in [`BuildReport::errors`] and
-/// recorded with an empty hash, never a build failure (P2-01).
+/// recorded with an empty hash, never a build failure.
 ///
 /// The cache lives under `context_dir/.cache/extract.<stamp>.json`, where
 /// `<stamp>` is [`extractor_stamp`]. This writes the refreshed cache
@@ -600,7 +599,7 @@ pub fn build_graph_cached(root: &Path, context_dir: &Path) -> std::io::Result<Bu
 }
 
 /// The build flags that shape one [`build_graph_cached_with`] call
-/// (P1-70).
+/// .
 #[derive(Debug, Clone, Default)]
 pub struct BuildOptions {
     /// The `--only-dir` whitelist: repo-relative posix prefixes. Empty
@@ -702,7 +701,7 @@ pub fn build_graph_cached_with(
     let mut files = collect_files(root, context_dir, opts.walked.take())?;
     files.retain(|rel| under_only_dirs(&to_slash(rel), &opts.only_dirs));
     timer.lap("walk");
-    // The memory guard runs before the cache read (S0, B3).
+    // The memory guard runs before the cache read.
     crate::guard::check(claimed_count(&files), !opts.no_reuse && cache_file.exists())?;
     // A thread hashes the claimed files while the cache parses. The prior
     // wiring is read later, after the old cache is gone, to keep the peak
@@ -784,7 +783,7 @@ pub fn build_graph_cached_with(
         // Every file is read and hashed, every build; only the parse is
         // replayed. A stat may decide whether a query rebuilds; it never
         // decides what the rebuild reads, or a same-size edit inside one mtime
-        // tick stays stale forever (P2-35, P1-46).
+        // tick stays stale forever.
         // The thread already hashed this file. A match replays the cache
         // entry. A miss falls through to the read below, which parses.
         // A changed stat means an edit after the early read: that hash is stale.
@@ -1235,7 +1234,7 @@ fn extract_native(rel: &Path, text: &str, grammar: &str, extractor: &mut Extract
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| id.clone());
     // A tree-sitter end row is the newline count, 0-indexed; Sieve
-    // reports that row plus one (P2-08).
+    // reports that row plus one.
     let end_line = text.matches('\n').count() as u32 + 1;
     let chars = text.encode_utf16().count() as u64;
     let body_hash = hex_sha256(text.as_bytes());
@@ -2057,7 +2056,7 @@ mod tests {
         assert_eq!(node.body_hash, hex_sha256(b"const x = 1;\nconst y = 2;\n"));
     }
 
-    /// P3-26: a file that is not valid UTF-8 keeps its file node. Each
+    /// A file that is not valid UTF-8 keeps its file node. Each
     /// invalid byte becomes one U+FFFD (lossy UTF-8 decoding), and the hash
     /// covers the decoded text.
     #[test]
@@ -2317,7 +2316,7 @@ mod tests {
         assert!(prefixes.contains("packages/a"), "prefixes: {prefixes:?}");
     }
 
-    /// S0: the guard counts claimed files only, not json beside them.
+    /// The guard counts claimed files only, not json beside them.
     #[test]
     fn test_s0_guard_counts_only_claimed_files() {
         let dir = TempDir::new("s0-claimed");
@@ -2341,7 +2340,7 @@ mod tests {
         );
     }
 
-    /// P1-70: `only_dirs` keeps the files under the prefix and drops the
+    /// `only_dirs` keeps the files under the prefix and drops the
     /// rest; `no_reuse` parses every file again with a warm cache.
     #[test]
     fn test_p1_70_build_options_only_dirs_and_no_reuse() {
@@ -2380,7 +2379,7 @@ mod tests {
         assert_eq!((report.parsed, report.reused), (2, 0));
     }
 
-    /// 2a: a build that takes the probe's walk list gives the same graph bytes
+    /// A build that takes the probe's walk list gives the same graph bytes
     /// as a build that walks, and the walk list leaves the options.
     #[test]
     fn walked_some_and_walked_none_give_the_same_wiring_bytes() {
@@ -2423,7 +2422,7 @@ mod tests {
         );
     }
 
-    /// V2: entries made by `fresh_entry` and linked by `link_entries` give the
+    /// The in-memory patch: entries made by `fresh_entry` and linked by `link_entries` give the
     /// graph of a full build, after one file changes.
     #[test]
     fn fresh_entries_link_to_the_graph_of_a_full_build() {

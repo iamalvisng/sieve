@@ -358,7 +358,7 @@ mod tests {
         );
     }
 
-    /// P4-49: expected values are node's `JSON.stringify(JSON.parse(raw))`
+    /// Expected values are node's `JSON.stringify(JSON.parse(raw))`
     /// on v24.18.0.
     #[test]
     fn test_p4_49_js_number_matches_node() {

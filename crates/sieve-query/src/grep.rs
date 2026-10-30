@@ -215,8 +215,7 @@ pub fn v8_error_message(pattern: &str, err: &regress::Error) -> String {
 }
 
 /// Compiles the user pattern like JS: `new RegExp(source,
-/// "i" | "")`, with no `u` flag, through the `regress` crate (ledger
-/// 2026-09-30, "the regress crate runs the grep user pattern").
+/// "i" | "")`, with no `u` flag, through the `regress` crate (the `regress` crate matches the JS rules).
 pub(crate) fn compile_pattern(
     pattern: &str,
     opts: &GrepOptions,
@@ -695,7 +694,7 @@ mod tests {
             .unwrap_or_else(|_| panic!("read golden {id}.{ext}"))
     }
 
-    /// P1-12, P3-16: the user pattern runs as `new RegExp(source, "i" | "")`
+    /// The user pattern runs as `new RegExp(source, "i" | "")`
     /// does, with no `u` flag. Every golden comes from a recorded run over
     /// `tests/inputs/grep-regex/regex-cases.ts` alone. An exit-0 case compares
     /// stdout; an exit-1 case compares the `sieve: invalid pattern` line.

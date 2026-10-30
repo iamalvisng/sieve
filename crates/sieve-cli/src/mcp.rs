@@ -1,5 +1,5 @@
 //! The `sieve mcp` subcommand: runs the NDJSON JSON-RPC server over stdio
-//! (the `mcp-server.md` note sections 6, 7).
+//!.
 
 use std::env;
 use std::io::{self, BufReader};
@@ -19,9 +19,9 @@ pub struct McpArgs {
 
 /// Runs `sieve mcp`: resolves the root and context dir, then serves one
 /// NDJSON session on stdin/stdout/stderr until EOF. Exits 0 on EOF
-/// (section 7). The CLI `UPKEEP_SKIP` set holds `mcp`, but the server
+///. The CLI `UPKEEP_SKIP` set holds `mcp`, but the server
 /// runs the upkeep at boot itself. So the update nudge
-/// goes to stderr and to the start of `instructions` (P4-57). The nudge is
+/// goes to stderr and to the start of `instructions`. The nudge is
 /// the CLI banner under the active product: same cache, same text.
 pub fn run(args: &McpArgs, dir_override: Option<&Path>) -> Result<(), String> {
     let cwd = env::current_dir().map_err(|e| e.to_string())?;

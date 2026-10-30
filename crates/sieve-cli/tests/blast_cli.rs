@@ -1,4 +1,4 @@
-//! Parity tests for `sieve impact` (P1-24 to P1-28, P3-26): the diff and impact
+//! Parity tests for `sieve impact`: the diff and impact
 //! report, against the goldens under `tests/fixtures/edges.expected/queries/`.
 //! Builds the `edges` fixture, commits it, edits two files, then runs every
 //! `edges.blast.txt` id (the two edits live in `build_and_edit_edges_fixture`).

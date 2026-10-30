@@ -256,7 +256,7 @@ fn help_precedes_subcommand(args: &[String]) -> bool {
 
 /// The names `help <name>` leaves to the old path: the Sieve-only
 /// commands, and the `upgrade`, `trail` and `claude-md`, which Sieve
-/// lacks by design (P1-52, P1-53).
+/// lacks by design.
 const HELP_KEEPS_CLAP: &[&str] = &[
     "rename",
     "hook",
@@ -268,7 +268,7 @@ const HELP_KEEPS_CLAP: &[&str] = &[
     "claude-md",
 ];
 
-/// P1-63: ports commander's root operand scan for the `help` command
+/// Ports commander's root operand scan for the `help` command
 /// (`parseOptions`, `_dispatchHelpCommand`). Root options are read
 /// anywhere up to the first unknown option, which ends the operands.
 /// Returns `None` when the first operand is not `help`. Otherwise it
@@ -296,7 +296,7 @@ fn help_target(args: &[String]) -> Option<Option<&str>> {
     (operands.first() == Some(&"help")).then(|| operands.get(1).copied())
 }
 
-/// P1-51: Commander's top-level scan error, when the args need no help
+/// Commander's top-level scan error, when the args need no help
 /// text (the caller already ruled out [`help_precedes_subcommand`]).
 ///
 /// Commander's option scan (see [`help_precedes_subcommand`]) also stops
@@ -359,7 +359,7 @@ fn preflight_error(args: &[String]) -> Option<String> {
 }
 
 fn main() -> ExitCode {
-    // P1-01: the Commander help renders the same 18-row command list
+    // The Commander help renders the same 18-row command list
     // for `sieve` (no args, stderr, exit 1), `sieve --help`, and `sieve
     // help` (stdout, exit 0 for both). Clap's own derived help has a
     // different layout, so sieve intercepts these top-level forms before
@@ -367,7 +367,7 @@ fn main() -> ExitCode {
     // early intercept (Commander prints the version and exits before any
     // subcommand routing runs).
     let raw_args: Vec<String> = std::env::args().skip(1).collect();
-    // P1-51: Commander's top-level scan runs over every token first. A
+    // Commander's top-level scan runs over every token first. A
     // version flag anywhere prints the version. A top-level value flag
     // with no value is an error. If every token was a known option, no
     // operand is left, and Commander prints the help on stderr, exit 1.
@@ -386,7 +386,7 @@ fn main() -> ExitCode {
         }
         None => {}
     }
-    // P1-63: commander's `help [command]`, after the root options.
+    // Commander's `help [command]`, after the root options.
     if let Some(target) = help_target(&raw_args) {
         match target {
             None => {
@@ -421,7 +421,7 @@ fn main() -> ExitCode {
             return ExitCode::SUCCESS;
         }
         [only] if only == "--" => {
-            // P1-51 follow-up: a lone `--` ends Commander's option scan
+            // A lone `--` ends Commander's option scan
             // with zero operands left. Commander then falls back to the
             // same no-args behavior: the full help text on stderr, exit
             // 1.
@@ -435,7 +435,7 @@ fn main() -> ExitCode {
         _ => {}
     }
 
-    // P1-51: an unknown top-level option, an unknown command, or a known
+    // An unknown top-level option, an unknown command, or a known
     // value flag with no value exits 1 with Commander's own line, ahead
     // of clap's parse (clap's exit 2 and message differ from Commander's).
     if let Some(message) = preflight_error(&raw_args) {
@@ -443,7 +443,7 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    // P1-01, P1-51: a clap error with a commander form prints that one
+    // A clap error with a commander form prints that one
     // line and exits 1. Any other clap error keeps clap's own output.
     // Commander reads a negative number as an operand in a leaf command
     // (`negativeNumberArg`). Clap's number test differs
@@ -454,7 +454,7 @@ fn main() -> ExitCode {
     root.build();
     let program = std::env::args().next().unwrap_or_else(|| "sieve".into());
     let precheck = commander::precheck(&root, &raw_args);
-    // P1-63: `<cmd> -h` and `<cmd> --help` print the text when one exists.
+    // `<cmd> -h` and `<cmd> --help` print the text when one exists.
     // Clap's help stays for the Sieve-only commands.
     if let Some(commander::Precheck::Help(argv)) = &precheck {
         let name = argv.iter().rev().nth(1).map_or("", String::as_str);
@@ -563,7 +563,7 @@ mod tests {
         flags
     }
 
-    /// P1-63: each text in `SUB_HELP` lists the long flags of its clap
+    /// Each text in `SUB_HELP` lists the long flags of its clap
     /// command, and no more.
     #[test]
     fn test_p1_63_help_text_flags_match_the_clap_flags() {

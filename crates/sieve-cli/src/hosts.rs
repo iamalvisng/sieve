@@ -1,6 +1,6 @@
 //! The host registry, the write and merge logic `sieve init` and
 //! `sieve uninstall` share, and the render of the shared instruction body
-//! and the SKILL.md template (the `hosts-hooks.md` note sections 1, 2, 5, 7).
+//! and the SKILL.md template.
 //! The texts live in `templates.rs`.
 
 use std::fs;
@@ -12,7 +12,7 @@ use sieve_core::product::product;
 use crate::names;
 use crate::ojson::{OJson, OMap};
 
-/// How a host's instruction file is written (section 1.2, 1.4).
+/// How a host's instruction file is written.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
     /// Sieve overwrites the whole file on any content change.
@@ -21,7 +21,7 @@ pub enum Kind {
     Section,
 }
 
-/// How a host wraps the shared [`INSTRUCTION_BODY`] (section 1.5).
+/// How a host wraps the shared [`INSTRUCTION_BODY`].
 #[derive(Clone, Copy)]
 pub enum Wrap {
     /// The plain body, fenced by the section markers.
@@ -37,7 +37,7 @@ pub enum Wrap {
 }
 
 /// One host `sieve init` can wire into, in the registry order the golden
-/// stderr report pins (`hosts-hooks.md` section 1.2).
+/// stderr report pins.
 pub struct HostSpec {
     pub id: &'static str,
     pub kind: Kind,
@@ -153,7 +153,7 @@ pub fn json_mcp_targets() -> Vec<McpTarget> {
 
 /// Codex's MCP config, `~/.codex/config.toml`. Sieve writes it only when
 /// the Codex CLI is installed, so `~/.codex` must be a directory
-/// (P4-51).
+/// .
 pub fn codex_mcp_path(home: &Path) -> Option<PathBuf> {
     let dir = home.join(".codex");
     dir.is_dir().then(|| dir.join("config.toml"))
@@ -161,7 +161,7 @@ pub fn codex_mcp_path(home: &Path) -> Option<PathBuf> {
 
 /// The repo's `opencode.json`. Sieve writes it only when opencode is
 /// installed, so `~/.config/opencode` must be a directory
-/// (P4-51).
+/// .
 pub fn opencode_mcp_path(root: &Path, home: &Path) -> Option<PathBuf> {
     home.join(".config")
         .join("opencode")
@@ -198,11 +198,11 @@ pub fn render_owned(wrap: Wrap) -> String {
     }
 }
 
-/// The fenced section's start marker (section 1.4), branded.
+/// The fenced section's start marker, branded.
 pub fn section_start() -> String {
     format!("<!-- {}:start -->", product().name)
 }
-/// The fenced section's end marker (section 1.4), branded.
+/// The fenced section's end marker, branded.
 pub fn section_end() -> String {
     format!("<!-- {}:end -->", product().name)
 }
@@ -236,7 +236,7 @@ impl WriteAction {
 }
 
 /// Writes an `owned` target: overwrites on any content change, otherwise
-/// leaves the file untouched (section 1.4, `writeOwned`).
+/// leaves the file untouched.
 pub fn write_owned(path: &Path, content: &str) -> io::Result<WriteAction> {
     let existed = path.is_file();
     if existed {
@@ -258,7 +258,7 @@ pub fn write_owned(path: &Path, content: &str) -> io::Result<WriteAction> {
 
 /// Builds the fenced block `upsertSection` writes or matches: the start
 /// marker, the body with trailing whitespace stripped, and the end
-/// marker (section 1.4).
+/// marker.
 fn section_block(body: &str) -> String {
     format!(
         "{}\n{}\n{}",
@@ -271,7 +271,7 @@ fn section_block(body: &str) -> String {
 /// Upserts the fenced sieve block into a `section` target: creates the
 /// file when missing, replaces an existing block in place, appends the
 /// block to a markerless file, or does nothing when the block already
-/// matches (section 1.4, `upsertSection`).
+/// matches.
 ///
 /// ponytail: always appends with a blank-line separator for a markerless
 /// non-empty file, rather than sniffing the file's own EOL style; add
@@ -494,8 +494,7 @@ fn read_json_object(path: &Path) -> io::Result<Option<OJson>> {
 }
 
 /// Merges a `sieve` entry into `path`'s `<bucket_key>` object, creating
-/// the file, its parent dirs, and the bucket as needed (section 1.8,
-/// `mergeJsonKey`). Skips an existing file that fails to parse as a JSON
+/// the file, its parent dirs, and the bucket as needed. Skips an existing file that fails to parse as a JSON
 /// object, reporting [`WriteAction::SkippedUnparseable`].
 pub fn merge_mcp_json(path: &Path, bucket_key: &str) -> io::Result<WriteAction> {
     merge_json_entry(path, bucket_key, product().mcp_key(), mcp_entry())
@@ -566,7 +565,7 @@ fn opencode_entry() -> OJson {
     ])
 }
 
-/// Merges Sieve's entry into `opencode.json` under `mcp` (P4-51).
+/// Merges Sieve's entry into `opencode.json` under `mcp`.
 pub fn merge_opencode_json(path: &Path) -> io::Result<WriteAction> {
     merge_json_entry(path, "mcp", product().mcp_key(), opencode_entry())
 }
@@ -605,7 +604,7 @@ pub fn strip_mcp_json(path: &Path, bucket_key: &str, apply: bool) -> io::Result<
     let emptied = root.is_empty();
     let after = root.into_ojson();
     // No Sieve key in the file: leave it byte for byte, so `init`'s
-    // retract step never rewrites a user's own config (P4-49).
+    // retract step never rewrites a user's own config.
     if after.to_pretty() == root_oj.to_pretty() {
         return Ok(Retract::Absent);
     }
@@ -824,7 +823,7 @@ pub fn write_cursor_hooks(path: &Path) -> io::Result<WriteAction> {
 }
 
 /// Returns `true` when a hook entry's command already invokes Sieve's own
-/// hook dispatcher (`sieve hook <sub>`) (section 1.7):
+/// hook dispatcher (`sieve hook <sub>`):
 /// only such an entry is ever replaced on a re-run.
 fn hook_entry_is_ours(entry: &OJson) -> bool {
     entry
@@ -1051,7 +1050,7 @@ fn allow_entries() -> [String; 3] {
 }
 
 /// Returns `true` when a `footerLinksRegexes` entry contains the context
-/// dir name, matching the note's drop rule (section 1.7): both Sieve's own
+/// dir name, matching the note's drop rule: both Sieve's own
 /// prior entry and any other regex that happens to name the context dir.
 fn footer_entry_is_ours(entry: &str) -> bool {
     entry.contains(&format!("{}/", product().context_dir_name()))
@@ -1059,7 +1058,7 @@ fn footer_entry_is_ours(entry: &str) -> bool {
 
 /// Merges one Claude hook event's array: keeps every existing entry that
 /// is not Sieve's own, in its existing order, then appends Sieve's fixed
-/// blocks for that event (section 1.7, plus the keep-foreign
+/// blocks for that event (plus the keep-foreign
 /// rule).
 fn merged_hook_event(existing_hooks: Option<&OJson>, event: &str, ours: Vec<OJson>) -> OJson {
     let mut kept: Vec<OJson> = existing_hooks
@@ -1156,7 +1155,7 @@ fn merged_hooks_ojson(existing_hooks: Option<&OJson>) -> OJson {
     hooks.into_ojson()
 }
 
-/// The `.claude/settings.json` merge (section 1.7).
+/// The `.claude/settings.json` merge.
 /// Keeps every foreign top-level key, every foreign hook entry (per
 /// event), `permissions.deny`, and any other `permissions` sub-key,
 /// untouched and in their existing order. Replaces the statusline only
@@ -1165,8 +1164,8 @@ fn merged_hooks_ojson(existing_hooks: Option<&OJson>) -> OJson {
 /// Sieve's own prior footer regex and allowlist entries before
 /// re-appending its own.
 ///
-/// Returns the write action and any warnings to print (section 1.7,
-/// `applyStatusline`'s foreign-value case).
+/// Returns the write action and any warnings to print
+/// (the foreign-value case of `applyStatusline`).
 pub fn merge_claude_settings(
     path: &Path,
     no_statusline: bool,
@@ -1340,7 +1339,7 @@ fn statusline_warning(key: &str) -> String {
 }
 
 /// The `~/.claude/settings.json` mirror `sieve init` merges into when
-/// `$HOME/.claude` already exists (section 1.9). Touches only the
+/// `$HOME/.claude` already exists. Touches only the
 /// `hooks` key, with the same five blocks the local `.claude/settings.json`
 /// merge writes; every other top-level key, and every foreign hook entry,
 /// survives untouched. No write when the merged text equals the file on
@@ -1387,7 +1386,7 @@ pub fn merge_claude_global_hooks(path: &Path) -> io::Result<WriteAction> {
 }
 
 /// Removes Sieve's `hooks` entries from `~/.claude/settings.json` for
-/// `sieve uninstall` (section 1.9). Touches only the `hooks` key, the
+/// `sieve uninstall`. Touches only the `hooks` key, the
 /// same key [`merge_claude_global_hooks`] writes; every other top-level
 /// key survives untouched. Deletes the whole file when nothing else is
 /// left. Returns a [`Retract`].
@@ -1460,7 +1459,7 @@ fn strip_ours_in(map: &mut OMap, src: &OJson, events: &[String]) -> bool {
 }
 
 /// Removes Sieve's hook events from `~/.codex/hooks.json` for `sieve
-/// uninstall` (section 1.10). Sieve nests the events under a top-level
+/// uninstall`. Sieve nests the events under a top-level
 /// `hooks` key, so this strips every event there.
 /// It also strips the four events at the top level, where an older Sieve
 /// wrote them. Keeps every foreign entry. Deletes the whole file when
@@ -1503,8 +1502,7 @@ pub fn strip_codex_hooks(path: &Path, apply: bool) -> io::Result<Retract> {
     )
 }
 
-/// Builds the merged `hooks` object of the Codex `hooks.json` (section
-/// 1.10): the four events. Keeps every foreign
+/// Builds the merged `hooks` object of the Codex `hooks.json`: the four events. Keeps every foreign
 /// entry per event, then appends Sieve's own block.
 fn merged_codex_hooks_ojson(existing: Option<&OJson>) -> OJson {
     let mut hooks = OMap::from_existing(existing);
@@ -1547,8 +1545,7 @@ fn merged_codex_hooks_ojson(existing: Option<&OJson>) -> OJson {
     hooks.into_ojson()
 }
 
-/// Merges Sieve's four hook events into `~/.codex/hooks.json` (section
-/// 1.10). Keeps every foreign entry, then appends Sieve's own block per
+/// Merges Sieve's four hook events into `~/.codex/hooks.json`. Keeps every foreign entry, then appends Sieve's own block per
 /// event. No write when the merged text equals the file on disk.
 pub fn merge_codex_hooks(path: &Path) -> io::Result<WriteAction> {
     let existed = path.is_file();
@@ -1703,7 +1700,7 @@ pub fn strip_claude_settings(path: &Path, apply: bool) -> io::Result<Retract> {
 
     let emptied = root.is_empty();
     let after = root.into_ojson();
-    // No Sieve key in the file: leave it byte for byte (P4-49).
+    // No Sieve key in the file: leave it byte for byte.
     if after.to_pretty() == oj.to_pretty() {
         return Ok(Retract::Absent);
     }
@@ -1781,11 +1778,11 @@ pub fn graph_counts(context_dir: &Path) -> Option<(usize, usize)> {
 }
 
 /// Renders the closing epilogue `sieve init` prints to stderr after every
-/// target write (section 1.11, `formatInitEpilogue`), with no ANSI color
+/// target write, with no ANSI color
 /// (Sieve never colors this report — the goldens capture a non-TTY run).
 ///
 /// `counts` is `None` on a repo that still has no graph — a build failure
-/// (P4-01: a failed in-process build never stops the rest of `init`) or a
+/// (a failed in-process build never stops the rest of `init`) or a
 /// `--no-build` run on a fresh repo. The epilogue then prepends a fourth
 /// step, "1. build the graph",
 /// renumbering the rest, and drops the node/edge stats from the wordmark
@@ -1865,7 +1862,7 @@ mod tests {
         }
     }
 
-    /// P4-09: the allow match is a prefix match on the product's own
+    /// The allow match is a prefix match on the product's own
     /// invocation forms, followed by `:` or `)`.
     #[test]
     fn test_p4_09_allow_entry_is_ours_matches_the_golden_prefix_regex() {
@@ -2659,7 +2656,7 @@ mod tests {
     }
 
     /// An inline or dotted `mcp_servers.<product>` key would make a second
-    /// table invalid TOML. A plain append would add it; Sieve leaves the file (P4-51
+    /// table invalid TOML. A plain append would add it; Sieve leaves the file (a known
     /// deviation).
     #[test]
     fn test_p4_51_merge_mcp_toml_skips_an_inline_or_dotted_server() {

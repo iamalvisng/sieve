@@ -1,5 +1,5 @@
 //! Multi-scope fusion: scope assignment, body-only suppression, file
-//! collapse, and `combineComparableScopes` (`ask-ranking.md` section 8).
+//! collapse, and `combineComparableScopes`.
 //!
 //! The ranking pipeline collapses each scope to one row per file
 //! (`collapseCandidates`), combines those file-level rows
@@ -241,7 +241,7 @@ pub(crate) struct MultiScope<'a> {
     pub baseline_rows: Vec<(&'a Node, f64)>,
 }
 
-/// Runs the multi-scope branch (section 8): scores every scope against
+/// Runs the multi-scope branch: scores every scope against
 /// the shared, repo-wide `lex` map, walks each scope's own subgraph
 /// separately, suppresses a body-only-match scope into `also_matched`,
 /// collapses each surviving scope to one row per file
@@ -504,7 +504,7 @@ mod tests {
         }
     }
 
-    /// P3-12: on a tied score, the scopes order by scope name, then the rows by
+    /// On a tied score, the scopes order by scope name, then the rows by
     /// scope name, then by node id. The root-fallback scope `""` sorts first.
     #[test]
     fn test_p3_12_combine_comparable_scopes_breaks_a_tie_by_scope_then_id() {

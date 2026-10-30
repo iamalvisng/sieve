@@ -311,7 +311,7 @@ fn walk_fs(
         root.join(rel)
     };
     // The filesystem walk lets the read throw, so an unreadable dir fails the
-    // whole walk with Node's `scandir` text (P2-01).
+    // whole walk with Node's `scandir` text.
     let entries = std::fs::read_dir(&dir)
         .map_err(|err| crate::node_error::node_io_error(err, "scandir", &dir))?;
 
@@ -433,7 +433,7 @@ mod tests {
         assert_eq!(as_slash_strings(&files), vec!["a.ts", "sub/b.py"]);
     }
 
-    /// P1-70: a name in `<root>/.<product>/config.json`'s `includeDirs`
+    /// A name in `<root>/.<product>/config.json`'s `includeDirs`
     /// leaves `SKIP_DIRS` for this repo; a dot dir never does.
     #[test]
     fn test_p1_70_walk_repo_include_dirs_lift_a_skip_dir_name() {
@@ -454,7 +454,7 @@ mod tests {
         assert_eq!(as_slash_strings(&files), vec!["a.ts", "dist/x.js"]);
     }
 
-    /// P2-01: with no git, an unreadable dir fails the walk with Node's
+    /// With no git, an unreadable dir fails the walk with Node's
     /// `scandir` text. The mode is restored before the temp dir drops.
     #[cfg(unix)]
     #[test]
@@ -698,9 +698,9 @@ mod order_tests {
         files.iter().map(|p| to_slash(p)).collect()
     }
 
-    /// P2-31: tracked `m.js`, `a/x.py`, `zz.ts` and untracked `M.ts`,
+    /// Tracked `m.js`, `a/x.py`, `zz.ts` and untracked `M.ts`,
     /// the walk keeps the `git ls-files` order, so the parse
-    /// order is the list below, and `a/x.md` reads `# a/x.py`.
+    /// order is the list below, and the card for `a/x` reads `# a/x.py`.
     #[test]
     fn test_p2_31_walk_repo_keeps_git_ls_files_order_for_untracked_files() {
         let dir = scratch("mixed");
@@ -716,7 +716,7 @@ mod order_tests {
         fs::remove_dir_all(&dir).expect("cleanup");
     }
 
-    /// P2-01: with no git, the walk is depth-first in sorted `readdirSync`
+    /// With no git, the walk is depth-first in sorted `readdirSync`
     /// order, so comes before `a-b.ts` (a parse order over
     /// 13 files with multibyte names). The names are many and mixed, so a
     /// raw file system order does not pass by chance.
@@ -740,7 +740,7 @@ mod order_tests {
         fs::remove_dir_all(&dir).expect("cleanup");
     }
 
-    /// P2-31: a merge conflict lists `c.ts` three times in
+    /// A merge conflict lists `c.ts` three times in
     /// `git ls-files --cached`. The shallow path does not dedup, and
     /// the build reports `parsed: 4 of 4 files` for `a.ts` and `c.ts`.
     #[test]
@@ -759,7 +759,7 @@ mod order_tests {
         fs::remove_dir_all(&dir).expect("cleanup");
     }
 
-    /// P2-31: the follow path ends in a sort and dedup, so
+    /// The follow path ends in a sort and dedup, so
     /// it sorts. A run with `followNestedRepos` on the
     /// mixed repo gave this sorted list.
     #[test]

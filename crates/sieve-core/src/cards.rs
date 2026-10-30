@@ -1,5 +1,4 @@
-//! Per-file wiring cards and the `INDEX.md` roster (section 4 and 5 of the
-//! build-cards-freshness note).
+//! Per-file wiring cards and the `INDEX.md` roster.
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -13,11 +12,11 @@ use crate::wiring::{Graph, Kind, Node};
 /// Turns a source path into its card path, by swapping the final extension
 /// for `.md`.
 ///
-/// A path with no extension gains `.md` (`"Makefile"` becomes
-/// `"Makefile.md"`). A root-level source whose stem equals a live concept
+/// A path with no extension gains `.md` (a `Makefile` card gets the
+/// `.md` suffix). A root-level source whose stem equals a live concept
 /// slug in `concept_slugs` routes to `_root/` instead, so the per-file
 /// wiring card never collides with that concept node's own file on disk
-/// (the `deep-tier.md` note section 2.2).
+///.
 pub fn card_path_for(source_path: &str, concept_slugs: &HashSet<String>) -> String {
     let search_start = source_path.rfind('/').map(|i| i + 1).unwrap_or(0);
     let stem = match source_path[search_start..].rfind('.') {
@@ -79,8 +78,7 @@ fn one_liner(node: Option<&Node>) -> String {
 ///
 /// `uplinks` is the slug of every concept whose `sources` names this file,
 /// already sorted in byte order (not ICU); each becomes a `[[slug]]` link
-/// on the heading line, joined by one space (note
-/// section 2.1). An empty list leaves the heading as a bare path.
+/// on the heading line, joined by one space. An empty list leaves the heading as a bare path.
 pub fn render_card(
     source_path: &str,
     file_node: Option<&Node>,
@@ -149,10 +147,10 @@ pub struct CardStats {
 /// walks the unsorted list in build order. This function writes cards in the
 /// order each path first appears in `graph.nodes`. When two source paths share
 /// one card path, the later one wins on disk, with the last-write-wins card
-/// count quirk (see the `build-cards-freshness.md` note).
+/// count quirk.
 pub fn write_cards(graph: &Graph, out_dir: &Path) -> io::Result<CardStats> {
     // One read of the concept layer per build, straight off disk: the
-    // concept pass runs before the wiring pass (note section 1.1), so a
+    // concept pass runs before the wiring pass, so a
     // deep build's concept files already sit under `out_dir` here. With no
     // concept layer this returns empty and every branch below is a no-op,
     // so a Tier-1 build stays byte-identical to today's output.
@@ -397,8 +395,8 @@ mod tests {
         assert_eq!(card_path_for("Makefile", &no_slugs), "Makefile.md");
     }
 
-    /// P2-31: a nested source never hits the `_root/` branch, even when its
-    /// stem happens to equal a live concept slug (note section 2.2, rule 2).
+    /// A nested source never hits the `_root/` branch, even when its
+    /// stem happens to equal a live concept slug (the second rule).
     #[test]
     fn card_path_for_p2_31_a_nested_file_never_collides() {
         let mut slugs = HashSet::new();
@@ -406,7 +404,7 @@ mod tests {
         assert_eq!(card_path_for("src/util.ts", &slugs), "src/util.md");
     }
 
-    /// P2-31: a root-level source whose stem equals a live concept slug
+    /// A root-level source whose stem equals a live concept slug
     /// routes to `_root/` instead of colliding with the concept node file.
     #[test]
     fn card_path_for_p2_31_a_root_level_collision_moves_under_root() {
@@ -415,7 +413,7 @@ mod tests {
         assert_eq!(card_path_for("util.ts", &slugs), "_root/util.md");
     }
 
-    /// P2-31: a root-level source whose stem matches no concept slug never
+    /// A root-level source whose stem matches no concept slug never
     /// fires the collision branch.
     #[test]
     fn card_path_for_p2_31_a_root_level_file_with_no_collision_stays_top_level() {
@@ -440,7 +438,7 @@ mod tests {
     }
 
     /// The up-link list joins in byte order, not ICU.
-    /// `[[slug]]` heading exactly (note section 2.1).
+    /// `[[slug]]` heading exactly.
     #[test]
     fn render_card_joins_uplinks_in_byte_order_on_the_heading() {
         let uplinks = vec!["Zeta".to_string(), "alpha".to_string()];
@@ -527,7 +525,7 @@ mod tests {
         assert!(text.starts_with("# a.ts"));
     }
 
-    /// P2-31 (DV10): cards are written in `graph.nodes` order, not
+    /// Cards are written in `graph.nodes` order, not
     /// id order. With `M.ts` before `m.js` in the list,
     /// the later write, `m.js`, wins the shared card path. The result is
     /// `# m.js` on a repo with `m.js` and `M.ts`.
@@ -627,7 +625,7 @@ mod tests {
         assert!(dir.join("b.md").exists());
     }
 
-    /// P2-31, end to end: a root-level source whose stem equals a live
+    /// End to end: a root-level source whose stem equals a live
     /// concept slug on disk lands under `_root/`, not at the top level.
     #[test]
     fn write_cards_p2_31_moves_a_colliding_root_file_under_root() {
@@ -663,7 +661,7 @@ mod tests {
     }
 
     /// The up-link line for a file two concepts cite lists both slugs in
-    /// byte order, not ICU (note section 2.1).
+    /// byte order, not ICU.
     #[test]
     fn write_cards_lists_two_concepts_citing_one_file_in_byte_order() {
         let dir = unique_temp_dir("uplinks");
@@ -696,7 +694,7 @@ mod tests {
         assert!(text.starts_with("# app.ts \u{b7} [[Zeta]] [[alpha]]\n"));
     }
 
-    /// P2-37: `INDEX.md`'s `## Concepts` roster sorts by slug with ICU,
+    /// `INDEX.md`'s `## Concepts` roster sorts by slug with ICU,
     /// not byte order.
     #[test]
     fn write_index_p2_37_sorts_the_concepts_roster_with_icu() {
@@ -735,9 +733,8 @@ mod tests {
     }
 
     /// With zero concept nodes on disk, `INDEX.md` never gets a
-    /// `## Concepts` section — the existing golden stays exact (section
-    /// 2.3's spec correction and P2-37's "only when at least one concept
-    /// exists" rule).
+    /// `## Concepts` section — the existing golden stays exact (the index
+    /// lists concepts only when at least one concept exists).
     #[test]
     fn write_index_with_no_concepts_omits_the_concepts_section() {
         let dir = unique_temp_dir("no-concepts");
@@ -752,8 +749,7 @@ mod tests {
     }
 
     /// The one-liner never reads `summary_state`: a `stale` summary still
-    /// prints its first line, exactly like a `ready` one (note section 2.3's
-    /// spec correction).
+    /// prints its first line, exactly like a `ready` one.
     #[test]
     fn one_liner_prints_a_stale_summary_like_a_ready_one() {
         let mut file_node = node("f.ts", "f.ts", Kind::File, "f.ts", "L1-L1");

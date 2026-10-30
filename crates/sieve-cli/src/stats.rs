@@ -1,4 +1,4 @@
-//! The `sieve stats [dir] [--json]` subcommand (P1-64): the latest session
+//! The `sieve stats [dir] [--json]` subcommand: the latest session
 //! file, the session text readout, and the dollars saved at the session
 //! billed input rate.
 //!

@@ -1,7 +1,7 @@
-//! Parity tests for workspace step 4: `skeleton`, `blast`, `stats` and
-//! `version` do not federate at a parent (P1-62), against recorded
+//! Parity tests for the workspace: `skeleton`, `blast`, `stats` and
+//! `version` do not federate at a parent, against recorded
 //! goldens under `tests/fixtures/ws.expected/workspace4/`. The helpers live in
-//! `support/ws.rs`. The MCP half of step 4 (P4-44) is tested in
+//! `support/ws.rs`. The MCP half is tested in
 //! `crates/sieve-daemon/tests/mcp_workspace_parity.rs`.
 
 mod support;
@@ -54,14 +54,14 @@ fn assert_case(id: &str, label: &str, args: &[&str]) {
     support::ws::assert_matches(GOLDEN, id, &output, &copy.path);
 }
 
-/// P1-62: `skeleton` at the parent does not federate; the parent has no
+/// `skeleton` at the parent does not federate; the parent has no
 /// wiring graph, so it prints the no-graph note and exits 0.
 #[test]
 fn test_p1_62_skeleton_at_a_workspace_parent_has_no_graph() {
     assert_case("skeleton", "ws4-skeleton", &["skeleton", "alpha/src/a.ts"]);
 }
 
-/// P1-62: `skeleton --json` at the parent prints the same note as JSON.
+/// `skeleton --json` at the parent prints the same note as JSON.
 #[test]
 fn test_p1_62_skeleton_json_at_a_workspace_parent_has_no_graph() {
     assert_case(
@@ -71,26 +71,26 @@ fn test_p1_62_skeleton_json_at_a_workspace_parent_has_no_graph() {
     );
 }
 
-/// P1-62: `blast` at the parent does not federate; it prints the
+/// `blast` at the parent does not federate; it prints the
 /// no-graph line and exits 1.
 #[test]
 fn test_p1_62_blast_at_a_workspace_parent_has_no_graph() {
     assert_case("blast", "ws4-blast", &["blast"]);
 }
 
-/// P1-62: `stats` at the parent reads the session, not the children.
+/// `stats` at the parent reads the session, not the children.
 #[test]
 fn test_p1_62_stats_at_a_workspace_parent_is_not_federated() {
     assert_case("stats", "ws4-stats", &["stats"]);
 }
 
-/// P1-62: `stats --json` at the parent prints `null`.
+/// `stats --json` at the parent prints `null`.
 #[test]
 fn test_p1_62_stats_json_at_a_workspace_parent_is_not_federated() {
     assert_case("stats-json", "ws4-stats-json", &["stats", "--json"]);
 }
 
-/// P1-62: `version` at the parent prints the installed version first and
+/// `version` at the parent prints the installed version first and
 /// no workspace line. Sieve asks npm for the latest version, so only the
 /// first line is in the golden.
 #[test]

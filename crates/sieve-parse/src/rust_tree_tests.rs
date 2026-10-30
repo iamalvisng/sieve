@@ -990,7 +990,7 @@ fn test_rsx3_self_assoc() {
 
 #[test]
 fn test_rmx1_self_assoc_in_block_impl_no_edge() {
-    // B2: an impl inside a fn body is not the module-level type of that name.
+    // An impl inside a fn body is not the module-level type of that name.
     let got = calls(&[(
         "src/lib.rs",
         "struct L;\nimpl L { fn f() {} }\nfn outer() {\n    struct L;\n    impl L { fn g() { Self::f(); } }\n}\n",

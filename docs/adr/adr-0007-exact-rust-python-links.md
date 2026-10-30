@@ -2,11 +2,11 @@
 
 - **Status:** Accepted
 - **Date:** 2026-10-13
-- **Amends:** the ledger deferral of full Rust call edges (2026-10-04)
+- **Amends:** the earlier deferral of full Rust call edges (2026-10-04)
 
 ## Context
 
-The old same-file name rule marked a call Extracted when one function in the file had the call's name. In Rust and Python this gave wrong edges. Before the change, Sieve had 254 wrong of 4,622 Rust Extracted edges, ripgrep 3fce3b5 had 173 of 938, httpx b5addb6 had 1 of 324 and black 11cff13 had 20 of 833. The designs are `docs/design/rust-xfile.md` and `docs/design/python-xfile.md`. The ledger entries of 2026-10-12 hold the decisions.
+The old same-file name rule marked a call Extracted when one function in the file had the call's name. In Rust and Python this gave wrong edges. Before the change, Sieve had 254 wrong of 4,622 Rust Extracted edges, ripgrep 3fce3b5 had 173 of 938, httpx b5addb6 had 1 of 324 and black 11cff13 had 20 of 833.
 
 ## Decision
 

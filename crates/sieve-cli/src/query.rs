@@ -32,7 +32,7 @@ pub fn query_root(dir_arg: Option<&Path>, dir_override: Option<&Path>, cwd: &Pat
 /// Resolves the repo root exactly like [`query_root`], but returns the
 /// ancestor note as a string instead of printing it. `sieve mcp` needs the
 /// note text to hand to [`sieve_daemon::serve`], which prints it first on
-/// stderr (`mcp-server.md` section 6).
+/// stderr.
 pub fn query_root_with_note(
     dir_arg: Option<&Path>,
     dir_override: Option<&Path>,
@@ -50,7 +50,7 @@ pub fn query_root_with_note(
     let context_name = product().context_dir_name();
     loop {
         // A built repo, or a workspace parent that holds only the index
-        // (P1-61).
+        // .
         let context_dir = current.join(context_name);
         if context_dir.join(".graph/wiring.json").is_file()
             || workspace::workspace_path(&context_dir).exists()
@@ -85,7 +85,7 @@ pub fn context_dir(root: &Path, dir_override: Option<&Path>, cwd: &Path) -> Path
 
 /// Runs the pre-query refresh: rebuilds the graph, and only the graph,
 /// when the fingerprint is missing or stale. At a workspace parent, the
-/// refresh walks each child instead (P2-39). Prints
+/// refresh walks each child instead. Prints
 /// the refresh note to stderr. Never fails a query: every error becomes
 /// a skip note instead.
 fn refresh_before(root: &Path, context_dir: &Path, no_refresh_flag: bool) {

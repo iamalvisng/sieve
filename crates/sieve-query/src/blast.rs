@@ -1,5 +1,5 @@
 //! `blast`: what a diff's changed lines reach, walked over the graph
-//! (the `query-commands.md` note section 3).
+//!.
 //!
 //! `blast` reads the diff through `git`, seeds the walk at the innermost
 //! changed symbol per file, then groups the result into areas (the diff's
@@ -36,7 +36,7 @@ pub use viz::{blast_viz_graph, repo_label, strip_url_credentials};
 // ---------------------------------------------------------------------
 
 /// What `blast` was asked to do: which base to diff against, how far to
-/// walk, and whether to attach owners (section 3.1).
+/// walk, and whether to attach owners.
 #[derive(Debug, Clone)]
 pub struct BlastOptions {
     /// `--base <ref>`. `None` diffs the working tree against `HEAD`.
@@ -50,7 +50,7 @@ pub struct BlastOptions {
     pub pr_author: Vec<String>,
 }
 
-/// Every way `blast` can fail (section 3.1 to 3.2).
+/// Every way `blast` can fail.
 #[derive(Debug, Error)]
 pub enum BlastError {
     #[error("could not read a diff in {0} \u{2014} run it inside a git repository")]
@@ -80,7 +80,7 @@ fn no_graph_message(path: &str) -> String {
     )
 }
 
-/// The four `--format` names (section 3.1, 3.7 to 3.9).
+/// The four `--format` names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BlastFormat {
     Text,
@@ -89,7 +89,7 @@ pub enum BlastFormat {
     Json,
 }
 
-/// Parses a raw `--format` value (section 3.1).
+/// Parses a raw `--format` value.
 pub fn parse_format(raw: &str) -> Result<BlastFormat, BlastError> {
     match raw {
         "text" => Ok(BlastFormat::Text),
@@ -101,7 +101,7 @@ pub fn parse_format(raw: &str) -> Result<BlastFormat, BlastError> {
 }
 
 // ---------------------------------------------------------------------
-// The diff reader (section 3.2)
+// The diff reader
 // ---------------------------------------------------------------------
 
 /// How a changed file was touched.
@@ -153,7 +153,7 @@ pub struct ChangedFile {
 }
 
 /// Text kept per hunk and per file — a regenerated lockfile must not ride
-/// along in `--format json` or in a diagram export (section 3.2).
+/// along in `--format json` or in a diagram export.
 const MAX_HUNK_LINES: usize = 24;
 const MAX_FILE_LINES: usize = 200;
 
@@ -174,11 +174,11 @@ fn run_git(root: &Path, args: &[&str]) -> Option<String> {
     }
     // Node's `spawnSync(..., { encoding: "utf8" })`
     // decodes an invalid byte to U+FFFD. A strict decode drops the whole
-    // patch when one changed file holds latin1 (P3-26).
+    // patch when one changed file holds latin1.
     Some(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
-/// True when `reference` names something git can resolve (section 3.2).
+/// True when `reference` names something git can resolve.
 pub fn ref_exists(root: &Path, reference: &str) -> bool {
     run_git(
         root,
@@ -193,7 +193,7 @@ pub fn ref_exists(root: &Path, reference: &str) -> bool {
 }
 
 /// Changed files and their post-image line ranges, for the working tree
-/// against `HEAD` (no base), or `<base>...HEAD` (section 3.2).
+/// against `HEAD` (no base), or `<base>...HEAD`.
 fn changed_files(root: &Path, base: Option<&str>) -> Option<DiffResult> {
     if let Some(base) = base {
         let basis = format!("{base}...HEAD");
@@ -221,7 +221,7 @@ fn changed_files(root: &Path, base: Option<&str>) -> Option<DiffResult> {
 }
 
 /// Both git passes for one range: name-status (statuses, renames), then
-/// hunks (section 3.2).
+/// hunks.
 fn diff_files(root: &Path, range: &[&str]) -> Option<Vec<ChangedFile>> {
     let mut name_status_args = vec!["diff", "--name-status", "--find-renames", "-z"];
     name_status_args.extend_from_slice(range);
@@ -249,7 +249,7 @@ fn diff_files(root: &Path, range: &[&str]) -> Option<Vec<ChangedFile>> {
 
 /// `--name-status -z` output: NUL-separated fields, where a rename or a
 /// copy spends three fields (`R096`, old, new) and everything else spends
-/// two (section 3.2).
+/// two.
 fn parse_name_status(out: &str) -> Vec<ChangedFile> {
     let fields: Vec<&str> = out.split('\0').filter(|f| !f.is_empty()).collect();
     let mut files = Vec::new();
@@ -308,7 +308,7 @@ fn strip_prefix(raw: &str) -> &str {
 }
 
 /// Attaches each hunk's post-image range, and its text, to its file
-/// (section 3.2).
+///.
 fn apply_hunks(files: &mut [ChangedFile], patch: &str) {
     let by_path: HashMap<String, usize> = files
         .iter()
@@ -407,7 +407,7 @@ fn push_line(hunk: &mut Hunk, line: DiffLine, within_file: bool) {
 }
 
 // ---------------------------------------------------------------------
-// Seeds and the walk (section 3.3, 3.4)
+// Seeds and the walk
 // ---------------------------------------------------------------------
 
 /// A changed symbol the walk started from.
@@ -447,7 +447,7 @@ pub(crate) fn span_bounds(span: &str) -> Option<(u32, u32)> {
 /// The innermost symbols whose spans overlap any changed range in `path`:
 /// a symbol that strictly contains another overlapping one is dropped, so
 /// a changed line inside a method seeds the method, not its class
-/// (section 3.3).
+///.
 fn seeds_for_file<'g>(graph: &'g Graph, path: &str, ranges: &[LineRange]) -> Vec<&'g Node> {
     let symbols: Vec<(&Node, u32, u32)> = graph
         .nodes
@@ -489,7 +489,7 @@ struct EdgeHit<'a> {
 
 /// BFS over incoming walk-relation edges from every seed at once, each
 /// node deduped by id and reported once at the depth it was first
-/// reached from any seed (section 3.4, `impactOfMany`). `blast` always
+/// reached from any seed. `blast` always
 /// walks `in`.
 fn impact_of_many<'a>(graph: &'a Graph, seeds: &[&Node], max_depth: Depth) -> Vec<EdgeHit<'a>> {
     let by_id: HashMap<&str, &Node> = graph.nodes.iter().map(|n| (n.id.as_str(), n)).collect();
@@ -541,7 +541,7 @@ fn impact_of_many<'a>(graph: &'a Graph, seeds: &[&Node], max_depth: Depth) -> Ve
 }
 
 // ---------------------------------------------------------------------
-// Module labels (section 3.5)
+// Module labels
 // ---------------------------------------------------------------------
 
 /// Path → module-label lookup. `conceptOf` names the deep tier's concept
@@ -550,7 +550,7 @@ fn impact_of_many<'a>(graph: &'a Graph, seeds: &[&Node], max_depth: Depth) -> Ve
 struct ModuleIndex {
     has_concepts: bool,
     /// `path` → `(concept name, that concept's own source count)`, the
-    /// smallest claiming concept only (section 2.11).
+    /// smallest claiming concept only.
     claims: HashMap<String, (String, usize)>,
 }
 
@@ -619,7 +619,7 @@ fn concept_prefix_re() -> &'static Regex {
     RE.get_or_init(|| Regex::new(&format!(r"(?i-u)^concepts?:(?u:{JS_WS}*)")).expect("valid regex"))
 }
 
-/// A concept name trimmed to fit a node (section 3.5).
+/// A concept name trimmed to fit a node.
 ///
 /// Every length and index is in UTF-16 units, as JS `length`, `slice` and
 /// `lastIndexOf` are. JS `/i` without `u` folds ASCII only, so the prefix runs
@@ -695,12 +695,12 @@ fn shared_concept(paths: &[String], index: &ModuleIndex) -> Option<String> {
 }
 
 /// Directory groups the diff is folded down to before anything is drawn
-/// (section 3.5).
+///.
 const MAX_AREAS: usize = 5;
 
 /// Folds directory groups into their parents until at most `max` remain.
 /// The deepest group goes first, and only into a parent that already
-/// exists; never into the top level (section 3.5, `coarsen`).
+/// exists; never into the top level.
 fn coarsen(order: &mut Vec<String>, groups: &mut HashMap<String, Vec<String>>, max: usize) {
     let depth = |dir: &str| dir.split('/').filter(|s| !s.is_empty()).count();
     while groups.len() > max {
@@ -740,13 +740,13 @@ fn test_path_re() -> &'static Regex {
     })
 }
 
-/// True when `path` is a test file (section 3.6).
+/// True when `path` is a test file.
 pub fn is_test_path(path: &str) -> bool {
     test_path_re().is_match(path)
 }
 
 // ---------------------------------------------------------------------
-// The report (section 3.3 to 3.8)
+// The report
 // ---------------------------------------------------------------------
 
 /// Where a cluster's label came from. `blast` never reaches `Named`
@@ -758,7 +758,7 @@ pub enum LabelSource {
     Symbol,
 }
 
-/// Whether the diff brought its tests along (section 3.5).
+/// Whether the diff brought its tests along.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TestSignal {
@@ -847,7 +847,7 @@ fn depth_as_u32(depth: Depth) -> Option<u32> {
 
 /// Groups dependents into modules by concept, else directory. A caller in a
 /// changed file counts: the pane band counts every impacted symbol, so the
-/// tree must too (section 3.5, `groupByModule`).
+/// tree must too.
 fn group_by_module(
     impacted: &[Impacted],
     origins: &HashMap<String, Vec<String>>,
@@ -922,7 +922,7 @@ fn group_by_module(
 }
 
 /// Groups the changed files into areas, and works out whether each one's
-/// tests moved (section 3.5, `changedAreas`).
+/// tests moved.
 #[allow(clippy::too_many_arguments)]
 fn changed_areas(
     graph: &Graph,
@@ -1083,8 +1083,7 @@ fn changed_areas(
     areas
 }
 
-/// Computes the blast radius of `changed` against `graph` (section 3.3
-/// to 3.5). `depth` is the BFS depth; `context_dir` feeds the (currently
+/// Computes the blast radius of `changed` against `graph`. `depth` is the BFS depth; `context_dir` feeds the (currently
 /// concept-less) module index.
 fn blast_radius(
     graph: &Graph,
@@ -1223,7 +1222,7 @@ fn blast_radius(
 }
 
 /// Computes `graph`'s blast radius for the diff `repo_root` carries,
-/// against `context_dir`'s module index (section 3.1 to 3.5).
+/// against `context_dir`'s module index.
 pub fn blast(
     graph: &Graph,
     repo_root: &Path,
@@ -1256,7 +1255,7 @@ pub fn blast(
 }
 
 // ---------------------------------------------------------------------
-// Text rendering (section 3.7)
+// Text rendering
 // ---------------------------------------------------------------------
 
 fn plural(n: usize, one: &str) -> String {
@@ -1309,7 +1308,7 @@ fn impacted_row(s: &Impacted) -> String {
 }
 
 /// The plain-text report the terminal path prints, with no savings line
-/// (section 3.7). It names the changed symbols, counts the dependents, and
+///. It names the changed symbols, counts the dependents, and
 /// draws them as a tree by hop.
 pub fn format_blast_text(r: &BlastReport) -> String {
     let mut lines: Vec<String> = Vec::new();
@@ -1695,7 +1694,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------
-    // Concept-label tests (section 2.11, P1-24 to P1-26).
+    // Concept-label tests.
     // -----------------------------------------------------------------
 
     /// A unique temp dir per call, so concurrent test runs never collide.
@@ -1809,7 +1808,7 @@ mod tests {
             .to_string()
     }
 
-    /// P1-25: JS `length` and `slice` count UTF-16 units. A byte slice at
+    /// JS `length` and `slice` count UTF-16 units. A byte slice at
     /// 30 lands inside `é` here and panics.
     #[test]
     fn test_p1_25_short_label_cuts_in_utf16_units_not_bytes() {
@@ -1818,7 +1817,7 @@ mod tests {
         assert_eq!(short_label(name), "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxé…");
     }
 
-    /// P1-25: JS `lastIndexOf(" ", 30)` takes a space at index 30.
+    /// JS `lastIndexOf(" ", 30)` takes a space at index 30.
     #[test]
     fn test_p1_25_short_label_word_cut_takes_a_space_at_index_thirty() {
         let name = "Aaaaaaaaaaaaaaaaaaaa Bbbbbbbbb Cccc";
@@ -1826,7 +1825,7 @@ mod tests {
         assert_eq!(short_label(name), "Aaaaaaaaaaaaaaaaaaaa Bbbbbbbbb…");
     }
 
-    /// P1-25: JS `/^concepts?:\s*/i` without `u` folds ASCII only, so a
+    /// JS `/^concepts?:\s*/i` without `u` folds ASCII only, so a
     /// long s (U+017F) is not an `s` there.
     #[test]
     fn test_p1_25_short_label_keeps_a_long_s_concept_prefix() {
@@ -1834,7 +1833,7 @@ mod tests {
         assert_eq!(short_label("CONCEPTS: x"), "x");
     }
 
-    /// P1-25: JS `/i` without `u` folds ASCII only in the clause-break and
+    /// JS `/i` without `u` folds ASCII only in the clause-break and
     /// test-path patterns too. `K` (U+212A) is not a `k` there.
     #[test]
     fn test_p1_25_ascii_case_fold_in_the_fixed_blast_patterns() {
@@ -1847,7 +1846,7 @@ mod tests {
         assert!(!test_path_re().is_match("src/te\u{017F}ts/a.ts"));
     }
 
-    /// P3-26: JS `\d` in the hunk header pattern is ASCII only.
+    /// JS `\d` in the hunk header pattern is ASCII only.
     #[test]
     fn test_p3_26_hunk_re_rejects_a_non_ascii_digit() {
         assert!(hunk_re().captures("@@ -1,2 +3,4 @@").is_some());
@@ -1905,7 +1904,7 @@ mod tests {
             .to_string()
     }
 
-    /// DV12: JS `\s` and `trim` take U+FEFF.
+    /// JS `\s` and `trim` take U+FEFF.
     #[test]
     fn test_p1_25_dv12_short_label_strips_a_bom() {
         assert_eq!(
@@ -1915,7 +1914,7 @@ mod tests {
         assert_eq!(short_label("concept:\u{FEFF}Foo Bar"), "Foo Bar");
     }
 
-    /// DV13: JS `\s` and `trim` leave U+0085.
+    /// JS `\s` and `trim` leave U+0085.
     #[test]
     fn test_p1_25_dv13_short_label_keeps_a_nel() {
         assert_eq!(
@@ -1962,7 +1961,7 @@ mod tests {
         assert_eq!(listed, 2);
     }
 
-    /// DV6 (P3-25): the label tie-break is `localeCompare`, not byte order.
+    /// The label tie-break is `localeCompare`, not byte order.
     #[test]
     fn test_p3_25_dv6_module_order_is_locale_compare() {
         let seed = node("src/a.ts#f", Kind::Function, "src/a.ts", "L1-L1");

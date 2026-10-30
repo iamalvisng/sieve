@@ -67,7 +67,7 @@ fn built_file_nodes() -> Vec<Node> {
         .collect()
 }
 
-/// Strips `body_text`, because no golden pins it (spec section 8).
+/// Strips `body_text`, because no golden pins it.
 fn strip_body_text(mut node: Node) -> Node {
     node.body_text = None;
     node
@@ -203,7 +203,7 @@ fn test_p2_26_28_written_file_nodes_are_sorted_and_byte_stable() {
 
 #[test]
 fn test_p2_file_nodes_match_golden_field_for_field() {
-    // No golden pins `body_text` (spec section 8, `write_graph` strips it).
+    // No golden pins `body_text` (`write_graph` strips it).
     let golden = golden_file_nodes();
     for node in built_file_nodes() {
         let expected = strip_body_text(find_node(&golden, &node.id).clone());
@@ -328,7 +328,7 @@ fn sorted_edges(mut edges: Vec<Edge>) -> Vec<Edge> {
     edges
 }
 
-/// P2-12, P2-13, P2-17 to P2-22: the resolved edges match the golden's,
+/// The resolved edges match the golden's,
 /// for every fixture, edge for edge.
 #[test]
 fn test_p2_12_13_17_to_22_edges_match_golden() {
@@ -384,7 +384,7 @@ fn copy_dir(src: &std::path::Path, dst: &std::path::Path) {
     }
 }
 
-/// P2-35: a warm build replays every unchanged file from the extraction
+/// A warm build replays every unchanged file from the extraction
 /// cache, and gives the same graph a cold build gives.
 #[test]
 fn test_p2_35_a_warm_build_replays_the_cache_and_matches_the_cold_graph() {
@@ -453,7 +453,7 @@ fn test_p2_35_a_warm_build_replays_the_cache_and_matches_the_cold_graph() {
     assert_eq!(after_touch.reused, 6);
 }
 
-/// P2-35: a stamp change (an extractor upgrade) invalidates the whole
+/// A stamp change (an extractor upgrade) invalidates the whole
 /// cache, so the next build re-parses every claimed file.
 #[test]
 fn test_p2_35_a_stamp_mismatch_invalidates_the_whole_cache() {
@@ -477,9 +477,8 @@ fn test_p2_35_a_stamp_mismatch_invalidates_the_whole_cache() {
     assert_eq!(second.reused, 0);
 }
 
-/// P3-01, P3-02: the `ask` sidecar built by Sieve matches the golden sidecar
-/// byte for byte, on every fixture (`notes/ask-ranking.md` sections 1, 2, and
-/// 10.10).
+/// The `ask` sidecar built by Sieve matches the golden sidecar
+/// byte for byte, on every fixture.
 #[test]
 fn test_p3_01_02_ask_sidecar_matches_golden_byte_for_byte() {
     for fixture in ["basic", "symbols", "scopes", "edges", "workspace", "pnpm"] {
@@ -560,7 +559,7 @@ fn test_p3_01_02_ask_sidecar_matches_golden_byte_for_byte() {
     }
 }
 
-/// P2-12: no resolved edge ever carries `Confidence::LspDispatch`.
+/// No resolved edge ever carries `Confidence::LspDispatch`.
 #[test]
 fn test_p2_12_no_edge_carries_lsp_dispatch() {
     for fixture in ["basic", "symbols", "scopes", "edges", "workspace", "pnpm"] {

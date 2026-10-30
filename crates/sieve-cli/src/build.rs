@@ -1,5 +1,5 @@
 //! The `build` subcommand: builds the graph, writes the `sieve/` tree, and
-//! prints the Tier-1 build report (P2-26 to P2-32).
+//! prints the Tier-1 build report.
 
 use std::collections::BTreeMap;
 use std::io::IsTerminal;
@@ -38,7 +38,7 @@ pub struct BuildArgs {
     #[arg(long = "no-ignore")]
     pub no_ignore: bool,
 
-    /// Runs the optional LSP enrichment layer (P2-23). Never on by
+    /// Runs the optional LSP enrichment layer. Never on by
     /// default; a missing server or a server timeout degrades to a
     /// no-op.
     #[arg(long)]
@@ -227,7 +227,7 @@ fn patch_build_config(
 /// A missing `dir` returns an `ENOENT`-shaped message; `main` prints that
 /// message with no `✗` prefix, matching Sieve.
 ///
-/// This never prints the update nudge itself (P1-47): `sieve init` calls
+/// This never prints the update nudge itself: `sieve init` calls
 /// this function too, and `init` stays silent. `main`'s `Command::Build`
 /// arm prints the nudge before this runs.
 pub fn run(args: &BuildArgs, context_dir_override: Option<&Path>) -> Result<(), String> {
@@ -235,7 +235,7 @@ pub fn run(args: &BuildArgs, context_dir_override: Option<&Path>) -> Result<(), 
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
     let root = resolve_abs(&cwd, &args.root_dir);
 
-    // Sieve checks every flag before it touches the repo (P1-70): the extension
+    // Sieve checks every flag before it touches the repo: the extension
     // warning, then the two directory flags, each on its
     // first bad value.
     crate::check::warn_unknown_extensions(&args.extensions);
@@ -278,7 +278,7 @@ pub fn run(args: &BuildArgs, context_dir_override: Option<&Path>) -> Result<(), 
     let skip_gitignore = args.no_gitignore || env_truthy(&product().env_var("NO_GITIGNORE"));
     let skip_ignore = args.no_ignore || env_truthy(&product().env_var("NO_IGNORE"));
 
-    // A workspace parent (P1-55): build each git child on its own, then
+    // A workspace parent: build each git child on its own, then
     // leave only `workspace.json` here.
     if workspace::is_build_root(&root, &context_dir) {
         return run_workspace(args, &root, &context_dir, skip_gitignore, skip_ignore);
@@ -468,7 +468,7 @@ fn build_repo(
     let mut report =
         build_graph_cached_with(root, context_dir, &mut build_opts).map_err(|e| e.to_string())?;
 
-    // The LSP layer is opt-in (P2-23): `--lsp` only, never on by
+    // The LSP layer is opt-in: `--lsp` only, never on by
     // default. Any failure — no server on `PATH`, a timeout, an early
     // exit — degrades to 0 added edges; the graph stays as the AST
     // resolver built it.
@@ -499,7 +499,7 @@ fn build_repo(
         ready,
     );
 
-    // Section 3 order: `writeGraph`, then the ask sidecar, then
+    // Write order: `writeGraph`, then the ask sidecar, then
     // `writeFingerprint`, then the gitignore edits and the cards. A sidecar
     // write failure is never fatal; it is recorded and printed after the build
     // report instead. The build's own read errors come first, then the sidecar
@@ -526,7 +526,7 @@ fn build_repo(
     write_index(context_dir, &card_stats).map_err(|e| e.to_string())?;
 
     // `writeCovers` runs only on an explicit `sieve build`, never on the
-    // query-path refresh (deep-tier.md section 3). It backfills the
+    // query-path refresh. It backfills the
     // `covers:` block into every existing concept file's frontmatter.
     write_covers(context_dir, &graph.nodes).map_err(|e| e.to_string())?;
 
@@ -541,7 +541,7 @@ fn build_repo(
     })
 }
 
-/// Runs the workspace build (P1-55): prints the migration note when a mega
+/// Runs the workspace build: prints the migration note when a mega
 /// graph sits here, builds each Reports the context dir when it is the
 /// workspace root, an ancestor of the root, or a child dir or its ancestor, by
 /// canonical path. `None` when the context dir is safe to delete, or does not
@@ -681,7 +681,7 @@ pub(crate) fn acquire_build_lock(context_dir: &Path) -> std::io::Result<Option<B
     }
 }
 
-/// Writes the freshness fingerprint for this build (P2-33): one [`Print`]
+/// Writes the freshness fingerprint for this build: one [`Print`]
 /// per claimed file, taken from the extractor's own read of that file, so
 /// the hash covers the same bytes `build_graph_cached` parsed.
 pub(crate) fn write_build_fingerprint(
@@ -937,7 +937,7 @@ mod tests {
         assert_eq!(resolved, PathBuf::from("/repo/sieve"));
     }
 
-    /// P1-70: `--include-dir` takes a bare name; `--only-dir` normalizes
+    /// `--include-dir` takes a bare name; `--only-dir` normalizes
     /// to the `--in` form and rejects a prefix that normalizes to `""`.
     #[test]
     fn test_p1_70_include_dir_and_only_dir_checks() {
@@ -952,7 +952,7 @@ mod tests {
         assert_eq!(normalize_path_prefix("./"), "");
     }
 
-    /// P1-70: a repeated `-e`, `--include-dir` or `--only-dir` adds to the
+    /// A repeated `-e`, `--include-dir` or `--only-dir` adds to the
     /// list, as commander's `[...prev, val]` reducer does, even under the
     /// global `args_override_self`.
     #[test]
@@ -985,7 +985,7 @@ mod tests {
         assert_eq!(cli.build.only_dir, ["x", "y"]);
     }
 
-    /// P1-70: `patch_build_config` merges `includeDirs` into the existing
+    /// `patch_build_config` merges `includeDirs` into the existing
     /// config and adds the config dir to `.gitignore` once.
     #[test]
     fn test_p1_70_patch_build_config_merges_and_ignores_once() {

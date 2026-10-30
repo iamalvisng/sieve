@@ -1,5 +1,4 @@
-//! Parity tests for commander's error forms against a recorded run (P1-01,
-//! P1-51). Each case prints one commander line on stderr and exits 1, where
+//! Parity tests for commander's error forms against a recorded run. Each case prints one commander line on stderr and exits 1, where
 //! clap prints its own text and exits 2. The query list lives in
 //! `tests/inputs/cli-errors/basic.txt`. The goldens live in
 //! `tests/fixtures/basic.expected/cli-errors/`.
@@ -127,7 +126,7 @@ fn mismatches(ids: &[&str]) -> Vec<String> {
         .collect()
 }
 
-/// P1-51 (DV6): `ask` prints commander's four error forms.
+/// `ask` prints commander's four error forms.
 #[test]
 fn test_p1_51_dv6_ask_errors() {
     let ids = [
@@ -141,7 +140,7 @@ fn test_p1_51_dv6_ask_errors() {
     assert_eq!(mismatches(&ids), Vec::<String>::new());
 }
 
-/// P1-51 (DV6): `grep` prints commander's four error forms.
+/// `grep` prints commander's four error forms.
 #[test]
 fn test_p1_51_dv6_grep_errors() {
     let ids = [
@@ -153,7 +152,7 @@ fn test_p1_51_dv6_grep_errors() {
     assert_eq!(mismatches(&ids), Vec::<String>::new());
 }
 
-/// P1-51 (DV6): `callers` prints commander's four error forms.
+/// `callers` prints commander's four error forms.
 #[test]
 fn test_p1_51_dv6_callers_errors() {
     let ids = [
@@ -166,7 +165,7 @@ fn test_p1_51_dv6_callers_errors() {
     assert_eq!(mismatches(&ids), Vec::<String>::new());
 }
 
-/// P1-51 (DV6): `check` prints commander's error forms, including the
+/// `check` prints commander's error forms, including the
 /// variadic `-e` flags text.
 #[test]
 fn test_p1_51_dv6_check_errors() {
@@ -178,7 +177,7 @@ fn test_p1_51_dv6_check_errors() {
     assert_eq!(mismatches(&ids), Vec::<String>::new());
 }
 
-/// P1-51 (DV6): `skeleton` prints commander's error forms, including the
+/// `skeleton` prints commander's error forms, including the
 /// global `--dir` with no value.
 #[test]
 fn test_p1_51_dv6_skeleton_errors() {
@@ -191,14 +190,14 @@ fn test_p1_51_dv6_skeleton_errors() {
     assert_eq!(mismatches(&ids), Vec::<String>::new());
 }
 
-/// P1-51 (DV6): `map` prints commander's error forms.
+/// `map` prints commander's error forms.
 #[test]
 fn test_p1_51_dv6_map_errors() {
     let ids = ["map-unknown-flag", "map-missing-value", "map-extra-arg"];
     assert_eq!(mismatches(&ids), Vec::<String>::new());
 }
 
-/// P1-51 (DV6): commander reports a missing option value before an
+/// Commander reports a missing option value before an
 /// unknown option, an unknown option before an extra argument, and the
 /// whole typed token for an unknown option.
 #[test]
@@ -212,7 +211,7 @@ fn test_p1_51_dv6_error_order_and_token() {
     assert_eq!(mismatches(&ids), Vec::<String>::new());
 }
 
-/// P1-51 (DV6): a negative number is an operand or a variadic value, and
+/// A negative number is an operand or a variadic value, and
 /// a short group reports its first unknown letter after a boolean flag.
 #[test]
 fn test_p1_51_dv6_negative_numbers_and_short_groups() {
@@ -232,7 +231,7 @@ fn test_p1_51_dv6_negative_numbers_and_short_groups() {
     assert_eq!(mismatches(&ids), Vec::<String>::new());
 }
 
-/// P1-51 (DV6): the flags text of a missing value for `build`, `viz`,
+/// The flags text of a missing value for `build`, `viz`,
 /// `blast` and `init`, one case per value option.
 #[test]
 fn test_p1_51_dv6_missing_value_flags_text() {
@@ -255,7 +254,7 @@ fn test_p1_51_dv6_missing_value_flags_text() {
     assert_eq!(mismatches(&ids), Vec::<String>::new());
 }
 
-/// P1-01, P1-51 (DV5): a version flag anywhere wins over help and over a
+/// A version flag anywhere wins over help and over a
 /// later fault.
 #[test]
 fn test_p1_51_dv5_version_forms() {
@@ -270,7 +269,7 @@ fn test_p1_51_dv5_version_forms() {
     assert_eq!(mismatches(&ids), Vec::<String>::new());
 }
 
-/// P1-01, P1-51 (DV5): a near-miss top-level flag gets a suggestion, a
+/// A near-miss top-level flag gets a suggestion, a
 /// known `--dir=x` leaves no operand, and a missing `--dir` value beats
 /// `-h`.
 #[test]
@@ -279,7 +278,7 @@ fn test_p1_51_dv5_suggestion_and_dir_forms() {
     assert_eq!(mismatches(&ids), Vec::<String>::new());
 }
 
-/// P1-51 (DV7): an option that needs a value takes the next token even
+/// An option that needs a value takes the next token even
 /// when it starts with `-`, and a short flag takes an attached value.
 /// The variadic flags keep the values that follow.
 #[test]
@@ -295,7 +294,7 @@ fn test_p1_51_dv7_hyphen_values_and_attached_values() {
     assert_eq!(mismatches(&ids), Vec::<String>::new());
 }
 
-/// P1-51 (DV7): commander lists no help option, so `-hx` and `-hh` are
+/// Commander lists no help option, so `-hx` and `-hh` are
 /// unknown options, and a missing option value beats a later `-h`.
 #[test]
 fn test_p1_51_dv7_help_group_is_an_unknown_option() {
@@ -307,7 +306,7 @@ fn test_p1_51_dv7_help_group_is_an_unknown_option() {
     assert_eq!(mismatches(&ids), Vec::<String>::new());
 }
 
-/// P1-51 (DV7): a `-h` token anywhere wins over an unknown option. Sieve
+/// A `-h` token anywhere wins over an unknown option. Sieve
 /// prints its help on stdout and exits 0.
 #[test]
 fn test_p1_51_dv7_help_wins_over_unknown_option() {
@@ -320,7 +319,7 @@ fn test_p1_51_dv7_help_wins_over_unknown_option() {
     assert_eq!(mismatches(&ids), Vec::<String>::new());
 }
 
-/// P1-51 (DV7): the root option `--dir` after
+/// The root option `--dir` after
 /// a subcommand option is never that option's value. The root flags and
 /// their values leave the line, and a variadic run goes on past them.
 /// After `--`, every token is an operand.
@@ -337,8 +336,8 @@ fn test_p1_51_dv7_root_flags_are_not_option_values() {
     assert_eq!(mismatches(&ids), Vec::<String>::new());
 }
 
-/// P1-02, P1-51 (DV4, DV7): `-n` takes a value that starts with `-` and
-/// an attached value. The value then reaches DV4: Sieve prints
+/// `-n` takes a value that starts with `-` and
+/// an attached value. The value then reaches the next check: Sieve prints
 /// clap's invalid-value error, exit 2. The error names
 /// the value, so the value was taken and not read as a flag.
 #[test]
@@ -364,7 +363,7 @@ fn test_p1_51_dv7_limit_takes_the_value_then_dv4() {
     }
 }
 
-/// P4-47, P1-51: `init --dry-run` prints the plan on stderr. `-- nodir`
+/// `init --dry-run` prints the plan on stderr. `-- nodir`
 /// makes no difference.
 #[test]
 fn test_p4_47_init_dry_run_plan_matches_golden() {
@@ -376,7 +375,7 @@ fn test_p4_47_init_dry_run_plan_matches_golden() {
     assert_eq!(mismatches(&ids), Vec::<String>::new());
 }
 
-/// P1-51: with `--dir x` and no graph there, `ask --in` runs and prints
+/// With `--dir x` and no graph there, `ask --in` runs and prints
 /// the empty result, and `blast` and `callers` name `x` as typed.
 #[test]
 fn test_p1_51_dv8_missing_graph_dir_forms() {

@@ -5,7 +5,7 @@
 //!
 //! ponytail: the stamp misses a local edit to the extractor code within
 //! one crate version. Upgrade: a build script that hashes every file
-//! under `crates/sieve-parse/src/` when the extraction cache (P2-35)
+//! under `crates/sieve-parse/src/` when the extraction cache
 //! lands.
 
 use sha2::{Digest, Sha256};

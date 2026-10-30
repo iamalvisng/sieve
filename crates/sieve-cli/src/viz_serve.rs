@@ -1,4 +1,4 @@
-//! The live server behind `sieve viz [dir]` (P1-65, step 3). It binds
+//! The live server behind `sieve viz [dir]`. It binds
 //! `127.0.0.1` only, and answers a fixed set of routes. A request path never
 //! reaches the disk: every file name below is a constant.
 //!

@@ -1,4 +1,4 @@
-//! Parity tests for `sieve query` (P1-02 to P1-11, P1-40, P1-49): the query
+//! Parity tests for `sieve query`: the query
 //! prelude and the `ask` report, against the goldens under
 //! `tests/fixtures/<name>.expected/queries/`.
 //!
@@ -214,10 +214,10 @@ fn run_named_ask_queries(fixture: &str, ids: &[&str]) -> Vec<String> {
         .collect()
 }
 
-/// P1-02: every `ask` flag by its long name (`--no-graph-rank`,
-/// `--no-refresh`, `--full`, `--limit`). P1-03, P1-04, P1-06: the
+/// Every `ask` flag by its long name (`--no-graph-rank`,
+/// `--no-refresh`, `--full`, `--limit`). the
 /// structural header, the `⚠` fallthrough note, and the structural hit
-/// line. P1-11, P1-43: a bad `--in` prefix on a multi-scope repo names the
+/// line. a bad `--in` prefix on a multi-scope repo names the
 /// scopes on stderr and exits 1.
 #[test]
 fn test_p1_02_to_04_p1_06_p1_11_p1_43_ask_flags_and_structural_cli_match_golden() {
@@ -239,8 +239,8 @@ fn test_p1_02_to_04_p1_06_p1_11_p1_43_ask_flags_and_structural_cli_match_golden(
     );
 }
 
-/// P1-07: a concept hit prints its `related:` line. P3-04: a test path's
-/// `--json` score carries the 0.35 factor. P3-15: `--source --full` caps
+/// A concept hit prints its `related:` line. a test path's
+/// `--json` score carries the 0.35 factor. `--source --full` caps
 /// a span at 80 lines and prints the `+N more lines` marker.
 #[test]
 fn test_p1_07_p3_04_p3_15_askx_cli_matches_golden() {

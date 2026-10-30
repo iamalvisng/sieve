@@ -1,5 +1,5 @@
-//! Parity test for P1-01: the 18-row command list and one-line
-//! descriptions, the `01-cli.md` note section 1.
+//! Parity test: the 18-row command list and one-line
+//! descriptions.
 //!
 //! The Commander help renders the same text for 3 invocations:
 //! `sieve` with no args (stderr, exit 1), `sieve --help` (stdout, exit
@@ -81,7 +81,7 @@ fn test_p1_01_help_lists_the_18_commands_and_matches_golden() {
     assert_matches_golden("help", &run_sieve(&temp.path, &["help"]));
 }
 
-/// P1-01 follow-up: `-h`/`--help` before the first subcommand token
+/// `-h`/`--help` before the first subcommand token
 /// prints the full top-level help, not the subcommand's help. `-v` and
 /// `--version` print the version and exit 0, matching Sieve exactly.
 #[test]
@@ -105,7 +105,7 @@ fn test_p1_01_help_before_a_subcommand_and_version_flags_match_golden() {
     assert_matches_golden("operand-then-h", &run_sieve(&temp.path, &["foo", "-h"]));
 }
 
-/// P1-51: with no `-h` in the tail, an unknown top-level option, an
+/// With no `-h` in the tail, an unknown top-level option, an
 /// unknown command, or a known value flag with no value exits 1 with
 /// Commander's own error line, not clap's exit 2.
 #[test]
@@ -125,7 +125,7 @@ fn test_p1_51_unknown_option_and_command_match_golden() {
     let temp = TempDir::new("help-dir-missing-value");
     assert_matches_golden("dir-missing-value", &run_sieve(&temp.path, &["--dir"]));
 
-    // P1-51 follow-up: a lone `-` is an operand, never a flag; a lone
+    // A lone `-` is an operand, never a flag; a lone
     // `--` falls back to the no-args help; `--` followed by an operand
     // names that operand in `unknown command`.
     let temp = TempDir::new("help-lone-dash");
@@ -142,7 +142,7 @@ fn test_p1_51_unknown_option_and_command_match_golden() {
 }
 
 /// The commands Sieve shares with the recorded help, hidden ones included. `upgrade`,
-/// `trail` and `claude-md` are absent: Sieve has none of them (P1-52, P1-53).
+/// `trail` and `claude-md` are absent: Sieve has none of them.
 const SHARED_COMMANDS: &[&str] = &[
     "telemetry",
     "version",
@@ -181,7 +181,7 @@ fn assert_sub_help(what: &str, want: &str, output: &Output) {
     assert_eq!(output.status.code(), Some(0), "{what}: exit code");
 }
 
-/// P1-63: `<cmd> --help`, `<cmd> -h` and `help <cmd>` print the golden
+/// `<cmd> --help`, `<cmd> -h` and `help <cmd>` print the golden
 /// text byte for byte, for every shared command.
 #[test]
 fn test_p1_63_subcommand_help_matches_golden() {
@@ -217,7 +217,7 @@ fn test_p1_63_subcommand_help_matches_golden() {
     }
 }
 
-/// P1-63: a `-h` token after operands or an unknown option still wins,
+/// A `-h` token after operands or an unknown option still wins,
 /// as commander's `_outputHelpIfRequested` finds it.
 #[test]
 fn test_p1_63_help_token_after_operands_wins() {
@@ -232,7 +232,7 @@ fn test_p1_63_help_token_after_operands_wins() {
     }
 }
 
-/// P1-63: a Sieve-only command has no old name text. It keeps clap's help,
+/// A Sieve-only command has no old name text. It keeps clap's help,
 /// never the root list.
 #[test]
 fn test_p1_63_sieve_only_commands_keep_clap_help() {
@@ -249,7 +249,7 @@ fn test_p1_63_sieve_only_commands_keep_clap_help() {
     }
 }
 
-/// P4-47: `init --help` lists `--verbose`.
+/// `init --help` lists `--verbose`.
 #[test]
 fn test_p4_47_init_help_shows_verbose() {
     let temp = TempDir::new("help-init-verbose");
@@ -263,7 +263,7 @@ fn test_p4_47_init_help_shows_verbose() {
     );
 }
 
-/// P1-63: `help [command]` reads the root options first and ignores what
+/// `help [command]` reads the root options first and ignores what
 /// follows the command name. An unknown name, `help` itself, or a name
 /// in another case prints the root help on stderr, exit 1. No command
 /// name prints the root help on stdout.

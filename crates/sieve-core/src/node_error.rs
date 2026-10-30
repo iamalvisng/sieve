@@ -1,6 +1,6 @@
 //! Node-shaped file error text. Sieve prints Node's own `fs` error
 //! message, for example `EACCES: permission denied, open '/x.ts'`, so a
-//! Sieve build and walk print the same words (P2-01).
+//! Sieve build and walk print the same words.
 
 use std::io;
 use std::path::Path;

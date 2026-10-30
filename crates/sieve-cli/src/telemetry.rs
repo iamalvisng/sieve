@@ -1,8 +1,8 @@
-//! The `sieve telemetry [action]` subcommand (P1-67), and the local-date
+//! The `sieve telemetry [action]` subcommand, and the local-date
 //! helpers the savings code shares.
 //!
-//! Sieve records no event and sends nothing (P4-35 to P4-38 are
-//! deviations). Every action prints one true line and touches no file.
+//! Sieve records no event and sends nothing (a known
+//! deviation). Every action prints one true line and touches no file.
 
 use std::time::{Duration, SystemTime};
 

@@ -1,6 +1,6 @@
-//! Parity tests for workspace step 2: the federated `grep` and `check`,
+//! Parity tests for the workspace: the federated `grep` and `check`,
 //! the coverage note, the child refresh, and the symlinked non-child
-//! (P1-57, P1-59, P1-60, P2-39), against the recorded goldens under
+//! , against the recorded goldens under
 //! `tests/fixtures/ws.expected/workspace2/`. The helpers live in `support/ws.rs`.
 
 mod support;
@@ -37,7 +37,7 @@ fn edit_alpha(copy: &Path) {
     fs::write(&path, body).expect("write a.ts");
 }
 
-/// P1-57: `grep` at the parent searches both children, prefixes each
+/// `grep` at the parent searches both children, prefixes each
 /// path with the child dir, and sums the counts.
 #[test]
 fn test_p1_57_grep_at_a_workspace_parent_hits_both_children() {
@@ -46,7 +46,7 @@ fn test_p1_57_grep_at_a_workspace_parent_hits_both_children() {
     assert_matches("grep-both", &output, &copy);
 }
 
-/// P1-57: a zero hit at the parent prints the merged zero-hit note, with
+/// A zero hit at the parent prints the merged zero-hit note, with
 /// the summed indexed-file count.
 #[test]
 fn test_p1_57_grep_zero_hit_at_a_workspace_parent() {
@@ -55,7 +55,7 @@ fn test_p1_57_grep_zero_hit_at_a_workspace_parent() {
     assert_matches("grep-zero", &output, &copy);
 }
 
-/// P1-57: `grep --json` at the parent prints the merged result, with the
+/// `grep --json` at the parent prints the merged result, with the
 /// summed `saved` baseline.
 #[test]
 fn test_p1_57_grep_json_at_a_workspace_parent() {
@@ -64,7 +64,7 @@ fn test_p1_57_grep_json_at_a_workspace_parent() {
     assert_matches("grep-json", &output, &copy);
 }
 
-/// P1-57: sieve drops `--in` at a workspace; the search covers every
+/// Sieve drops `--in` at a workspace; the search covers every
 /// child.
 #[test]
 fn test_p1_57_grep_in_is_ignored_at_a_workspace_parent() {
@@ -73,7 +73,7 @@ fn test_p1_57_grep_in_is_ignored_at_a_workspace_parent() {
     assert_matches("grep-in", &output, &copy);
 }
 
-/// P1-59: `check` at the parent prints one `OK` line per built child,
+/// `check` at the parent prints one `OK` line per built child,
 /// and `--json` is ignored.
 #[test]
 fn test_p1_59_check_at_a_workspace_parent_with_both_children_built() {
@@ -84,7 +84,7 @@ fn test_p1_59_check_at_a_workspace_parent_with_both_children_built() {
     assert_matches("check-json", &output, &copy);
 }
 
-/// P1-59, P1-60: an unbuilt child is `not built`, then the coverage
+/// An unbuilt child is `not built`, then the coverage
 /// note; the exit stays 0. `grep` adds the same note after its body,
 /// or after the zero-hit note on stderr.
 #[test]
@@ -99,7 +99,7 @@ fn test_p1_60_check_and_grep_with_one_child_unbuilt() {
     assert_matches("grep-coverage-zero", &output, &copy);
 }
 
-/// P1-59: a stale child is `STALE (…)`, and the exit is 1. `check` runs
+/// A stale child is `STALE (…)`, and the exit is 1. `check` runs
 /// no refresh, so the edit stays visible.
 #[test]
 fn test_p1_59_check_with_one_child_stale() {
@@ -109,7 +109,7 @@ fn test_p1_59_check_with_one_child_stale() {
     assert_matches("check-stale", &output, &copy);
 }
 
-/// P2-39: a query at the parent refreshes the edited child first, with
+/// A query at the parent refreshes the edited child first, with
 /// The two-part note, and answers from the fresh graph.
 #[test]
 fn test_p2_39_grep_refreshes_an_edited_child_before_answering() {
@@ -119,7 +119,7 @@ fn test_p2_39_grep_refreshes_an_edited_child_before_answering() {
     assert_matches("grep-refresh", &output, &copy);
 }
 
-/// P2-38: a symlinked dir beside the children is not a workspace member:
+/// A symlinked dir beside the children is not a workspace member:
 /// the build names two repos, the index lists two, and `grep` searches
 /// two.
 #[cfg(unix)]

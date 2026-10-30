@@ -1,4 +1,4 @@
-//! The `viz --export` data (P1-65): the context graph assembled from the
+//! The `viz --export` data: the context graph assembled from the
 //! top-level `<context_dir>/*.md` files and the one-file page that inlines the
 //! viewer, both graphs and the stylesheet.
 //!

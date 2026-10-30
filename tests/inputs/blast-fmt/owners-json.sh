@@ -1,5 +1,5 @@
 # args: blast --format json -d 1
-# DV5 (P1-25, P3-25): the same second author, as JSON: `owners` on the
+# The same second author, as JSON: `owners` on the
 # module and `reviewers` with `areas`. The author date is pinned so
 # `last` is byte-stable. `score` decays with the clock (120-day
 # half-life from now), so the test masks it. The pinned date leaves the

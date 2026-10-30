@@ -1,5 +1,4 @@
-//! Workspace federation for the query commands (P1-54, P1-57, P1-58,
-//! P1-60): the per-child graph load, the coverage note, the merged
+//! Workspace federation for the query commands: the per-child graph load, the coverage note, the merged
 //! `grep`, the per-child `map`, and the per-child `callers`
 
 use std::cmp::Ordering;
@@ -161,7 +160,7 @@ pub fn federate_grep(
     })
 }
 
-/// The workspace `map` text (P1-54): the `workspace map — N repo(s)` head, then
+/// The workspace `map` text: the `workspace map — N repo(s)` head, then
 /// one `## <child>/` section per built child, then the coverage note.
 /// `max_dirs` splits evenly across the built children, at least 1 each; `None`
 /// keeps the default. `render` wraps one child's map body in its savings
@@ -205,7 +204,7 @@ pub fn federate_map(
     parts.join("\n") + "\n"
 }
 
-/// The workspace `callers` text (P1-58).
+/// The workspace `callers` text.
 #[derive(Debug)]
 pub struct FederatedCallers {
     /// The blocks joined, plus the coverage note; or the miss line, plus
@@ -573,7 +572,7 @@ fn merge_scopes(
     }
 }
 
-/// The federated `ask` across a workspace (P1-56, the `fileTopLock` branch).
+/// The federated `ask` across a workspace (the `fileTopLock` branch).
 /// Each built child runs its own ask with ranking metadata. The merged result
 /// holds the baseline top first, then the files by reciprocal-rank fusion,
 /// round robin over the files.
@@ -950,7 +949,7 @@ mod tests {
         }
     }
 
-    /// P1-57, P1-60: an unbuilt or unparseable child goes to `missing`;
+    /// An unbuilt or unparseable child goes to `missing`;
     /// the note counts it; the merged grep prefixes each path, sums the
     /// counts and the baseline, and ignores `--in`.
     #[test]
@@ -1034,7 +1033,7 @@ mod tests {
         }
     }
 
-    /// P1-54: the head, one section per built child with the render
+    /// The head, one section per built child with the render
     /// applied to the body without its trailing newline, `--max-dirs`
     /// split evenly with a floor of 1, then the coverage note.
     #[test]
@@ -1080,7 +1079,7 @@ mod tests {
         );
     }
 
-    /// P1-58: one block per child with a match, child-relative paths, no
+    /// One block per child with a match, child-relative paths, no
     /// quote line, the render given the saved paths; a miss in every
     /// child is `found: false` with the workspace miss line.
     #[test]
@@ -1128,7 +1127,7 @@ mod tests {
         );
     }
 
-    /// P1-60: every child built gives an empty note, and discovery
+    /// Every child built gives an empty note, and discovery
     /// stands in for a missing index.
     #[test]
     fn test_p1_60_coverage_note_is_empty_when_every_child_is_built() {
@@ -1149,7 +1148,7 @@ mod tests {
         }
     }
 
-    /// P1-56: the reciprocal-rank sums and the divide by the max keep the exact
+    /// The reciprocal-rank sums and the divide by the max keep the exact
     /// bits. A tie sorts by score, then scope, then id, and the id order is
     /// plain `localeCompare`, so `alpha 10` comes before `alpha 9`. A score of
     /// 0 or less drops out. A scope below a quarter of the best scope is gated.
@@ -1206,7 +1205,7 @@ mod tests {
         assert_eq!(one.federated, ["s"]);
     }
 
-    /// P1-56: each comma part of a concept pointer gets the child prefix; a
+    /// Each comma part of a concept pointer gets the child prefix; a
     /// part with a space is free text and keeps its own text, leading space
     /// included.
     #[test]
@@ -1247,7 +1246,7 @@ mod tests {
         }
     }
 
-    /// P1-56: the lock puts the baseline top first at its own score, and the
+    /// The lock puts the baseline top first at its own score, and the
     /// tail takes the group leader's score, not the top's. A group absent from
     /// the ranked list locks as a singleton.
     #[test]
@@ -1281,7 +1280,7 @@ mod tests {
         assert_eq!(absent[1].key, "g1");
     }
 
-    /// P1-56: the locked scope leads the footer once,
+    /// The locked scope leads the footer once,
     /// and a federated scope leaves the also-matched list.
     #[test]
     fn test_p1_56_scope_footer_drops_a_federated_scope_from_also_matched() {
@@ -1300,7 +1299,7 @@ mod tests {
         assert_eq!(left, ["c", "d"]);
     }
 
-    /// P1-56: a scope at exactly a quarter of the best federates (`>=`), and a
+    /// A scope at exactly a quarter of the best federates (`>=`), and a
     /// doc scoring exactly 0 drops (`<= 0`).
     #[test]
     fn test_p1_56_fuse_scopes_gate_is_inclusive_and_a_zero_score_drops() {
@@ -1322,7 +1321,7 @@ mod tests {
         assert!(only_zero.also_matched.is_empty());
     }
 
-    /// P1-56: a child whose ask panics is skipped, as
+    /// A child whose ask panics is skipped, as
     /// a child whose ask throws is skipped.
     #[test]
     fn test_p1_56_a_panicking_child_is_skipped() {
@@ -1354,7 +1353,7 @@ mod tests {
         assert!(result.hits.is_empty());
     }
 
-    /// P1-56: an unknown first `--in` segment is an
+    /// An unknown first `--in` segment is an
     /// error naming every child, sorted; an empty `--in` is no scope.
     #[test]
     fn test_p1_56_unknown_in_child_names_the_sorted_repos() {

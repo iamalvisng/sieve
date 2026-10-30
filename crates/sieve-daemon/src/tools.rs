@@ -1,6 +1,6 @@
 //! The `tools/call` dispatch: alias mapping, the pre-tool refresh, the six
 //! engine calls, and the per-tool text and error rules
-//! (the `mcp-server.md` note sections 4 and 5).
+//!.
 
 use std::path::Path;
 
@@ -112,7 +112,7 @@ fn to_json<T: serde::Serialize>(value: &T) -> String {
 }
 
 /// The text a missing graph reports for every tool that has no graceful
-/// empty-result path of its own (`mcp-server.md` section 4).
+/// empty-result path of its own.
 fn no_graph_text() -> String {
     format!("no graph found — run `{} build` first", product().name)
 }
@@ -177,9 +177,9 @@ pub fn call(name: &str, args: &Value, root: &Path, context_dir: &Path) -> (Strin
             disabled: env_truthy(&product().env_var("NO_REFRESH")) && !refresh_forced(),
             force_hash: std::env::var(product().env_var("REFRESH")).as_deref() == Ok("hash"),
         };
-        // A workspace root keeps the step 1 path: a parent has no graph of
+        // A workspace root keeps the full path: a parent has no graph of
         // its own, and each child needs its own watcher. Only a single
-        // root uses the warm index (`docs/design/daemon-speed.md`, 3a).
+        // root uses the warm index.
         let mut outcome = match &ws {
             Some(ws) => ensure_fresh_children(root, &ws.children, &opts),
             None => crate::warm::refresh(root, context_dir, &opts),
@@ -231,10 +231,10 @@ pub fn call(name: &str, args: &Value, root: &Path, context_dir: &Path) -> (Strin
     (text, is_error)
 }
 
-/// The workspace-parent tools (P4-44, `callWorkspaceTool`): `trace_calls`,
+/// The workspace-parent tools (`callWorkspaceTool`): `trace_calls`,
 /// `find_all`, `repo_map` and `check_freshness` federate across the children.
 /// `None` sends the call to the single-graph path. `find_code` federates `ask`
-/// (workspace step 5, P1-56).
+/// .
 fn call_workspace(
     tool: &str,
     args: &Value,
@@ -455,7 +455,7 @@ fn load_graph(context_dir: &Path) -> Option<std::sync::Arc<Graph>> {
 }
 
 /// An empty graph, for `sieve_query`'s no-graph path: `ask` runs over
-/// an empty node set instead of erroring (`ask-ranking.md` section 0).
+/// an empty node set instead of erroring.
 fn empty_graph() -> Graph {
     Graph {
         meta: Meta {
@@ -522,7 +522,7 @@ pub(crate) fn js_number_text(n: f64) -> String {
     }
 }
 
-/// `find_code` at a workspace parent (P4-44): the
+/// `find_code` at a workspace parent: the
 /// federated `ask`, with source inlined and no savings line. A thrown
 /// error, such as an unknown `in` child, is the message as an error.
 /// The third value is true when the federation threw.
@@ -809,7 +809,7 @@ fn repo_map(args: &Value, context_dir: &Path) -> (String, bool) {
     let map = build_repo_map(&graph, &opts);
     // Strip-then-restore the trailing newline before measuring the
     // savings pack; same rounding-boundary fix as `file_api`
-    // (`mcp-server.md` section 4).
+    //.
     let mut rendered = format_repo_map(&map);
     if let Some(n) = max_dirs.filter(|n| n.fract() != 0.0) {
         rendered = fractional_dropped_notes(&rendered, &map, n);

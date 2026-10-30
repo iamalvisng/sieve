@@ -1,5 +1,5 @@
-//! Tests for `sieve version` (P1-37, P1-38). Sieve prints no update nudge
-//! (P1-47), and these tests pin the silence.
+//! Tests for `sieve version`. Sieve prints no update nudge
+//! , and these tests pin the silence.
 
 mod support;
 
@@ -76,7 +76,7 @@ fn test_p1_38_version_never_prints_the_update_nudge() {
     let temp = TempDir::new("exempt");
     let home = TempDir::new("exempt-home");
     // A newer cached version would nudge every other command; `version`
-    // stays silent on stderr regardless (P1-38).
+    // stays silent on stderr regardless.
     seed_update_cache(&home.path, Some("9.9.9"));
 
     let output = run_sieve_with_home(&temp.path, &home.path, &["version"]);
@@ -84,7 +84,7 @@ fn test_p1_38_version_never_prints_the_update_nudge() {
     assert_eq!(String::from_utf8_lossy(&output.stderr), "");
 }
 
-/// P1-47: `sieve init` calls `build::run` under the hood, but `init` is
+/// `sieve init` calls `build::run` under the hood, but `init` is
 /// exempt from the nudge (Sieve's own exempt set adds `init`,
 /// `uninstall`, `hook` and `statusline` to the `UPKEEP_SKIP`). A
 /// newer cached version must not leak a nudge line into `init`'s stderr.
@@ -110,7 +110,7 @@ fn test_p1_47_init_stays_silent_even_though_it_calls_build() {
     );
 }
 
-/// P1-47/P4-57: `mcp` sits inside the CLI `UPKEEP_SKIP` set, so the
+/// `mcp` sits inside the CLI `UPKEEP_SKIP` set, so the
 /// CLI preAction prints no nudge for it. The MCP server prints its own
 /// banner at boot; `test_p4_57_*` in `mcp_cli.rs` pins that. Here the
 /// cache is current, so `mcp` stays silent. `mcp` serves stdin until
@@ -135,7 +135,7 @@ fn test_p1_47_mcp_stays_silent() {
     );
 }
 
-/// P1-47: `hook` and `statusline` read their own canned JSON from stdin
+/// `hook` and `statusline` read their own canned JSON from stdin
 /// and never call the query prelude, so they stay silent on the nudge
 /// too.
 #[test]
@@ -166,7 +166,7 @@ fn test_p1_47_hook_and_statusline_stay_silent() {
         .any(|line| line.starts_with('\u{2b06}')));
 }
 
-/// P4-41: `sieve hook session-start` never panics and prints no nudge
+/// `sieve hook session-start` never panics and prints no nudge
 /// when the cache is missing (a fresh machine, or `$HOME` unset).
 #[test]
 fn test_p4_41_hook_session_start_stays_silent_without_a_cache() {
@@ -186,7 +186,7 @@ fn test_p4_41_hook_session_start_stays_silent_without_a_cache() {
     assert!(!stdout.contains('\u{2b06}'), "got: {stdout:?}");
 }
 
-/// P4-41: `sieve statusline` never runs the update upkeep (only the
+/// `sieve statusline` never runs the update upkeep (only the
 /// `session-start` hook does), so it prints no nudge even from a newer cached
 /// version.
 #[test]

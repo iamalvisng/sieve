@@ -338,7 +338,7 @@ fn rename_table_cli_default_is_sieve_without_the_switch() {
     );
 }
 
-/// P4-47: the `--dry-run` plan of a sieve-branded run lists the files the
+/// The `--dry-run` plan of a sieve-branded run lists the files the
 /// run writes, lists no shim row, names no old name and writes nothing.
 #[test]
 fn test_p4_47_init_dry_run_plan_names_sieve_and_lists_no_shims() {
@@ -404,11 +404,11 @@ fn plan_paths(stderr: &str, repo: &Path, home: &Path) -> std::collections::BTree
     paths
 }
 
-/// P4-47: for each product, with and without `--global`, `--no-mcp` and
+/// For each product, with and without `--global`, `--no-mcp` and
 /// `--no-hooks`, the files the real `init` writes equal the plan's rows.
 /// The plan omits `.gitignore`, `.ignore` and the index dir. The
 /// scratch HOME holds `.codex` and `.config/opencode`, so the Codex hook,
-/// Codex config and opencode rows show (P4-51).
+/// Codex config and opencode rows show.
 #[test]
 fn test_p4_47_init_dry_run_plan_equals_the_files_a_real_run_writes() {
     let fixture = support::manifest_dir().join("../../tests/fixtures/basic");

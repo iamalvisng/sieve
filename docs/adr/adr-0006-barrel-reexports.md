@@ -6,7 +6,7 @@
 
 ## Context
 
-ADR 0005 leaves barrel re-exports uncovered. The oracle follows `export ... from`. Sieve does not. All uncovered oracle pairs on vite and flowfig are barrel pairs. The design is in `docs/design/xfile-slice3.md`.
+ADR 0005 leaves barrel re-exports uncovered. The oracle follows `export ... from`. Sieve does not. All uncovered oracle pairs on vite and flowfig are barrel pairs.
 
 ## Decision
 
@@ -28,7 +28,7 @@ The gate stays 0 wrong edges by count 2 on flowfig and on vite. Coverage is repo
 - Barrel pairs become Extracted, or stay as before.
 - `CACHE_VERSION` moves from 4 to 5. The first build is cold.
 - A re-export record gives no `imports` graph edge.
-- The sha256 of both oracle scripts goes into the ledger.
+- The sha256 of both oracle scripts goes into the release record.
 - Measured on 2026-10-07: vite 10033218 gives 1,272 of 1,272 edges right (was 1,246), 0 wrong, barrel pairs 24 of 24 (was 0 of 24). flowfig 402b7d5 gives barrel pairs 11 of 11 (was 0 of 11).
 
 - **Code:** `crates/sieve-parse/src/resolve.rs`, `crates/sieve-parse/src/extract.rs`

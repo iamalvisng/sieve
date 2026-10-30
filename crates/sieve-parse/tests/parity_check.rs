@@ -1,4 +1,4 @@
-//! Parity test for `check_graph`/`check_context` (P1-33 to P1-36, P4-42),
+//! Parity test for `check_graph`/`check_context`,
 //! pinned against the goldens recorded for the `basic` and
 //! `multi` fixtures.
 
@@ -235,7 +235,7 @@ fn test_p4_42_mcp_check_freshness_text_matches_golden() {
     assert_eq!(text, golden_text);
 }
 
-/// P1-33: the check keys the committed nodes by id in a `Map`,
+/// The check keys the committed nodes by id in a `Map`,
 /// so a node id repeated in `wiring.json` counts once. A merge-conflict
 /// repo writes and `c.ts#c` three times. The golden reported
 /// `nodes: 5` and `pending: 5` for this graph (9 node records).

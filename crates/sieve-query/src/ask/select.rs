@@ -1,5 +1,5 @@
 //! Candidate scoring, file grouping, the baseline top lock, and the
-//! round-robin selection (`ask-ranking.md` section 5).
+//! round-robin selection.
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -27,7 +27,7 @@ pub(crate) fn title_key(node: &Node) -> String {
 }
 
 /// One scored candidate: a node with its lexical and graph scores
-/// (section 5.2).
+///.
 #[derive(Debug, Clone)]
 pub(crate) struct Cand<'a> {
     pub node: &'a Node,
@@ -87,7 +87,7 @@ fn anchor_cmp(a: &Cand, b: &Cand, weights: &HashMap<String, f64>) -> Ordering {
 }
 
 /// Builds the candidate set: every node in `lex`, plus every rescued node
-/// whose graph score clears `RESCUE_FLOOR` (section 5.2). Walks
+/// whose graph score clears `RESCUE_FLOOR`. Walks
 /// `active_nodes` itself, so the candidate order is the node order the
 /// caller already holds, not a `HashMap`'s iteration order (rule book
 /// 9.1).
@@ -179,7 +179,7 @@ fn query_weights(terms: &[String], corpus: &Corpus) -> HashMap<String, f64> {
 }
 
 /// One file's ranked candidates, and the score its representative carries
-/// (section 5.4).
+///.
 pub(crate) struct FileGroup<'a> {
     pub file: String,
     pub score: f64,
@@ -202,7 +202,7 @@ fn representative<'g, 'a>(g: &'g FileGroup<'a>) -> Option<&'g Cand<'a>> {
 
 /// Groups candidates by file, picks each file's representative (a
 /// pooled anchor when it strictly beats the baseline, else the top
-/// baseline candidate), and orders the files (section 5.4).
+/// baseline candidate), and orders the files.
 pub(crate) fn rank_files_bounded<'a>(
     candidates: Vec<Cand<'a>>,
     terms: &[String],
@@ -319,7 +319,7 @@ pub(crate) fn rank_files_bounded<'a>(
 }
 
 /// Emits every queue's leader, then every queue's second member, and so
-/// on, stopping the instant the result reaches `limit` (section 5.7).
+/// on, stopping the instant the result reaches `limit`.
 pub(crate) fn round_robin_queues<T: Clone>(queues: &[Vec<T>], limit: usize) -> Vec<T> {
     let mut out = Vec::new();
     let mut depth = 0usize;
@@ -459,8 +459,7 @@ pub(crate) struct FusedTop<'a> {
 }
 
 /// One round-robin queue's item: a symbol candidate, or the single item a
-/// concept's own singleton queue ever holds (the `deep-tier.md` note section
-/// 2.8: "one singleton group per concept, never a file group").
+/// concept's own singleton queue ever holds.
 #[derive(Clone)]
 pub(crate) enum QueueItem<'a> {
     Symbol(&'a Node, f64),
@@ -477,7 +476,7 @@ struct EmitGroup<'a> {
 
 /// Applies the baseline top lock across symbol candidates and concept
 /// scores together, then runs the round robin over the merged group list
-/// (note section 2.8; section 5.5 to 5.7 for the symbol-only half).
+/// (the symbol-only half differs).
 ///
 /// With `fused` set (the multi-scope path), `file_groups` are already
 /// ordered and scored on the combined scale. The best symbol is then
@@ -796,8 +795,7 @@ mod tests {
 
     /// A concept that strictly beats the best symbol baseline wins the
     /// top lock: it fronts the group list, and `top` (the coverage
-    /// anchor) reports no graph node, since a concept carries none (note
-    /// section 2.8).
+    /// anchor) reports no graph node, since a concept carries none.
     #[test]
     fn a_concept_that_strictly_beats_the_baseline_wins_the_top_lock() {
         let n = node("a.rs#run", "run", Kind::Function, "a.rs", "L1-L2");
@@ -841,7 +839,7 @@ mod tests {
         assert_eq!(top_key(&top).as_deref(), Some("a.rs#run"));
     }
 
-    /// P3-09: with `baselineTieKey` set, a same-score,
+    /// With `baselineTieKey` set, a same-score,
     /// same-title pair compares Equal, so the file keeps its candidate order
     /// and the later span does not move ahead.
     #[test]
@@ -857,7 +855,7 @@ mod tests {
         assert_eq!(ids, vec!["a.rs#Alpha.run", "a.rs#Beta.run"]);
     }
 
-    /// P3-09: `matchedLexicalTerms` uses exact `.has`.
+    /// `matchedLexicalTerms` uses exact `.has`.
     /// The query term `helpers` does not match the name token `helper`.
     #[test]
     fn test_p3_09_matched_terms_use_exact_match_with_no_plural_folding() {
@@ -916,7 +914,7 @@ mod tests {
         assert!(base("a.rs#run_test") < base("a.rs#run_code"));
     }
 
-    /// P3-08: two concepts with an equal score tie on title, so the one whose
+    /// Two concepts with an equal score tie on title, so the one whose
     /// title collates first takes the top lock, whatever the load order.
     #[test]
     fn test_p3_08_a_concept_score_tie_takes_the_first_title() {
@@ -938,7 +936,7 @@ mod tests {
         }
     }
 
-    /// P3-09: on a raw-lexical tie the anchor is the donor with the larger idf
+    /// On a raw-lexical tie the anchor is the donor with the larger idf
     /// coverage, not the one with more matched terms. `x` matches one rare
     /// term. `y` matches two common terms, so it has the larger count and the
     /// smaller coverage.
@@ -958,7 +956,7 @@ mod tests {
         assert_eq!(groups[0].queue[0].0.id, "a.rs#x");
     }
 
-    /// P3-09: two files with the same score tie on
+    /// Two files with the same score tie on
     /// `baselineOrder(a.representative, b.representative)`. The representative
     /// is the pooled anchor, not the file's first baseline candidate.
     #[test]
@@ -991,7 +989,7 @@ mod tests {
         assert_eq!(groups[0].file, "a.rs");
     }
 
-    /// P3-08 and P3-09: on the multi-scope path the top
+    /// On the multi-scope path the top
     /// lock reads `fused.best`, the best candidate of the candidate-level
     /// combine, and not the first group's leader. The locked queue scores
     /// every member from `fused.scores`. A concept compares against the
@@ -1056,7 +1054,7 @@ mod tests {
         assert_eq!(hits[0].kind, "concept");
     }
 
-    /// P3-09: at `-n 0` the top is `scored[0]`, the best
+    /// At `-n 0` the top is `scored[0]`, the best
     /// unlocked leader, and not the locked group's first item. Here the
     /// lock picks `b1` (baseline 0.6), but `a1` leads its file at 0.9.
     #[test]
@@ -1088,7 +1086,7 @@ mod tests {
         assert_eq!(top_key(&top).as_deref(), Some("a.rs#a1"));
     }
 
-    /// P3-08: the locked queue drops a member that is
+    /// The locked queue drops a member that is
     /// the same hit as the top by kind, pointer and title, not by node id.
     #[test]
     fn test_p3_08_locked_queue_filters_with_same_hit_not_node_id() {

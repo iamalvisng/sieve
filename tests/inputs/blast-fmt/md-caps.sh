@@ -1,5 +1,5 @@
 # args: blast --format markdown -d 1
-# DV1, DV5 (P1-24, P1-25, P1-26): the markdown caps. Eight modules of
+# The markdown caps. Eight modules of
 # eight symbols each: 5 diagram boxes plus the tail circle, 6 table rows
 # plus the "smaller areas" row, 60 listed symbols, and 8 owner rows plus
 # the "further area" row (1 changed area + 8 modules = 9 rows).

@@ -57,6 +57,6 @@ fn test_gox2_fixture_pins_stops() {
     assert!(!has("dotdir/a.go#A", "dotdir/b.go#B"));
     // A dir with 2 non-test package clauses stops.
     assert!(!has("mixed/a.go#A", "mixed/b.go#B"));
-    // B5: a package-level `new` in another file hides the builtin.
+    // A package-level `new` in another file hides the builtin.
     assert!(!has("shadow/use.go#Use", "shadow/use.go#T.M"));
 }

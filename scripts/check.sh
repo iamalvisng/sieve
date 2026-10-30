@@ -4,6 +4,8 @@ set -euo pipefail
 if command -v node >/dev/null; then node scripts/gen-banner.mjs --check; else echo "skip: node not found, banner check not run"; fi
 # The export scripts stay in the private repo. Run each one only when it exists.
 if [ -f scripts/test-export.sh ]; then scripts/test-export.sh; fi
+# The public files of the working tree must hold no internal reference.
+if [ -f scripts/gate-worktree.sh ]; then scripts/gate-worktree.sh; fi
 if command -v node >/dev/null; then node --check crates/sieve-cli/assets/viewer/app.js; else echo "skip: node not found, viewer syntax check not run"; fi
 if command -v claude >/dev/null; then
   pane_out=$(claude plugin validate crates/sieve-cli/assets/claude-mod/sieve-pane 2>&1 || true)

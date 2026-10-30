@@ -1,10 +1,9 @@
-//! Parity tests for the deep tier (P1-33 to P1-36, P2-31, P2-37, P3-01 to
-//! P3-09, P3-14, P3-15): a stored `sieve build --deep` layer, replayed by
+//! Parity tests for the deep tier: a stored `sieve build --deep` layer, replayed by
 //! a plain `sieve build` with no LLM call.
 //!
 //! Setup for every test: copy `tests/fixtures/deep/` into a fresh temp dir,
 //! restore the stored deep layer into it the way a user's checkout would hold
-//! it (the `deep-tier.md` note section 4.1), then run a plain `sieve build`.
+//! it, then run a plain `sieve build`.
 //! Sieve never calls an LLM; every Tier-2 field it prints comes from the
 //! restored `wiring.json`, `manifest.json` and concept `.md` files.
 
@@ -106,7 +105,7 @@ fn golden_dir() -> PathBuf {
 }
 
 /// Restores the stored deep layer into `temp_root`, the way a user's
-/// checkout would hold it (`notes/deep-tier.md` section 4.1): every
+/// checkout would hold it: every
 /// concept `.md` file, `manifest.json`, and `wiring.json`. Sieve
 /// regenerates every card and `INDEX.md` itself, so those never restore.
 fn restore_deep_layer(temp_root: &Path) {
@@ -235,7 +234,7 @@ fn collect_md(dir: &Path, prefix: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
-/// P1-34: the wiring section of the replayed graph is byte-for-byte the
+/// The wiring section of the replayed graph is byte-for-byte the
 /// same as the golden — 23 ready nodes, 2 pending, the
 /// cruxes it stored survive a plain Tier-1 build with no LLM call.
 #[test]
@@ -259,7 +258,7 @@ fn test_p1_34_build_carries_the_stored_meaning_tier() {
     );
 }
 
-/// P2-31, P2-37: every card under `sieve/`, including the `_root/`
+/// Every card under `sieve/`, including the `_root/`
 /// collision card and the seven concept files with their `covers:`
 /// blocks, matches the golden byte for byte, and Sieve writes no
 /// extra file.
@@ -327,7 +326,7 @@ fn test_p2_31_p2_37_cards_index_and_covers_match_golden() {
     assert_eq!(actual_top, expected_top, "unexpected entry under sieve/");
 }
 
-/// P1-33, P1-35, P1-36: `sieve check` over a present, complete deep layer
+/// `sieve check` over a present, complete deep layer
 /// matches the `check-deep` golden — stdout, `⬆`-normalized stderr
 /// and exit code.
 #[test]
@@ -336,7 +335,7 @@ fn test_p1_33_p1_35_p1_36_check_matches_golden_on_a_present_deep_layer() {
     assert_query_matches_golden(&temp.path, "check-deep");
 }
 
-/// P1-34: a Tier-1 rebuild over one changed source file moves that
+/// A Tier-1 rebuild over one changed source file moves that
 /// node's `summary_state` to `stale`, and both `check` and `check --json`
 /// report it the way the `check-stale` goldens do.
 #[test]
@@ -360,7 +359,7 @@ fn test_p1_34_check_reports_stale_summaries_like_golden() {
     assert_query_matches_golden(&temp.path, "check-stale-json");
 }
 
-/// P3-01 to P3-09: `ask` ranks concept documents against a symbol hit the
+/// `ask` ranks concept documents against a symbol hit the
 /// same way the `ask-concept` golden does.
 #[test]
 fn test_p3_01_to_p3_09_ask_ranks_concepts_like_golden() {
@@ -368,8 +367,8 @@ fn test_p3_01_to_p3_09_ask_ranks_concepts_like_golden() {
     assert_query_matches_golden(&temp.path, "ask-concept");
 }
 
-/// P3-14, P3-15: `ask --source` replays the stored crux instead of
-/// re-slicing the file, and `--full` still bypasses the crux map. P1-02:
+/// `ask --source` replays the stored crux instead of
+/// re-slicing the file, and `--full` still bypasses the crux map.
 /// the two goldens differ, so `--full` has an effect this test can
 /// break; `src/app.ts:L4-L14` is longer than its crux and under 80 lines.
 #[test]
@@ -388,7 +387,7 @@ fn test_p1_02_p3_14_p3_15_ask_source_replays_the_crux_and_full_bypasses_it() {
     assert_query_matches_golden(&temp.path, "ask-source-full");
 }
 
-/// P2-10: `sieve symbols` prints the stored summary line, matching
+/// `sieve symbols` prints the stored summary line, matching
 /// The `skeleton-deep` golden.
 #[test]
 fn test_p1_18_p2_10_skeleton_prints_the_summary_line() {
@@ -398,7 +397,7 @@ fn test_p1_18_p2_10_skeleton_prints_the_summary_line() {
 
 /// `map` and `grep` read no Tier-2 field, so their output over a deep
 /// graph is unchanged from a Tier-1 graph
-/// (`notes/deep-tier.md` section 2.11).
+///.
 #[test]
 fn test_deep_map_and_grep_are_unchanged() {
     let temp = setup_deep_temp("map-grep");

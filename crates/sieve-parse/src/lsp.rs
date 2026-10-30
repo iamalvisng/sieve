@@ -1,12 +1,11 @@
-//! The optional LSP enrichment layer (P2-23 to P2-25).
+//! The optional LSP enrichment layer.
 //!
 //! `sieve build --lsp` spawns one language server, asks it for the
 //! outgoing calls of every function and method node, and adds a `calls`
 //! edge, confidence `lsp_resolved`, for every callee the AST resolver
 //! could not place. This layer is opt-in: `enrich_with_lsp` runs only
 //! when the caller asks for it, and every failure degrades to a no-op
-//! (added 0, the graph unchanged); see the `languages-lsp.md` note
-//! section 5.
+//! (added 0, the graph unchanged).
 //!
 //! The transport is a hand-rolled JSON-RPC framer (`Content-Length`
 //! headers) over `std::process::Command`, so this module adds no crate
@@ -99,7 +98,7 @@ const REQUEST_TIMEOUT: Duration = Duration::from_millis(15_000);
 const MAX_NODES: usize = 2000;
 
 /// A ceiling on one JSON-RPC message body's declared `Content-Length`
-/// (P2-23). A value past this treats the stream as broken rather than
+/// . A value past this treats the stream as broken rather than
 /// allocating whatever size a malformed or hostile server names.
 const MAX_MESSAGE_LEN: usize = 64 * 1024 * 1024;
 
@@ -121,7 +120,7 @@ fn lookup_command(cmd: &str, extra_path_dir: Option<&Path>) -> Command {
 }
 
 /// Resolves `cmd` to an absolute path with `command -v`, run through `/bin/sh
-/// -c` (P2-24). The shell is not `$SHELL` and not a login shell.
+/// -c`. The shell is not `$SHELL` and not a login shell.
 ///
 /// `extra_path_dir`, when given, is prepended to that shell's `PATH` for
 /// this one lookup only. Production callers pass `None`; a test uses it
@@ -143,7 +142,7 @@ fn resolve_command(cmd: &str, extra_path_dir: Option<&Path>) -> Option<String> {
 }
 
 /// Picks the first registry row, in priority order, whose language set
-/// meets `languages` and whose command resolves on this machine (P2-24).
+/// meets `languages` and whose command resolves on this machine.
 /// Returns `None` when no row matches: the caller then does nothing.
 pub fn pick_server(languages: &BTreeSet<String>) -> Option<ResolvedServer> {
     pick_server_with_extra_path(languages, None)
@@ -168,7 +167,7 @@ pub fn pick_server_with_extra_path(
 /// The repo's language set, from every file node's path:
 /// the breadth-tier name, else the depth-tier label,
 /// per node). A breadth-tier repo (rust, c, cpp, ruby, ...) must count
-/// here, or `pick_server` never sees past a depth-tier row (P2-24).
+/// here, or `pick_server` never sees past a depth-tier row.
 pub fn repo_languages(graph: &Graph) -> BTreeSet<String> {
     graph
         .nodes
@@ -188,7 +187,7 @@ struct WriteJob {
 
 /// Writes `Content-Length`-framed bodies to `stdin` as jobs arrive on
 /// `rx`, one at a time, until a job's write fails or `rx` disconnects
-/// (P2-23). Runs on its own thread so a stuck server with a full pipe
+/// . Runs on its own thread so a stuck server with a full pipe
 /// buffer blocks this thread, never the caller waiting on `job.ack`.
 fn write_messages(mut stdin: ChildStdin, rx: Receiver<WriteJob>) {
     while let Ok(job) = rx.recv() {
@@ -211,7 +210,7 @@ struct LspClient {
     writer_tx: mpsc::Sender<WriteJob>,
     rx: Receiver<serde_json::Value>,
     next_id: i64,
-    /// Set once a write times out or the writer thread is gone (P2-23).
+    /// Set once a write times out or the writer thread is gone.
     /// Every later `send` degrades without trying to write again.
     dead: bool,
 }
@@ -219,7 +218,7 @@ struct LspClient {
 impl LspClient {
     /// Spawns `spec.command` with `spec.args`, cwd `root`. Waits
     /// [`SPAWN_SETTLE`] then checks the child has not already exited
-    /// (a missing binary or an early crash), per the P2-23 degrade rule.
+    /// (a missing binary or an early crash), per the degrade rule.
     fn spawn(command_path: &str, args: &[&str], root: &Path) -> Option<Self> {
         let mut child = Command::new(command_path)
             .args(args)
@@ -232,7 +231,7 @@ impl LspClient {
 
         thread::sleep(SPAWN_SETTLE);
         if child.try_wait().ok().flatten().is_some() {
-            // The child already exited: an early-exit degrade (P2-23).
+            // The child already exited: an early-exit degrade.
             return None;
         }
 
@@ -253,7 +252,7 @@ impl LspClient {
     }
 
     /// Frames and writes `value`, off-thread, and waits up to
-    /// [`REQUEST_TIMEOUT`] for the write itself to finish (P2-23). A
+    /// [`REQUEST_TIMEOUT`] for the write itself to finish. A
     /// stuck server with a full pipe buffer times out this call rather
     /// than hanging it; a timed-out write marks the client dead, the same
     /// degrade a timed-out read already takes.
@@ -300,7 +299,7 @@ impl LspClient {
 
     /// Sends a request and waits up to `timeout` for its response. Any
     /// I/O error, a channel disconnect (the server exited), or a timeout
-    /// all resolve to `None` — the P2-23 degrade path.
+    /// all resolve to `None` — the degrade path.
     fn request(
         &mut self,
         method: &str,
@@ -386,7 +385,7 @@ fn read_messages(stdout: impl Read, tx: mpsc::Sender<serde_json::Value>) {
         let Some(len) = content_length else { return };
         if len > MAX_MESSAGE_LEN {
             // A broken or hostile stream: stop reading rather than
-            // allocate an attacker-chosen size (P2-23). Dropping `tx`
+            // allocate an attacker-chosen size. Dropping `tx`
             // disconnects the client's receiver, the same degrade path a
             // framing error already takes.
             return;
@@ -470,7 +469,7 @@ fn name_pos(node: &Node, source: &str) -> Option<(u32, u32)> {
         }
         let text = lines[line_no - 1];
         if let Some(byte_idx) = text.find(node.name.as_str()) {
-            // LSP `character` counts UTF-16 code units, not chars (P2-23):
+            // LSP `character` counts UTF-16 code units, not chars:
             // an astral-plane character before the name is two units.
             let character = text[..byte_idx].encode_utf16().count() as u32;
             return Some((line_no as u32 - 1, character));
@@ -480,7 +479,7 @@ fn name_pos(node: &Node, source: &str) -> Option<(u32, u32)> {
 }
 
 /// Runs the LSP enrichment layer over `graph`, mutating it in place, and
-/// returns the number of edges added (P2-23 to P2-25). Every failure —
+/// returns the number of edges added. Every failure —
 /// no server found, a spawn or initialize timeout, a server that exits
 /// early — returns `0` and leaves `graph` untouched.
 pub fn enrich_with_lsp(root: &Path, graph: &mut Graph) -> usize {
@@ -523,7 +522,7 @@ pub fn enrich_with_lsp_report_and_extra_path(
     // Canonicalize once, up front. A server reports
     // callee URIs against the real path, so a symlinked checkout (macOS
     // `/tmp` -> `/private/tmp`, common in CI) would otherwise fail
-    // `uri_to_rel`'s in-repo test for every callee (P2-23). Fall back to
+    // `uri_to_rel`'s in-repo test for every callee. Fall back to
     // the given root when canonicalize fails; the rest of this run then
     // degrades as it did before this fix.
     let root: std::path::PathBuf =
@@ -688,7 +687,7 @@ pub fn enrich_with_lsp_report_and_extra_path(
 
             let key = dedupe_key(&node.id, Relation::Calls.as_str(), &target_node.id);
             if !existing.insert(key) {
-                continue; // already present, P2-25 dedupe
+                continue; // already present: dedupe
             }
             new_edges.push(Edge {
                 source: node.id.clone(),
@@ -733,7 +732,7 @@ fn poll_until_ready(
     }
 }
 
-/// The exact dedupe key: `source\0relation\0target` (P2-25).
+/// The exact dedupe key: `source\0relation\0target`.
 fn dedupe_key(source: &str, relation: &str, target: &str) -> String {
     format!("{source}\0{relation}\0{target}")
 }
@@ -759,7 +758,7 @@ mod tests {
     fn pick_server_returns_none_when_no_row_s_language_matches() {
         // No registry row covers Haskell, so this never depends on
         // which servers happen to sit on the test machine's `PATH`.
-        // The command-resolution and priority rules (P2-24) get a real
+        // The command-resolution and priority rules get a real
         // pin in `tests/lsp.rs`, with a fake command on `PATH`.
         let langs = set(&["haskell"]);
         assert!(pick_server(&langs).is_none());
@@ -819,7 +818,7 @@ mod tests {
         assert_eq!(pos, (0, 3));
     }
 
-    /// A fake child that never reads its stdin (P2-23): a write past
+    /// A fake child that never reads its stdin: a write past
     /// the OS pipe buffer must time out, not hang the test.
     #[test]
     fn test_p2_23_f4_a_write_to_a_stuck_child_times_out_and_marks_the_client_dead() {

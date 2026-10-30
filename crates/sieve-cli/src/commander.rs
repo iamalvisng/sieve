@@ -1,4 +1,4 @@
-//! Commander's error forms for the CLI (P1-01, P1-51). The parser
+//! Commander's error forms for the CLI. The parser
 //! prints one line on stderr and exits 1. Clap prints its own text and
 //! exits 2. This module holds the one map from clap's error kinds to
 //! commander's text, and the ports of commander's top-level scan and
@@ -554,7 +554,7 @@ mod tests {
         items.iter().map(|s| s.to_string()).collect()
     }
 
-    /// P1-51: the suggestion text matches commander's for one near match,
+    /// The suggestion text matches commander's for one near match,
     /// a tie, and a far word.
     #[test]
     fn test_p1_51_suggest_similar_matches_commander() {
@@ -571,7 +571,7 @@ mod tests {
         );
     }
 
-    /// P1-51: tied suggestions sort by ICU collation, as `localeCompare`
+    /// Tied suggestions sort by ICU collation, as `localeCompare`
     /// does. A byte sort puts `-` before `_`. ICU puts `_` first.
     #[test]
     fn test_p1_51_suggestions_sort_by_collation() {
@@ -582,7 +582,7 @@ mod tests {
         );
     }
 
-    /// P1-51: `negative_number` follows commander's regex
+    /// `negative_number` follows commander's regex
     /// `^-(\d+|\d*\.\d+)(e[+-]?\d+)?$`.
     #[test]
     fn test_p1_51_negative_number_matches_commander_regex() {
@@ -594,7 +594,7 @@ mod tests {
         }
     }
 
-    /// P1-51: a version flag anywhere beats a later fault, and a `-v`
+    /// A version flag anywhere beats a later fault, and a `-v`
     /// group fires the version at once.
     #[test]
     fn test_p1_51_scan_top_level_orders_faults() {

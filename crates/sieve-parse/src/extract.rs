@@ -1,6 +1,5 @@
 //! Symbol extraction for TypeScript, TSX, JavaScript-labelled and Python
-//! files. Every rule follows the extraction notes; see
-//! the `extract-ts-py.md` note.
+//! files.
 
 use std::collections::{HashMap, HashSet};
 
@@ -1402,7 +1401,7 @@ fn walk(node: TsNode, ctx: &Ctx, file: &FileCtx, sink: &mut Sink) {
             callee_info(node, source, lang)
         };
         if let Some((name, via_member, receiver, arg_count, kinds)) = info {
-            // Swift `implicitSelf` (edges note, section 1.4): a bare
+            // Swift `implicitSelf`: a bare
             // lowercase call inside a type body, with no explicit kinds,
             // stands for `self.<call>`.
             let swift_implicit_self = lang == "swift"
@@ -2094,7 +2093,7 @@ fn emit_definition(node: TsNode, desc: Desc, ctx: &Ctx, file: &FileCtx, sink: &m
         // unset, per the golden). A trait never hosts one either: a
         // trait method's `owner` stays unset, so it resolves only
         // through the class that pulls the trait in
-        // (`resolve_trait_member`, edges note section 4).
+        // (`resolve_trait_member`).
         enclosing_class: if kind == Kind::Class
             || (kind == Kind::Interface && ctx.lang == "java")
             || (ctx.lang == "swift" && SWIFT_TYPE_KINDS.contains(&kind))
@@ -2131,8 +2130,7 @@ fn emit_definition(node: TsNode, desc: Desc, ctx: &Ctx, file: &FileCtx, sink: &m
         // an R6 `inherit =` off whatever `describe_r` matched. Both are
         // recomputed only when entering a genuinely new class, so a
         // `super`/`super$` call inside a method resolves against the
-        // PARENT type, not the overriding current one (edges note, section
-        // 1.4 and 1.6).
+        // PARENT type, not the overriding current one.
         r_super_class: if kind == Kind::Class {
             match ctx.lang {
                 "r" => r_r6_parent_class(node, source),
@@ -2145,7 +2143,7 @@ fn emit_definition(node: TsNode, desc: Desc, ctx: &Ctx, file: &FileCtx, sink: &m
         // Reset on every new definition: a purely local marker for "still
         // inside THIS class-defining call's own public=/private=/active=
         // argument chain," not something that leaks into a nested
-        // definition (edges note, section 1.6).
+        // definition.
         r_r6_access: None,
         r_generics: ctx.r_generics.clone(),
     };
@@ -2286,7 +2284,7 @@ fn collect_param_names(node: TsNode, source: &str, is_python: bool) -> HashSet<S
 /// never matches and the walk keeps descending into it. R has no import
 /// grammar construct: `library()`, `require()`, and `source()` are
 /// ordinary `call` nodes, so `is_import` must check the node's own callee
-/// text, not just its kind (edges note, section 1.6).
+/// text, not just its kind.
 fn is_import(node: TsNode, source: &str, lang: &str) -> bool {
     let kind = node.kind();
     match lang {
@@ -2325,9 +2323,8 @@ fn is_call_node(kind: &str, lang: &str) -> bool {
     }
 }
 
-/// Reads one import statement's specifier text, per the source-shape
-/// table in the edge note, section 3, and per section 1 for Go, Java, and
-/// PHP.
+/// Reads one import statement's specifier text, by the source shape of
+/// each language.
 fn import_specifier(node: TsNode, source: &str, lang: &str) -> Option<String> {
     match lang {
         "python" => {
@@ -2366,7 +2363,7 @@ fn import_specifier(node: TsNode, source: &str, lang: &str) -> Option<String> {
         }
         "kotlin" => {
             // `import_header`: the specifier is the first `identifier`
-            // child's text (edges note, section 1.3).
+            // child's text.
             let mut cursor = node.walk();
             let found = node
                 .named_children(&mut cursor)
@@ -2391,7 +2388,7 @@ fn import_specifier(node: TsNode, source: &str, lang: &str) -> Option<String> {
         "r" => {
             // `library(pkg)` / `library("pkg")` / `require(pkg)` /
             // `source("f.R")`: the target is the first positional
-            // argument, bare symbol or string (edges note, section 1.6).
+            // argument, bare symbol or string.
             let value = r_call_args(node)
                 .into_iter()
                 .next()
@@ -2417,7 +2414,7 @@ fn import_specifier(node: TsNode, source: &str, lang: &str) -> Option<String> {
 }
 
 /// Emits an `extends` or `implements` raw edge for each base named in a
-/// class node's heritage, per the edge note, section 6.
+/// class node's heritage.
 fn emit_heritage_edges(
     node: TsNode,
     class_id: &str,
@@ -2518,7 +2515,7 @@ fn emit_heritage_edges(
                 }
             }
             // `use SomeTrait;` in a class body is an `implements` edge
-            // (edges note, section 1.5).
+            //.
             if let Some(body) = node.child_by_field_name("body") {
                 let mut bc = body.walk();
                 for member in body.named_children(&mut bc) {
@@ -2540,7 +2537,7 @@ fn emit_heritage_edges(
             // direct `type_identifier` is the bare supertype name. Swift
             // cannot say syntactically whether a specifier is the
             // superclass or a protocol conformance, so every edge is
-            // `extends` (edges note, section 1.4).
+            // `extends`.
             let mut cursor = node.walk();
             for spec in node
                 .named_children(&mut cursor)
@@ -2578,7 +2575,7 @@ fn emit_heritage_edges(
         }
         "r" => {
             // `node` is whatever `describe_r` matched: a `binary_operator`
-            // for R6, or the call itself for S4 (edges note, section 1.6).
+            // for R6, or the call itself for S4 classes.
             let call = if node.kind() == "binary_operator" {
                 node.child_by_field_name("rhs")
             } else {
@@ -2681,8 +2678,7 @@ fn php_dequalified_name(node: TsNode, source: &str) -> Option<String> {
 type CalleeInfo = (String, bool, Option<String>, Option<u32>, Option<Vec<Kind>>);
 
 /// Returns a call site's callee name, whether it is a member call, its
-/// receiver text, and its argument count (Java only), per the edge note,
-/// section 4, and section 1 for Go, Java, and PHP.
+/// receiver text, and its argument count (Java only).
 fn callee_info(node: TsNode, source: &str, lang: &str) -> Option<CalleeInfo> {
     match lang {
         "python" => {
@@ -2786,8 +2782,7 @@ fn callee_info(node: TsNode, source: &str, lang: &str) -> Option<CalleeInfo> {
 
 /// R's callee: `self$m()`/`private$m()` resolves through `self`; `super$m()`
 /// through `super`; any other `obj$m()` is a plain name match over both
-/// `function` and `method` kinds; `pkg::fn()` is a bare call (edges note,
-/// section 1.6). Returns `None` for the class-defining `R6Class(...)`/mixin
+/// `function` and `method` kinds; `pkg::fn()` is a bare call. Returns `None` for the class-defining `R6Class(...)`/mixin
 /// `list(...)` call itself, already consumed by `describe_r`.
 fn r_callee_info(node: TsNode, source: &str) -> Option<CalleeInfo> {
     if r_is_consumed_class_call(node, source) {
@@ -2847,7 +2842,7 @@ fn r_callee_info(node: TsNode, source: &str) -> Option<CalleeInfo> {
 
 /// Swift's callee: the Kotlin shape (a `call_expression` pairs a callee
 /// expression with a `call_suffix`), plus a one-hop `self.<field>`
-/// receiver (edges note, section 1.4).
+/// receiver.
 fn swift_callee_info(node: TsNode, source: &str) -> Option<CalleeInfo> {
     let mut cursor = node.walk();
     let target = node.named_children(&mut cursor).next()?;
@@ -2893,7 +2888,7 @@ fn swift_callee_info(node: TsNode, source: &str) -> Option<CalleeInfo> {
 }
 
 /// Swift's one-hop `self.<field>` receiver: `self.repo.save()` binds like
-/// TS's `this.x` (edges note, section 1.4).
+/// TS's `this.x`.
 fn swift_self_field_receiver(node: TsNode, source: &str) -> Option<String> {
     let mut cursor = node.walk();
     let head = node.named_children(&mut cursor).next()?;
@@ -3033,8 +3028,7 @@ fn php_callee_info(
 }
 
 /// PHP receiver for a member call: a `$this` operand becomes `this`; any
-/// other `$var` operand keeps its `$` (edges note, section 1.5, "keys
-/// keep the `$`").
+/// other `$var` operand keeps its `$`.
 fn php_receiver(object: TsNode, source: &str) -> Option<String> {
     if object.kind() != "variable_name" {
         return None;
@@ -3101,7 +3095,7 @@ fn py_receiver(object: TsNode, source: &str) -> Option<String> {
 
 /// Collects every TS import binding by its local name: each
 /// `import_specifier` (named or aliased), each default clause identifier and
-/// each `* as ns` namespace import. Empty for Python (edge note, section 5).
+/// each `* as ns` namespace import. Empty for Python.
 fn collect_imported_symbols(
     root: TsNode,
     source: &str,
@@ -3210,8 +3204,7 @@ fn is_declaration_name(node: TsNode) -> bool {
 }
 
 /// Emits a `references` raw edge for an identifier that names an imported
-/// symbol, is not a direct callee, and is not a declaration name, per the
-/// edge note, section 5.
+/// symbol, is not a direct callee, and is not a declaration name.
 fn maybe_emit_reference(
     node: TsNode,
     ctx: &Ctx,
@@ -3464,7 +3457,7 @@ fn go_receiver_type(node: TsNode, source: &str) -> Option<String> {
 }
 
 /// Returns a Go method's receiver variable name, for example `g` in
-/// `func (g Greeter) Greet()` (edges note, section 1.1: the receiver
+/// `func (g Greeter) Greet()` (the receiver
 /// variable maps to the enclosing class inside the method body).
 fn go_receiver_var_name(node: TsNode, source: &str) -> Option<String> {
     let receiver = node.child_by_field_name("receiver")?;
@@ -3554,7 +3547,7 @@ fn php_closure_name(node: TsNode, source: &str) -> String {
 }
 
 /// `describe` for PHP: an interface, a trait, a class, an enum, a
-/// top-level function, and a method (section 1.5).
+/// top-level function, and a method.
 fn describe_php<'a>(node: TsNode<'a>, source: &str) -> Option<Desc<'a>> {
     // A closure is a function node.
     if matches!(node.kind(), "anonymous_function" | "arrow_function") {
@@ -3631,7 +3624,7 @@ fn describe_kotlin<'a>(
             } else {
                 Kind::Class
             };
-            // Both body kinds end the header (DV17: `enum_class_body`).
+            // Both body kinds end the header (`enum_class_body`).
             let end = kotlin_header_end(node, &["class_body", "enum_class_body"]);
             Some(desc(name, kind, end))
         }
@@ -3738,8 +3731,7 @@ fn kotlin_has_anon_child(node: TsNode, token: &str) -> bool {
 }
 
 /// Reports whether `node`'s `modifiers` child holds a `class_modifier`
-/// whose text reads `annotation` (an annotation class is interface-shaped,
-/// edges note section 1.3).
+/// whose text reads `annotation` (an annotation class is interface-shaped).
 fn kotlin_is_annotation_class(node: TsNode, source: &str) -> bool {
     let Some(modifiers) = kotlin_child(node, "modifiers") else {
         return false;
@@ -3777,7 +3769,7 @@ fn kotlin_property_name(node: TsNode, source: &str) -> Option<String> {
 
 /// Kotlin `kotlinExported`: no `modifiers` child means true; else the
 /// `visibility_modifier` inside `modifiers` is absent (true) or reads
-/// `public` (edges note, section 1.3).
+/// `public`.
 fn kotlin_exported(node: TsNode, source: &str) -> bool {
     let Some(modifiers) = kotlin_child(node, "modifiers") else {
         return true;
@@ -3805,15 +3797,13 @@ const SWIFT_TYPE_KINDS: [Kind; 5] = [
 ];
 
 /// Kotlin kinds that host their own members, and promote a nested
-/// function to a method: class, interface, and enum (edges note, section
-/// 1.3, `KOTLIN_TYPE_KINDS`).
+/// function to a method: class, interface, and enum.
 const KOTLIN_TYPE_KINDS: [Kind; 3] = [Kind::Class, Kind::Interface, Kind::Enum];
 
 /// `describe` for Swift: one `class_declaration` node covers class,
 /// struct, enum, actor, and extension; a protocol; a function promoted to
 /// method inside a type body; an initializer named after its enclosing
-/// class; a top-level typealias; and a top-level property (edges note,
-/// section 1.4, `describeSwift`).
+/// class; a top-level typealias; and a top-level property.
 fn describe_swift<'a>(
     node: TsNode<'a>,
     enclosing_kind: Option<Kind>,
@@ -4371,8 +4361,7 @@ const R_BASE_GENERICS: [&str; 29] = [
 /// an S3 method when its name splits against a known generic), an
 /// `R6Class(...)`/mixin `list(...)` class assignment, a top-level
 /// `setClass`/`setMethod` call, and an R6 method reached through the
-/// `r_r6_access` section interception in `walk` (edges note, section 1.6,
-/// `describeR`).
+/// `r_r6_access` section interception in `walk`.
 fn describe_r<'a>(node: TsNode<'a>, ctx: &Ctx, source: &str) -> Option<Desc<'a>> {
     match node.kind() {
         "binary_operator" => {
@@ -4783,7 +4772,7 @@ fn r_r6_parent_class(node: TsNode, source: &str) -> Option<String> {
 /// node again while descending generically to find its
 /// `public =`/`private =`/`active =` arguments, and must not also read it
 /// as an ordinary call to a function literally named `R6Class`/`list`
-/// (edges note, section 1.6).
+///.
 fn r_is_consumed_class_call(node: TsNode, source: &str) -> bool {
     if node.kind() != "call" {
         return false;
@@ -4993,7 +4982,7 @@ mod tests {
 
     #[test]
     fn test_p2_14_kotlin_enum_header_ends_at_the_enum_class_body() {
-        // DV17: a one-line enum, and an enum with entries, end the
+        // A one-line enum, and an enum with entries, end the
         // signature at `enum_class_body`.
         let mut extractor = Extractor::new().expect("build extractor");
         let source =

@@ -1,5 +1,5 @@
 //! The `sieve map` subcommand: a deterministic, token-budgeted repo orientation
-//! (the `query-commands.md` note section 4).
+//!.
 
 use std::path::{Path, PathBuf};
 
@@ -33,7 +33,7 @@ pub struct MapArgs {
 }
 
 /// The `saved` key `--json` appends, key order `files` then
-/// `baselineChars` (section 4.7).
+/// `baselineChars`.
 #[derive(Serialize)]
 struct SavedJson {
     files: usize,
@@ -42,7 +42,7 @@ struct SavedJson {
 }
 
 /// The full JSON payload: [`sieve_query::map::RepoMap`]'s own fields, then
-/// `saved` when a baseline is known (section 4.7).
+/// `saved` when a baseline is known.
 #[derive(Serialize)]
 struct RepoMapJson<'a> {
     #[serde(flatten)]
@@ -53,8 +53,7 @@ struct RepoMapJson<'a> {
 
 /// Parses a raw `--max-dirs` value with JavaScript `parseInt(raw, 10)`
 /// semantics: leading whitespace, an optional sign, then the longest
-/// leading run of decimal digits; no digits at all gives `NaN` (section
-/// 4.1). Rejects non-finite or non-positive values.
+/// leading run of decimal digits; no digits at all gives `NaN`. Rejects non-finite or non-positive values.
 fn parse_max_dirs(raw: &str) -> Result<usize, String> {
     let trimmed = raw.trim_start();
     let mut chars = trimmed.chars().peekable();
@@ -84,8 +83,8 @@ fn parse_max_dirs(raw: &str) -> Result<usize, String> {
 }
 
 /// Runs `sieve map`: validates `--max-dirs` before the refresh runs, then
-/// the query prelude, the grouping, then the report (section 4.1). Text
-/// `map` at a workspace parent federates (P1-54);
+/// the query prelude, the grouping, then the report. Text
+/// `map` at a workspace parent federates;
 /// `--json` falls through to the single path and its no-graph line.
 pub fn run(args: &MapArgs, dir_override: Option<&Path>) -> Result<(), String> {
     let max_dirs = args.max_dirs.as_deref().map(parse_max_dirs).transpose()?;
@@ -113,7 +112,7 @@ pub fn run(args: &MapArgs, dir_override: Option<&Path>) -> Result<(), String> {
     Ok(())
 }
 
-/// The workspace `map` (P1-54): one section per built child, then the
+/// The workspace `map`: one section per built child, then the
 /// coverage note.
 fn run_workspace(root: &Path, context_dir: &Path, max_dirs: Option<usize>) -> Result<(), String> {
     let graphs = sieve_query::workspace::load_children(root, context_dir);
@@ -125,7 +124,7 @@ fn run_workspace(root: &Path, context_dir: &Path, max_dirs: Option<usize>) -> Re
 }
 
 /// Prints the result as pretty JSON, with a `saved` key appended when a
-/// baseline is known (section 4.7).
+/// baseline is known.
 fn print_json(graph: &sieve_core::Graph, map: &sieve_query::map::RepoMap) {
     let saved_paths = map_saved_paths(graph);
     let saved = savings_for(graph, &saved_paths).map(|s| SavedJson {

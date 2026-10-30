@@ -1,6 +1,6 @@
 //! Renders an [`AskResult`] as the plain-text `ask` report
-//! (`ask-ranking.md` section 7, `formatAsk`), and as pretty JSON
-//! (section 7.10).
+//!, and as pretty JSON
+//!.
 
 use std::sync::OnceLock;
 
@@ -28,7 +28,7 @@ fn plain_words(line: &str) -> String {
 }
 
 /// The note block: every line starting `structural index:` gets a `⚠ `
-/// marker; a benign structural note prints plain (section 6.4).
+/// marker; a benign structural note prints plain.
 fn note_block(note: &Option<String>) -> String {
     match note {
         Some(note) => note
@@ -48,7 +48,7 @@ fn note_block(note: &Option<String>) -> String {
 }
 
 /// The escalation nudge appended after a thin (`<= 3` hits) lexical or
-/// empty result (section 7.7).
+/// empty result.
 fn escalation_nudge(r: &AskResult) -> String {
     if (r.mode != AskMode::Lexical && r.mode != AskMode::Empty) || r.hits.len() > 3 {
         return String::new();
@@ -72,8 +72,7 @@ fn escalation_nudge(r: &AskResult) -> String {
 }
 
 /// The multi-scope footer: `matched in:` over the displayed hits' scopes,
-/// then one `also matched:` line per gated-out scope (section 7.6,
-/// `ask.ts`'s `scopeFooterLines`: counts come from the rendered hits, not
+/// then one `also matched:` line per gated-out scope. The counts come from the rendered hits, not
 /// from the fused scope list, so a top-lock reorder still counts right).
 fn scope_footer_lines(r: &AskResult) -> Vec<String> {
     let Some(scopes) = &r.scopes else {
@@ -200,7 +199,7 @@ fn integer_float_re() -> Option<&'static Regex> {
 }
 
 /// Renders an [`AskResult`] as `JSON.stringify(r, null, 2) + "\n"` would
-/// (section 7.10). `serde_json` prints a whole-number float as `1.0`;
+///. `serde_json` prints a whole-number float as `1.0`;
 /// JavaScript prints `1`. Rewritten here the same way
 /// `askindex::write_ask_index` rewrites `avgBodyLen`.
 pub fn format_ask_json(r: &AskResult) -> Result<String, serde_json::Error> {
@@ -251,8 +250,8 @@ mod tests {
         }
     }
 
-    /// P1-06 (DV1): a structural result prints `subject` after `mode` and
-    /// no `coverage`; `saved` prints last when set (DV5, P1-02).
+    /// A structural result prints `subject` after `mode` and
+    /// no `coverage`; `saved` prints last when set.
     #[test]
     fn test_p1_06_json_prints_subject_and_drops_a_none_coverage() {
         let mut r = empty_result(AskMode::Structural, vec![hit("one")], Some("n".to_string()));
@@ -332,7 +331,7 @@ mod tests {
     }
 
     /// The render prints `related:` right after the snippet, in
-    /// frontmatter order, for a concept hit only (note section 2.8).
+    /// frontmatter order, for a concept hit only.
     #[test]
     fn a_concept_hits_related_line_prints_after_the_snippet_in_frontmatter_order() {
         let mut concept = hit("Widget");

@@ -1,6 +1,5 @@
 //! The pre-query graph refresh, shared by `sieve-cli` and `sieve-daemon`
-//! (`query-prelude-grep.md` sections 1.5 and 1.6,
-//! `build-cards-freshness.md` sections 3 and 7).
+//!.
 //!
 //! `sieve-cli`'s `refresh_before` and `sieve-daemon`'s `refresh_before`
 //! were two copies of the same logic, because `sieve-daemon` could not
@@ -137,7 +136,7 @@ pub fn lookup_path(context_dir: &Path) -> PathBuf {
 }
 
 /// Writes `wiring.json`, then the lookup index with the stamp of the new
-/// wiring (S3, E4). The refresh calls it now. The CLI build site calls it
+/// wiring. The refresh calls it now. The CLI build site calls it
 /// in task T3. A failed lookup write deletes any old lookup and still
 /// returns `Ok`, so the readers fall back to the wiring.
 pub fn write_wiring_and_lookup(graph: &Graph, context_dir: &Path) -> io::Result<()> {
@@ -225,7 +224,7 @@ impl KeepRebuilt {
 }
 
 /// Rewrites the lookup from `wiring.json` alone when the lookup is missing
-/// or its stamp differs from the wiring stamp (S3, E3). It parses no
+/// or its stamp differs from the wiring stamp. It parses no
 /// source and builds no graph. A failure leaves the readers on their
 /// fallback path, so it is never fatal.
 fn regenerate_lookup(context_dir: &Path, wiring_path: &Path) {
@@ -293,12 +292,12 @@ fn rebuild_inner(
     walked: Option<Vec<PathBuf>>,
 ) -> io::Result<(RebuildReport, Option<Kept>)> {
     // The last build's `--only-dir` whitelist rides in the fingerprint, so
-    // a refresh walks the same set (P1-70).
+    // a refresh walks the same set.
     let stamp = crate::extractor_stamp();
     let path = fingerprint_path(context_dir, &stamp);
     let fp = read_fingerprint(&path, &stamp);
     // The warm guard runs on the fingerprint file count, before the old
-    // cache is parsed (S0, B3).
+    // cache is parsed.
     if let Some(fp) = &fp {
         crate::guard::check(fp.files.len(), true)?;
     }
@@ -377,7 +376,7 @@ pub fn ensure_fresh_graph(
         return RefreshOutcome::default();
     }
 
-    // P1-50: no graph exists yet for this context dir. A query never builds
+    // No graph exists yet for this context dir. A query never builds
     // a whole repo, and it creates no folder. The user runs `build` first.
     let wiring_path = context_dir.join(".graph").join("wiring.json");
     if !wiring_path.is_file() {
@@ -509,7 +508,7 @@ pub fn ensure_fresh_graph(
     }
 }
 
-/// The workspace refresh (P2-39): refreshes each child's own graph in
+/// The workspace refresh: refreshes each child's own graph in
 /// turn, under `<root>/<child>/<context dir name>`, never under the
 /// parent's context dir. The outcome carries no drift count of its own;
 /// the per-child sum rides in `note`, so [`refresh_note`] prints
@@ -555,7 +554,7 @@ pub fn ensure_fresh_children(
 }
 
 /// Formats the refresh note for [`RefreshOutcome::refreshed`]
-/// (`query-prelude-grep.md` section 1.6): the built line, then ` — <note>` when
+///: the built line, then ` — <note>` when
 /// the outcome carries one. Returns `outcome.note` verbatim for every other
 /// case.
 pub fn refresh_note(outcome: &RefreshOutcome) -> Option<String> {
@@ -662,7 +661,7 @@ mod tests {
 
         // Build a graph first, so the wiring exists. Then drop the
         // fingerprint only, so the refresh sees a graph with no
-        // fingerprint — not a repo with no graph at all (P1-50).
+        // fingerprint — not a repo with no graph at all.
         rebuild_graph_only(&dir.path, &context_dir).expect("build graph");
         let stamp = crate::extractor_stamp();
         fs::remove_file(fingerprint_path(&context_dir, &stamp)).expect("remove fingerprint");
@@ -721,7 +720,7 @@ mod tests {
         let context_dir = dir.path.join("sieve");
 
         // Build the graph directly, so the refresh call under test finds
-        // an already-fresh fingerprint, not a missing graph (P1-50).
+        // an already-fresh fingerprint, not a missing graph.
         rebuild_graph_only(&dir.path, &context_dir).expect("build graph");
         let wiring = wiring_path(&context_dir);
         let mtime_after_build = fs::metadata(&wiring)
@@ -748,7 +747,7 @@ mod tests {
 
         // Build a graph first, so the wiring exists, then drop the
         // fingerprint so this call needs a rebuild and takes the lock
-        // (P1-50: a repo with no graph at all takes neither path).
+        // (a repo with no graph at all takes neither path).
         rebuild_graph_only(&dir.path, &context_dir).expect("build graph");
         let stamp = crate::extractor_stamp();
         fs::remove_file(fingerprint_path(&context_dir, &stamp)).expect("remove fingerprint");
@@ -774,7 +773,7 @@ mod tests {
         assert!(elapsed >= Duration::from_millis(sieve_core::lock::LOCK_WAIT_MS));
     }
 
-    /// P2-39: the child refresh rebuilds only the drifted child, under
+    /// The child refresh rebuilds only the drifted child, under
     /// that child's own context dir, and the note names the child with
     /// the per-child file sum behind the `?` count.
     #[test]

@@ -1,4 +1,4 @@
-//! The per-file lookup index `lookup.v1` (scale S3). A hook reads the nodes
+//! The per-file lookup index `lookup.v1`. A hook reads the nodes
 //! and the incoming edges of one file without parsing the whole
 //! `wiring.json`.
 //!

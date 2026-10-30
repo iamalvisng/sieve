@@ -1,5 +1,5 @@
 # args: blast --format json -d 1
-# DV6 (P3-25): two staged files, `alpha` in lib/ and `Zulu` in lib2/. Area
+# Two staged files, `alpha` in lib/ and `Zulu` in lib2/. Area
 # labels sort with localeCompare: alpha before Zulu.
 mkdir -p lib lib2
 printf 'export function alpha(): number { return 1; }\n' >lib/alpha.ts

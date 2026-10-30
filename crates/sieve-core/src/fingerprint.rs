@@ -346,10 +346,10 @@ pub fn under_only_dirs(rel: &str, only_dirs: &[String]) -> bool {
 /// accepts. A caller must pass the same claim rule a build uses to fingerprint
 /// files (native, container, and breadth tiers), or every breadth-tier file in
 /// `fp.files` reads as `removed` on every call, because it never reaches `seen`
-/// (P1-46, P2-35). A record's hash is trusted, with no read, when `force_hash`
+/// . A record's hash is trusted, with no read, when `force_hash`
 /// is false and the size and `mtime_ms` both still match. A fingerprint with
 /// `onlyDirs` probes only the files under those prefixes, so a `build
-/// --only-dir` graph never reads as drifted by the files it left out (P1-70).
+/// --only-dir` graph never reads as drifted by the files it left out.
 pub fn probe_drift(
     root: &Path,
     fp: &Fingerprint,
@@ -536,7 +536,7 @@ mod tests {
         }
     }
 
-    /// P1-70: the `onlyDirs` prefix match is segment-aware, and an empty
+    /// The `onlyDirs` prefix match is segment-aware, and an empty
     /// list accepts every path.
     #[test]
     fn test_p1_70_under_only_dirs_matches_whole_segments() {
@@ -563,7 +563,7 @@ mod tests {
 
     #[test]
     fn stat_print_gives_the_same_mtime_ms_twice_for_one_file() {
-        // Ponytail: pins the P2-35 flake. `stat_print` reads the file's
+        // Ponytail: pins a past flake. `stat_print` reads the file's
         // real mtime twice; both reads must give the exact same `f64`, or
         // a warm build treats an unchanged file as stale.
         let dir = TempDir::new("stat-twice");
@@ -576,7 +576,7 @@ mod tests {
 
     #[test]
     fn print_mtime_ms_round_trips_exactly_through_json() {
-        // Ponytail: pins the P2-35 flake. Without `serde_json`'s
+        // Ponytail: pins a past flake. Without `serde_json`'s
         // `float_roundtrip` feature, some 16-significant-digit `mtime_ms`
         // values (real mtimes look like this) come back one ULP off,
         // so the cache treats an unchanged file as stale.

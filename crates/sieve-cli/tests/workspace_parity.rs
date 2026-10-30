@@ -1,5 +1,4 @@
-//! Parity tests for the workspace build and the ancestor walk (P1-55,
-//! P1-61, P2-38), against the recorded goldens under
+//! Parity tests for the workspace build and the ancestor walk, against the recorded goldens under
 //! `tests/fixtures/ws.expected/workspace/`. The helpers live in `support/ws.rs`.
 
 mod support;
@@ -20,7 +19,7 @@ fn assert_matches(id: &str, output: &Output, copy: &Path) {
     support::ws::assert_matches(GOLDEN, id, output, copy);
 }
 
-/// P1-55, P2-38: `build` at a parent with two git children builds each
+/// `build` at a parent with two git children builds each
 /// child, prints the per-child lines and the federated line, and leaves
 /// only `workspace.json` under the parent's context dir.
 #[test]
@@ -37,7 +36,7 @@ fn test_p1_55_build_at_a_workspace_parent_matches_golden() {
     assert_eq!(gitignore, golden("gitignore.txt"));
 }
 
-/// P1-55: a mega graph built before the children were repos gets the
+/// A mega graph built before the children were repos gets the
 /// migration note, and the parent's old tree goes.
 #[test]
 fn test_p1_55_build_over_a_mega_graph_prints_the_migration_note() {
@@ -53,7 +52,7 @@ fn test_p1_55_build_over_a_mega_graph_prints_the_migration_note() {
     assert_eq!(file_list(&copy), golden("migrate.files.txt"), "file list");
 }
 
-/// P1-61: from a plain subdir of the parent, the ancestor walk stops at
+/// From a plain subdir of the parent, the ancestor walk stops at
 /// the parent's `workspace.json`, not at the file system root.
 #[test]
 fn test_p1_61_walk_stops_at_the_workspace_parent() {
@@ -63,7 +62,7 @@ fn test_p1_61_walk_stops_at_the_workspace_parent() {
     assert_matches("skeleton-docs", &output, &copy);
 }
 
-/// P1-61: from a child's subdir, the walk stops at the child's own graph.
+/// From a child's subdir, the walk stops at the child's own graph.
 #[test]
 fn test_p1_61_walk_stops_at_a_child_repo() {
     let (copy, build) = built_workspace("ws-walk-child");
@@ -72,7 +71,7 @@ fn test_p1_61_walk_stops_at_a_child_repo() {
     assert_matches("grep-alpha-src", &output, &copy);
 }
 
-/// P2-38: one git child is not a workspace; the parent builds as one
+/// One git child is not a workspace; the parent builds as one
 /// repo, with the single-repo report and tree.
 #[test]
 fn test_p2_38_one_git_child_is_not_a_workspace() {

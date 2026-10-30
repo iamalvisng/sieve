@@ -1,5 +1,5 @@
 //! Parity tests for the `sieve impact` divergences from a recorded run
-//! (DV2, DV4, DV6, DV7 and DV12; P1-24, P1-27, P3-25, P3-26), against
+//! , against
 //! the goldens under `tests/fixtures/edges.expected/blast-dv/`. Each case
 //! is one `tests/inputs/blast-dv/<id>.sh`: its first line names the
 //! arguments, the rest is a setup script.
@@ -177,7 +177,7 @@ fn assert_case_matches_golden(id: &str) {
     assert_eq!(got_exit, want_exit, "blast-dv {id}: exit mismatch");
 }
 
-/// DV4 (P1-24, P1-27): on a dirty tree the refresh note comes before the
+/// On a dirty tree the refresh note comes before the
 /// `--format` or `--depth` error.
 #[test]
 fn test_p1_24_p1_27_dv4_refresh_note_precedes_a_flag_error() {
@@ -185,7 +185,7 @@ fn test_p1_24_p1_27_dv4_refresh_note_precedes_a_flag_error() {
     assert_case_matches_golden("depth-zero");
 }
 
-/// DV6 (P3-25): module labels sort with `localeCompare`, so `alpha` comes
+/// Module labels sort with `localeCompare`, so `alpha` comes
 /// before `Zulu`.
 #[test]
 fn test_p3_25_dv6_modules_sort_with_locale_compare() {
@@ -193,14 +193,14 @@ fn test_p3_25_dv6_modules_sort_with_locale_compare() {
     assert_case_matches_golden("order-modules-json");
 }
 
-/// DV6 (P3-25): area labels sort with `localeCompare` too (dist).
+/// Area labels sort with `localeCompare` too (dist).
 #[test]
 fn test_p3_25_dv6_areas_sort_with_locale_compare() {
     assert_case_matches_golden("order-areas");
     assert_case_matches_golden("order-areas-json");
 }
 
-/// DV7 (P3-26): a diff with a latin1 byte keeps its ranges and hunks. Node
+/// A diff with a latin1 byte keeps its ranges and hunks. Node
 /// decodes the patch as UTF-8 with U+FFFD.
 ///
 /// Only the `changed` array is compared. The build (sieve-parse) still
@@ -219,13 +219,13 @@ fn test_p3_26_dv7_latin1_diff_keeps_its_ranges() {
     );
 }
 
-/// DV12: JS `trim()` strips U+FEFF from a concept label (dist).
+/// JS `trim()` strips U+FEFF from a concept label (dist).
 #[test]
 fn test_p1_25_dv12_label_trim_strips_a_bom() {
     assert_case_matches_golden("label-bom");
 }
 
-/// P1-27: a base ref that does not exist makes blast exit 1 with sieve's
+/// A base ref that does not exist makes blast exit 1 with sieve's
 /// message.
 #[test]
 fn test_p1_27_blast_bad_base_exits_1() {
@@ -233,14 +233,14 @@ fn test_p1_27_blast_bad_base_exits_1() {
     assert_eq!(golden("base-nope").2, 1, "the golden must be exit 1");
 }
 
-/// P1-27: with no graph, blast exits 1 and names the build command.
+/// With no graph, blast exits 1 and names the build command.
 #[test]
 fn test_p1_27_blast_no_graph_exits_1() {
     assert_case_matches_golden("no-graph");
     assert_eq!(golden("no-graph").2, 1, "the golden must be exit 1");
 }
 
-/// P3-20: blast with no `--depth` uses depth 2. The chain reaches l2 and
+/// Blast with no `--depth` uses depth 2. The chain reaches l2 and
 /// stops before l3, so a default of 1 or 3 changes the output.
 #[test]
 fn test_p3_20_blast_default_depth_is_2() {
@@ -249,7 +249,7 @@ fn test_p3_20_blast_default_depth_is_2() {
     assert!(out.contains("within 2 hops") && out.contains("l2  fn") && !out.contains("l3  fn"));
 }
 
-/// P3-22: blast follows in edges only. The seed `newFn` calls `leaf`, and
+/// Blast follows in edges only. The seed `newFn` calls `leaf`, and
 /// the report never lists `leaf`. It lists the three callers of `extra`.
 #[test]
 fn test_p3_22_blast_follows_in_edges_only() {

@@ -1,4 +1,4 @@
-//! Parity tests for JS regex rules against a recorded run (P1-04, P1-12),
+//! Parity tests for JS regex rules against a recorded run,
 //! against the goldens under `tests/fixtures/basic.expected/js-regex/`.
 //! The query list lives in `tests/inputs/js-regex/basic.txt`.
 
@@ -96,19 +96,19 @@ fn assert_matches_golden(id: &str) {
     );
 }
 
-/// P1-04: U+FEFF is JS `\s`, so `who<FEFF>calls` is a structural query.
+/// U+FEFF is JS `\s`, so `who<FEFF>calls` is a structural query.
 #[test]
 fn test_p1_04_feff_counts_as_js_whitespace() {
     assert_matches_golden("p1-04-feff");
 }
 
-/// P1-04: U+0085 is not JS `\s`, so `who<NEL>calls` is a lexical query.
+/// U+0085 is not JS `\s`, so `who<NEL>calls` is a lexical query.
 #[test]
 fn test_p1_04_nel_is_not_js_whitespace() {
     assert_matches_golden("p1-04-nel");
 }
 
-/// P1-12: a pattern that starts with `{2}` reports `Nothing to repeat`.
+/// A pattern that starts with `{2}` reports `Nothing to repeat`.
 #[test]
 fn test_p1_12_leading_brace_quantifier_reason() {
     assert_matches_golden("p1-12-brace-quant");

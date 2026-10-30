@@ -1,6 +1,5 @@
 //! The `covers:` backfill: every concept node's frontmatter gets a list of the
-//! symbols its `sources` claim, with an exact `file:span` (see the
-//! `deep-tier.md` note section 2.5). Sieve never writes a concept node body or
+//! symbols its `sources` claim, with an exact `file:span`. Sieve never writes a concept node body or
 //! a summary; this module only splices one frontmatter key into text the
 //! `--deep` pass already wrote.
 

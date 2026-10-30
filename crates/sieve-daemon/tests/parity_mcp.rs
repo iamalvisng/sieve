@@ -1,5 +1,5 @@
 //! Parity test: `serve` against the captured `mcp/` sessions for the
-//! `basic`, `multi`, and `edges` fixtures (P4-26 to P4-33).
+//! `basic`, `multi`, and `edges` fixtures.
 
 use std::collections::HashMap;
 use std::fs;

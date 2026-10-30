@@ -1,5 +1,4 @@
-//! The byte-stable sorted write of a `Graph` to `wiring.json` (P2-26 to
-//! P2-28).
+//! The byte-stable sorted write of a `Graph` to `wiring.json`.
 
 use std::cmp::Ordering;
 use std::collections::HashMap;

@@ -1,5 +1,5 @@
 # args: blast -d all
-# P3-22: blast follows in edges only. The seed `newFn` calls `leaf`, an
+# Blast follows in edges only. The seed `newFn` calls `leaf`, an
 # out edge. The seed `extra` has the caller chain l1, l2, l3, an in edge.
 # The report lists the callers and never lists `leaf`.
 cat >ts/chain.ts <<'TS'

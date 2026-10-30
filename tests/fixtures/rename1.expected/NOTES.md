@@ -1,7 +1,6 @@
 # rename1 oracle notes
 
-Recorded 2026-10-26 with `typescript` 5.9.3 (RN0b, `docs/design/rename.md`
-section F). Source: `oracle.jsonl` in this folder, made by
+Recorded 2026-10-26 with `typescript` 5.9.3. Source: `oracle.jsonl` in this folder, made by
 `scripts/oracle/ts-rename.mjs tests/fixtures/rename1 tests/fixtures/rename1/cases.jsonl`.
 
 The first row of `oracle.jsonl` freezes the program set: 27 files, the
@@ -28,7 +27,7 @@ Cases `default_decl`, `default_import`, `default_alias_import`,
   name, and leaves other default importers alone. No row has prefix or suffix
   text. The public module shape does not change, because the export is
   `default`. A name-based text match in Sieve would differ from this.
-  Slice 1 refuses default targets (`target_kind`).
+  The rename plan refuses default targets (`target_kind`).
 
 ## Shorthand property
 
@@ -39,7 +38,7 @@ Cases `short_import`, `short_prop` (`src/short.ts`: `{ greet }`).
   turns `{ greet }` into `{ greetRn }`. That changes the object key, so the
   program changes meaning.
 - With the option `true`, TS would give `greet: ` as prefix text. The oracle
-  does not use it. The design (G4, S10) refuses shorthand sites in slice 1, so
+  does not use it. The rename plan refuses shorthand sites, so
   a case with this site shows as Refused, never Wrong.
 - Contrast: `(globalThis as any).greet = greet` (`src/gt.ts`). TS renames only
   the right side (`gt.ts:60`) and the import (`gt.ts:9`). The key `.greet` is
@@ -51,7 +50,7 @@ Cases `short_import`, `short_prop` (`src/short.ts`: `{ greet }`).
 - JSDoc in a TS file: `{@link greet}` and `@see greet` in `def.ts` and
   `named.ts` are listed (tag `jsdoc_link`). The `{typeof greet}` type of
   `@param` in `named.ts:148` is also listed (tag `jsdoc_type`), even in a
-  `.ts` file. S11 makes such a hit Unproven in Sieve, so it must refuse.
+  `.ts` file. The JSDoc rule makes such a hit Unproven in Sieve, so it must refuse.
 - JSDoc in a JS file (`jsdoc.js`): `@type {typeof greet}` (`jsdoc.js:50`) and
   `{@link greet}` (`jsdoc.js:101`) are listed.
 - Comment and string hits are listed only when the oracle passes
@@ -72,7 +71,7 @@ Cases `short_import`, `short_prop` (`src/short.ts`: `{ greet }`).
 - Named barrel `export { greet } from "./def"`: the specifier is a location
   (`barrel_named.ts:9`), and so are the importers of the barrel.
 - Namespace member `d.greet`, star barrel and `export * as` barrel members are
-  all locations (`nsuser.ts:48`, `star_user.ts:57`, `ns_user.ts:61`). Slice 1
+  all locations (`nsuser.ts:48`, `star_user.ts:57`, `ns_user.ts:61`). The rename plan
   refuses these.
 - Local-declared `function loc(){}; export { loc }` with an importer: 5
   locations: declaration, export clause, same-file use, importer specifier and
@@ -93,13 +92,13 @@ Cases `short_import`, `short_prop` (`src/short.ts`: `{ greet }`).
   offsets.
 - Symlinked file `src/linked.ts -> named.ts`: the walk includes the link as a
   file, and TS treats it as a second file. Every `named.ts` location appears
-  again under `linked.ts`. Sieve must refuse by S13. Git holds no symlink.
+  again under `linked.ts`. Sieve must refuse by the symlink rule. Git holds no symlink.
   Before you run `ts-rename.mjs`, run
   `ln -s named.ts tests/fixtures/rename1/src/linked.ts`. The Rust test
   `test_rn2_matches_frozen_oracle` creates the link in its temp copy.
 - `import.meta.glob(...)` in plain form (`glob.ts`): TS lists nothing for the `glob` name
   (`canRename: false`, case `glob_name`, excluded). It is a fixture for the
-  Sieve S7 refusal, not an oracle case.
+  Sieve reach-rule refusal, not an oracle case.
 - Excluded rows: `globalthis_key` and `glob_name`. The script also writes an
   `excluded: "no_locations"` row for a case where TS gives no location.
 - Each case has an `expect` field in `cases.jsonl`. It is the planned Sieve

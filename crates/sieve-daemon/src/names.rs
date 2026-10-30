@@ -1,6 +1,6 @@
 //! The MCP server identity: the server name, the six tool names, their
 //! descriptions and schemas, the legacy aliases, and the boot `instructions`
-//! text (the `mcp-server.md` note sections 2 and 3).
+//! text.
 //!
 //! Every name below routes through `sieve_core::product()`.
 //!
@@ -112,7 +112,7 @@ const OLD_TOOL_NAMES: [(&str, &str); 9] = [
 ];
 
 /// Maps an old tool name to its current tool name, else returns the name
-/// unchanged (`canonicalToolName`, `mcp-server.md` section 3).
+/// unchanged.
 pub fn canonical_tool_name(name: &str) -> String {
     let p = product();
     OLD_TOOL_NAMES
@@ -122,7 +122,7 @@ pub fn canonical_tool_name(name: &str) -> String {
 }
 
 /// The boot `instructions` body, with no upkeep prefix
-/// (`mcp-server.md` section 2, `mcpInstructions()`).
+///.
 pub fn instructions() -> String {
     instructions_with_upkeep(&[])
 }

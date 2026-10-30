@@ -1,4 +1,4 @@
-//! S0 build memory guard tests. These set `SIEVE_BUILD_CEILING_BYTES`, so
+//! Build memory guard tests. These set `SIEVE_BUILD_CEILING_BYTES`, so
 //! they live in their own test binary and hold one lock.
 
 use std::fs;

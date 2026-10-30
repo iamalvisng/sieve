@@ -1,6 +1,5 @@
 //! The `wiring.json` schema: the node, edge, and graph types Sieve writes
-//! and reads. Field names and order match the parity spec (P2-06 to
-//! P2-13).
+//! and reads. Field names and order match the parity spec.
 
 use serde::{Deserialize, Serialize};
 
@@ -68,7 +67,7 @@ impl Relation {
 
 /// How sure Sieve is that an edge's target is correct.
 ///
-/// The schema declares `lsp_dispatch` (P2-12), but Sieve never
+/// The schema declares `lsp_dispatch`, but Sieve never
 /// emits it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -154,7 +153,7 @@ pub struct Graph {
     pub edges: Vec<Edge>,
 }
 
-/// Formats a 1-indexed inclusive line span as `L<start>-L<end>` (P2-08).
+/// Formats a 1-indexed inclusive line span as `L<start>-L<end>`.
 pub fn span(start: u32, end: u32) -> String {
     format!("L{start}-L{end}")
 }

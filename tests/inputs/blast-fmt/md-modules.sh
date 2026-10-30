@@ -1,5 +1,5 @@
 # args: blast --format markdown -d 1
-# DV1, DV5 (P1-24, P1-25, P1-26): markdown with two changed areas and two
+# Markdown with two changed areas and two
 # dependent modules. "Other Person" committed the modules and the second
 # area's file, so the tag line, the owner table and the quoted evidence
 # lines all appear. The tag line counts areas at 3 or more.

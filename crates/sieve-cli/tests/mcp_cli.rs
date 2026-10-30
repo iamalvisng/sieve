@@ -1,7 +1,7 @@
-//! Parity tests for `sieve mcp` (P1-48, P4-26 to P4-33): the CLI wiring
+//! Parity tests for `sieve mcp`: the CLI wiring
 //! around `sieve_daemon::serve` — root resolution, context dir, the
 //! ancestor note, and stdin/stdout/stderr piping — against the
-//! captured `mcp/` sessions (the `mcp-server.md` note).
+//! captured `mcp/` sessions.
 
 mod support;
 
@@ -339,7 +339,7 @@ fn seed_cache(home: &Path, body: &str) {
     fs::write(home.join(".sieve").join("update-check.json"), body).expect("write cache");
 }
 
-/// P4-57: no cache, or a cache that says the version is current, gives
+/// No cache, or a cache that says the version is current, gives
 /// no banner.
 #[test]
 fn test_p4_57_mcp_is_silent_without_a_newer_cache() {

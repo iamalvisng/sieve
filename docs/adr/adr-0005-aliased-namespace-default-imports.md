@@ -6,7 +6,7 @@
 
 ## Context
 
-ADR 0002 limits Extracted cross-file links to named relative imports. Aliased, namespace and default imports stay Inferred. An alias call `b()` can name-match a wrong symbol `b`. A namespace call `ns.fn()` gives no edge. The design is in `docs/design/xfile-slice2.md`.
+ADR 0002 limits Extracted cross-file links to named relative imports. Aliased, namespace and default imports stay Inferred. An alias call `b()` can name-match a wrong symbol `b`. A namespace call `ns.fn()` gives no edge.
 
 ## Decision
 
@@ -31,7 +31,7 @@ The gate uses the span-matched oracle (count 2). An oracle row matches a Sieve e
 ## Consequences
 
 - Some calls that were Inferred become Extracted. Some wrong Inferred edges disappear (rule B9).
-- `scripts/oracle/` holds the oracle. Its sha256 goes into the ledger.
+- `scripts/oracle/` holds the oracle. Its sha256 goes into the release record.
 - The commit that lands the resolver sets ADR 0002 to "Superseded by" this ADR, and this ADR to "Accepted".
 
 - **Code:** `crates/sieve-parse/src/resolve.rs#resolve_calls`, `crates/sieve-parse/src/extract.rs`

@@ -1,4 +1,4 @@
-//! Parity tests for `sieve viz --export` (P1-65, step 1) against the
+//! Parity tests for `sieve viz --export` against the
 //! goldens under `tests/fixtures/<name>.expected/viz/`.
 //!
 //! Each test rebuilds the tree the viewer reads from the same goldens: the

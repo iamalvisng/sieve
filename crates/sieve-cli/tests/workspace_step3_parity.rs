@@ -1,5 +1,4 @@
-//! Parity tests for workspace step 3: the federated `map` and `callers` (P1-54,
-//! P1-58), against the recorded goldens under
+//! Parity tests for the workspace: the federated `map` and `callers`, against the recorded goldens under
 //! `tests/fixtures/ws.expected/workspace3/`. The helpers live in
 //! `support/ws.rs`. The fixture has no symbol in both children, so each test
 //! appends the same `shared` chain to both children before the build.
@@ -42,7 +41,7 @@ fn built(label: &str) -> TempDir {
     copy
 }
 
-/// P1-54: text `map` at the parent prints the workspace head, then one
+/// Text `map` at the parent prints the workspace head, then one
 /// `## <child>/` section per child, each with its own savings header.
 #[test]
 fn test_p1_54_map_at_a_workspace_parent_prints_one_section_per_child() {
@@ -51,7 +50,7 @@ fn test_p1_54_map_at_a_workspace_parent_prints_one_section_per_child() {
     assert_matches("map", &output, &copy);
 }
 
-/// P1-54: `--max-dirs` splits evenly across the children.
+/// `--max-dirs` splits evenly across the children.
 #[test]
 fn test_p1_54_map_max_dirs_splits_across_the_children() {
     let copy = built("ws3-map-max-dirs");
@@ -59,7 +58,7 @@ fn test_p1_54_map_max_dirs_splits_across_the_children() {
     assert_matches("map-max-dirs", &output, &copy);
 }
 
-/// P1-58: `map --json` at the parent does not federate; it prints the
+/// `map --json` at the parent does not federate; it prints the
 /// plain no-graph line and exits 1.
 #[test]
 fn test_p1_58_map_json_at_a_workspace_parent_has_no_graph() {
@@ -68,7 +67,7 @@ fn test_p1_58_map_json_at_a_workspace_parent_has_no_graph() {
     assert_matches("map-json", &output, &copy);
 }
 
-/// P1-54: an unbuilt child drops out of the map, and the coverage note
+/// An unbuilt child drops out of the map, and the coverage note
 /// closes the output.
 #[test]
 fn test_p1_54_map_with_one_child_unbuilt_adds_the_coverage_note() {
@@ -78,7 +77,7 @@ fn test_p1_54_map_with_one_child_unbuilt_adds_the_coverage_note() {
     assert_matches("map-unbuilt", &output, &copy);
 }
 
-/// P1-58: `callers` at the parent prints one `## <child>/` block per
+/// `callers` at the parent prints one `## <child>/` block per
 /// child with a hit, child-relative paths, no call-site quote, and one
 /// savings line per block.
 #[test]
@@ -88,7 +87,7 @@ fn test_p1_58_callers_with_hits_in_both_children() {
     assert_matches("callers-both", &output, &copy);
 }
 
-/// P1-58: a child with no match prints no block.
+/// A child with no match prints no block.
 #[test]
 fn test_p1_58_callers_with_a_hit_in_one_child_only() {
     let copy = built("ws3-callers-one");
@@ -96,7 +95,7 @@ fn test_p1_58_callers_with_a_hit_in_one_child_only() {
     assert_matches("callers-one", &output, &copy);
 }
 
-/// P1-58: a miss in every child prints the workspace miss line and exits
+/// A miss in every child prints the workspace miss line and exits
 /// 1.
 #[test]
 fn test_p1_58_callers_miss_in_every_child_exits_1() {
@@ -105,7 +104,7 @@ fn test_p1_58_callers_miss_in_every_child_exits_1() {
     assert_matches("callers-miss", &output, &copy);
 }
 
-/// P1-58: `callers --json` at the parent does not federate; it prints the
+/// `callers --json` at the parent does not federate; it prints the
 /// named no-graph line and exits 1.
 #[test]
 fn test_p1_58_callers_json_at_a_workspace_parent_has_no_graph() {
@@ -114,7 +113,7 @@ fn test_p1_58_callers_json_at_a_workspace_parent_has_no_graph() {
     assert_matches("callers-json", &output, &copy);
 }
 
-/// P1-58: `--depth 2` tags each hit with its depth, in every block.
+/// `--depth 2` tags each hit with its depth, in every block.
 #[test]
 fn test_p1_58_callers_depth_2_tags_each_hit_in_every_child() {
     let copy = built("ws3-callers-depth");

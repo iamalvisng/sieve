@@ -1,6 +1,6 @@
 //! `map`: a deterministic, token-budgeted repo orientation — directory
 //! clusters, per-directory hubs, and global hotspots — computed purely from the
-//! wiring graph (the `query-commands.md` note section 4).
+//! wiring graph.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -587,7 +587,7 @@ mod tests {
         assert!(padded.ends_with(' '));
     }
 
-    /// P1-29: the map pads the directory column with JavaScript's
+    /// The map pads the directory column with JavaScript's
     /// `padEnd`, so the width counts UTF-16 units, not chars.
     #[test]
     fn test_p1_29_pad_end_counts_utf16_units_not_chars() {

@@ -1,4 +1,4 @@
-//! the decision-hint rule slice 1: `sieve why`, `sieve why --check`, the sidecar and the
+//! the decision-hint rule: `sieve why`, `sieve why --check`, the sidecar and the
 //! post-read hint, on a small fixture project.
 
 mod support;
@@ -135,7 +135,7 @@ fn hook_with_fake_git(temp: &TempDir) -> (Output, bool) {
     (out, marker.exists())
 }
 
-/// The ledger with one more entry that names a sha. A rebuild of the
+/// The decision file with one more entry that names a sha. A rebuild of the
 /// sidecar would run git for it.
 fn ledger_with_sha() -> String {
     format!("{LEDGER}\n## 2026-10-04, a sha\n\n- **Date:** 2026-10-04\n- In commit abc1234.\n")
@@ -210,7 +210,7 @@ fn test_f6_suggest_prints_the_ids_of_the_changed_symbols() {
 }
 
 // ---------------------------------------------------------------------------
-// Slice 2: reason comments, pinning tests, history and the MCP tool
+// Reason comments, pinning tests, history and the MCP tool
 // ---------------------------------------------------------------------------
 
 const ROWS_SRC: &str = "pub fn build_repo(x: i32) -> Result<i32, String> {\n    // SAFETY: the lock is held here.\n    if x < 0 {\n        return Err(\"negative\".to_string());\n    }\n    // NOTE: never log token=abc123\n    let y = x.checked_add(1).ok_or(\"overflow\")?;\n    Ok(y)\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    fn test_build_repo_rejects_a_negative() {\n        let _ = build_repo(-1);\n    }\n}\n";

@@ -1,5 +1,5 @@
 //! Pins the pre-query refresh against a repo whose claimed files include
-//! the breadth tier (P1-46, P2-35). `tests/fixtures/langs` claims most of
+//! the breadth tier. `tests/fixtures/langs` claims most of
 //! its files there: `.rs`, `.c`, `.cpp`, `.rb`, `.cs`, `.scala`, `.ex`,
 //! `.sol`, `.ml`, `.zig`, `.dart`, `.nix`, `.lua`, `.clj` all match only
 //! `generic_lang_of`, never the native tier.

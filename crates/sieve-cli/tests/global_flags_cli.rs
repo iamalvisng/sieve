@@ -1,8 +1,8 @@
-//! Parity tests for P1-45: the global `--dir` flag and the `SIEVE_DIR`
+//! Parity tests: the global `--dir` flag and the `SIEVE_DIR`
 //! env var are two separate overrides.
 //!
 //! The `--dir` flag sets the context dir override, read only from the CLI flag,
-//! with no env fallback of its own (the `01-cli.md` note section 4).
+//! with no env fallback of its own.
 //! `SIEVE_DIR` is a different override, read only by the context dir resolver
 //! for the hook and statusline entry points. A query command — `ask`, `grep`,
 //! `skeleton`, `callers`, `blast`, `map`, `check` — never reads `SIEVE_DIR`.
@@ -72,7 +72,7 @@ fn build_fixture_default_dir() -> TempDir {
     temp
 }
 
-/// P1-45: a query command must ignore `SIEVE_DIR` outright. With the
+/// A query command must ignore `SIEVE_DIR` outright. With the
 /// graph at the default `<repo>/sieve` and `SIEVE_DIR` pointed at an
 /// empty, unrelated dir, `grep` must still find the default graph — a
 /// command that read `SIEVE_DIR` would report "no graph" instead.
@@ -99,7 +99,7 @@ fn test_p1_45_dir_env_alone_does_not_relocate_a_query_context_dir() {
     );
 }
 
-/// P1-45: `--dir` decides the context dir outright when `SIEVE_DIR` also
+/// `--dir` decides the context dir outright when `SIEVE_DIR` also
 /// names a different, unrelated path. This is the flag/env pair's real
 /// precedence rule: not "the flag beats the env var" (they are not the
 /// same override), but "the flag is the only one a query command reads".

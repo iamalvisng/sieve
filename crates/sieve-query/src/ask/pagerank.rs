@@ -1,5 +1,5 @@
 //! Personalized PageRank over the walk-relation edges
-//! (`ask-ranking.md` section 4).
+//!.
 
 use std::collections::{HashMap, HashSet};
 
@@ -8,7 +8,7 @@ use sieve_core::{Graph, Node};
 use crate::relations::WALK_RELATIONS;
 
 /// The undirected adjacency list over the walk relations, restricted to
-/// `active_ids` (section 4.4, section 4.8).
+/// `active_ids`.
 pub(crate) fn build_adjacency(
     graph: &Graph,
     active_ids: &HashSet<&str>,
@@ -35,7 +35,7 @@ pub(crate) fn build_adjacency(
 }
 
 /// Runs 25 fixed iterations of personalized PageRank, seeded from `lex`,
-/// and top-normalizes the result (section 4.2 to 4.6).
+/// and top-normalizes the result.
 ///
 /// `nodes` is the walk's whole universe, in the caller's own node order
 /// (`active_nodes`, or one scope's node slice) — every seed and every
@@ -194,7 +194,7 @@ mod tests {
         assert!((pr["a"] - 1.0).abs() < 1e-12); // "a" is the seed, so it tops out at 1.
     }
 
-    /// P2-31: the walk keeps its ids in a `Set` and the seeds in a `Map`, so a
+    /// The walk keeps its ids in a `Set` and the seeds in a `Map`, so a
     /// node id listed twice (a merge conflict) walks as one node. `ask "c
     /// function"` on that repo ranked `a` before `c`, the order a deduped walk
     /// gives.
@@ -215,7 +215,7 @@ mod tests {
         assert_eq!(once, twice);
     }
 
-    /// P3-05: the run sums over its `rank` Map in insertion order, the seeds
+    /// The run sums over its `rank` Map in insertion order, the seeds
     /// first and then each node in the order the walk first touched it. Summing
     /// in node order moves the last bits. The expected values come from a
     /// JS-order simulation of the loop.

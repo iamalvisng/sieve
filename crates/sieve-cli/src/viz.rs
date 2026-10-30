@@ -1,4 +1,4 @@
-//! The `sieve viz [dir]` subcommand (P1-65), step 1: `--export <dir>`
+//! The `sieve viz [dir]` subcommand. With `--export <dir>` it
 //! writes one self-contained `index.html`. Without `--export`
 //! the live server (`-p`, `--no-open`) runs; see `viz_serve.rs`.
 //!

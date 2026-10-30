@@ -1,8 +1,7 @@
 //! Type bindings for one file: a pre-order scan that maps a name in a
 //! scope to the type it was constructed or annotated with. Extraction
 //! uses this map to resolve a `this.x()` or `self.x()` call's receiver
-//! type. Every rule follows the binding notes; see
-//! the `edges-ts-py.md` note section 4.
+//! type.
 
 use std::collections::HashMap;
 
@@ -73,7 +72,7 @@ struct BCtx {
 /// This runs as its own pre-order pass, before extraction, so a binding
 /// declared later in the file is visible to an earlier call site.
 pub fn collect_bindings(tree_root: TsNode, source: &str, grammar: &str) -> FileBindings {
-    // R has no binding collector (edges note, section 1.6): its call
+    // R has no binding collector: its call
     // resolution never consults a typed-receiver table.
     if grammar == "r" {
         return FileBindings {
@@ -394,7 +393,7 @@ fn bind_go_var_spec(
 
 /// Names the type a Go value expression constructs: a composite literal's
 /// own type, one `&` unwrapped, or the `NewX()` convention's `X`
-/// (edges note, section 1.1).
+///.
 fn go_value_type_name(value: TsNode, source: &str) -> Option<String> {
     match value.kind() {
         "composite_literal" => {
@@ -494,7 +493,7 @@ fn bind_java_formal_parameter(
 }
 
 /// `field_declaration` (`private Greeter g;`): binds twice, bare and
-/// `this.`-prefixed, at the class scope (edges note, section 1.2).
+/// `this.`-prefixed, at the class scope.
 fn bind_java_field(
     node: TsNode,
     source: &str,
@@ -543,7 +542,7 @@ fn php_type_name(type_node: TsNode, source: &str) -> Option<String> {
 }
 
 /// `simple_parameter` (`App $app`): the `type` field's own name. Keys
-/// keep the `$` (edges note, section 1.5).
+/// keep the `$`.
 fn bind_php_simple_parameter(
     node: TsNode,
     source: &str,
@@ -578,7 +577,7 @@ fn php_new_type_name(node: TsNode, source: &str) -> Option<String> {
 }
 
 /// `$x = new Foo()`: binds the left variable to the constructed type.
-/// Keys keep the `$` (edges note, section 1.5).
+/// Keys keep the `$`.
 fn bind_php_assignment(
     node: TsNode,
     source: &str,

@@ -1,5 +1,5 @@
-//! The write half of the rename (design `docs/design/rename.md`, section D
-//! steps 3 to 9): apply, journal, rollback, recover, and the diff printer.
+//! The write half of the rename: apply, journal, rollback, recover and the
+//! diff printer.
 //!
 //! `apply_plan` never applies a stored plan. It plans again under the build
 //! lock, checks every file, writes a journal, writes each file by temp file
@@ -9,7 +9,7 @@
 //! Limit: a write keeps the file mode and, on unix, tries to keep the owner
 //! and group. It does not keep extended attributes, because `std` has no API
 //! for them. A temp-and-rename write also changes the inode and breaks hard
-//! links (design S13).
+//! links (a rename rule).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -35,7 +35,7 @@ use crate::ts_scope::{scope_file, word_matches, SiteKind};
 pub enum ApplyStatus {
     /// Every edit is on disk, the graph is fresh and the check passed.
     Written,
-    /// The plan is refused, or a file failed the step 4 checks. No file
+    /// The plan is refused, or a file failed the pre-write checks. No file
     /// changed.
     Refused,
     /// The new plan id differs from `--expect`. No file changed.
@@ -88,7 +88,7 @@ struct JournalFile {
     bytes_hex: String,
 }
 
-/// The write journal, version 1 (design section D step 5).
+/// The write journal, version 1 (the plan file for a crash).
 #[derive(Debug, Serialize, Deserialize)]
 struct Journal {
     version: u32,
@@ -207,7 +207,7 @@ pub(super) struct Hooks {
     pub fail_sync: bool,
 }
 
-/// Applies the rename of `symbol` to `new_name` (design D steps 3 to 9).
+/// Applies the rename of `symbol` to `new_name`.
 ///
 /// It plans again under the build lock. With `expect`, the new plan id must
 /// equal it. It writes nothing when the plan is refused or a check fails. A
@@ -283,7 +283,7 @@ fn inbound(kept: &Kept, id: &str) -> BTreeSet<(String, String)> {
 /// The inbound links that must survive the rename (check c). A link is
 /// required when its raw edge carried an import specifier. A link without a
 /// specifier can be a false edge from a property call such as `cfg.f()` or a
-/// shadowed call (design F7). It is exempt only when its source node holds an
+/// shadowed call (a rename rule). It is exempt only when its source node holds an
 /// old-name hit that the plan classed Other for a structural reason. Any
 /// other such link must reappear on the new node.
 fn required_links(kept: &Kept, plan: &Plan, counts: &Counts) -> BTreeSet<(String, String)> {
@@ -356,7 +356,7 @@ fn apply_locked(
     expect: Option<&str>,
     hooks: Hooks,
 ) -> Result<ApplyReport, RenameError> {
-    // Step 3: plan again. A stored plan is never applied.
+    // Plan again. A stored plan is never applied.
     let kept = rebuild_keeping(root, context_dir)?;
     let (mut plan, counts) =
         plan_counted(root, context_dir, &kept, symbol, new_name, in_prefix, true)?;
@@ -419,20 +419,20 @@ fn apply_locked(
             }
         }
     }
-    // Step 4: check every file before the first write.
+    // Check every file before the first write.
     let staged = match precheck(root, &plan) {
         Ok(staged) => staged,
         Err(refusals) => {
             plan.status = Status::Refused;
             plan.files.clear();
             plan.refused = refusals;
-            let text = "a file failed the pre-write checks".to_string();
+            let text = "a file failed the post-write checks".to_string();
             return Ok(report(ApplyStatus::Refused, plan, Vec::new(), Some(text)));
         }
     };
-    // Step 5: the journal, before any write. A sync failure stops here.
+    // Write the journal, before any write. A sync failure stops here.
     write_journal(context_dir, &plan, &staged)?;
-    // Step 6: write each file by temp file and rename.
+    // Write each file by temp file and rename.
     for (i, item) in staged.iter().enumerate() {
         touch_lock(context_dir);
         #[cfg(test)]
@@ -464,7 +464,7 @@ fn apply_locked(
             file.write_all(b"\n// tampered\n")?;
         }
     }
-    // Steps 7 and 8: rebuild, then post-check.
+    // Rebuild, then post-check.
     if let Err(why) = post_check(root, context_dir, &plan, &staged, &want, hooks) {
         let why = format!("post-check failed: {why}");
         return roll_back(root, context_dir, plan, &staged, &why, hooks);
@@ -490,7 +490,7 @@ fn apply_locked(
             shown.display()
         )));
     }
-    // Step 9: the journal goes away only after a passed check.
+    // The journal goes away only after a passed check.
     remove_journal(context_dir)?;
     let paths = staged.iter().map(|s| s.path.clone()).collect();
     Ok(report(ApplyStatus::Written, plan, paths, None))
@@ -558,7 +558,7 @@ fn roll_back(
     Ok(report(ApplyStatus::RolledBack, plan, paths, Some(text)))
 }
 
-/// Design D step 4 and S13: the bytes at each span equal the old name, the
+/// The pre-write check: the bytes at each span equal the old name, the
 /// disk hash equals the plan, the file is writable and no touched path is a
 /// symlink. It returns the staged files, or one refusal per failed file.
 pub(super) fn precheck(root: &Path, plan: &Plan) -> Result<Vec<Staged>, Vec<Refusal>> {
@@ -635,7 +635,7 @@ fn splice(bytes: &[u8], edits: &[Edit], old: &[u8], new: &[u8]) -> Option<Vec<u8
     Some(out)
 }
 
-/// Design D step 8. The checks use the graph and the files, not a second
+/// The post-write check. The checks use the graph and the files, not a second
 /// plan over the repo:
 /// (a) each written file holds exactly the staged bytes;
 /// (b) the old node id is gone, and the new node sits on the same line;
@@ -884,8 +884,7 @@ fn restore(root: &Path, staged: &[&Staged], hooks: Hooks) -> Result<(), Vec<Stri
     }
 }
 
-/// Touches the lock file, so a long write does not look stale (design D
-/// step 6). A failure is ignored.
+/// Touches the lock file, so a long write does not look stale. A failure is ignored.
 fn touch_lock(context_dir: &Path) {
     let path = sieve_core::lock::lock_path(context_dir);
     if let Ok(file) = fs::OpenOptions::new().write(true).open(path) {
@@ -931,7 +930,7 @@ fn make_journal(old: &str, new: &str, rows: &[(&str, &[u8], &[u8])]) -> Journal 
 }
 
 /// Writes the journal file, syncs it and its directory. Any failure stops
-/// the apply before the first source write (design D step 5).
+/// the apply before the first source write.
 fn put_journal(context_dir: &Path, journal: &Journal) -> Result<(), RenameError> {
     let body = serde_json::to_vec(journal).map_err(|e| RenameError::Apply(e.to_string()))?;
     let path = context_dir.join(JOURNAL_PATH);
@@ -991,8 +990,7 @@ fn remove_journal(context_dir: &Path) -> Result<(), RenameError> {
     }
 }
 
-/// Restores the files from a journal that a crash left (design C
-/// `--recover`), then removes the journal and rebuilds the graph.
+/// Restores the files from a journal that a crash left (`--recover`), then removes the journal and rebuilds the graph.
 ///
 /// It checks the journal first: the checksum, and each path. A bad journal
 /// is an error and nothing changes. Then, for each file: bytes equal to the
@@ -1134,7 +1132,7 @@ fn recover_locked(
 
 // ---- diff ----
 
-/// Prints the unified diff of the plan (design C samples). Each file shows
+/// Prints the unified diff of the plan (the plan format). Each file shows
 /// `--- a/path`, `+++ b/path` and one hunk per run of edited lines, with
 /// `context` lines around each edit. It reads the files from `root`, so call
 /// it before the write. It never panics: a file that no longer matches the

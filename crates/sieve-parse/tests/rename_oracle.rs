@@ -17,11 +17,11 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 use sieve_parse::rename::{plan_rename, Plan, SiteClass, Status};
 
-/// Files that make S7, S3 or S13 refuse every case: a glob, a symlink and a
+/// Files that make the reach, clean-file or symlink rule refuse every case: a glob, a symlink and a
 /// UTF-16 file.
 const HAZARDS: [&str; 3] = ["src/glob.ts", "src/linked.ts", "src/utf16.ts"];
 
-/// Importers of `src/def.ts#greet` that slice 1 cannot plan: namespace and
+/// Importers of `src/def.ts#greet` that the rename plan cannot plan: namespace and
 /// star barrels, a shorthand property, a nested shadow and a TS file with a
 /// JSDoc type.
 const GREET_EXTRA: [&str; 8] = [
@@ -230,7 +230,7 @@ fn judge(plan: &Plan, rows: &[Row]) -> Result<(), String> {
 /// same site breaks a second rule.
 fn extra_reasons(case: &str) -> &'static [&'static str] {
     match case {
-        // `d.greet` also has a relative namespace receiver (S8).
+        // `d.greet` also has a relative namespace receiver (property rule).
         "ns_member" => &["unproven"],
         _ => &[],
     }

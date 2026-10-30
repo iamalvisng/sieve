@@ -1,4 +1,4 @@
-//! The `sieve version` subcommand (P1-37).
+//! The `sieve version` subcommand.
 //!
 //! `version` prints one line: the product name and the crate version.
 //! Sieve runs no update check and prints no update nudge. It never calls
@@ -19,7 +19,7 @@ pub fn current_version() -> &'static str {
 pub struct VersionArgs;
 
 /// Runs `sieve version`: prints the one-line report to stdout. No nudge,
-/// no refresh, no telemetry preamble (P1-38).
+/// no refresh, no telemetry preamble.
 pub fn run(_args: &VersionArgs) -> Result<(), String> {
     let ui = Ui::stdout();
     println!(

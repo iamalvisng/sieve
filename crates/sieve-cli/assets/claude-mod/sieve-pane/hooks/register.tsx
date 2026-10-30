@@ -879,7 +879,7 @@ export const register: Register = on => {
     await $.command.register({ name: 'sieve-mascot', description: `Set and save the pane mascot: ${MASCOT_NAMES.join(', ')}` })
     anim.name = (await readMascot($)) ?? DEFAULT_MASCOT
     bin.path = await readBin($)
-    // The worker starts here, with this hook's $. reference.md, "Work that outlives a dispatch", lines 129-133:
+    // The worker starts here, with this hook's $. The host plugin guide says:
     // "Work meant to outlive a dispatch belongs elsewhere: start it from a `session.start` hook, ...
     //  and keep it going with `$.clock.every` and `$.clock.after`, whose timers run until cancelled or until the module reloads."
     const put: Put = async v => void (await update($, view, () => v))

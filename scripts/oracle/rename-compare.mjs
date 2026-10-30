@@ -1,6 +1,6 @@
 // Compare Sieve rename plans with the TypeScript oracle.
 // Usage: node rename-compare.mjs <oracle.jsonl> <sieve-plans.jsonl> [--json]
-// Design: docs/design/rename.md, sections C and E.
+// Compares the rename plan with the TypeScript oracle.
 //
 // oracle.jsonl: output of ts-rename.mjs. Rows: {program}, {case, path, start,
 //   end, prefix, suffix, tag} and {case, excluded, message}.

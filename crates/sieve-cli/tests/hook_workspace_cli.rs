@@ -1,4 +1,4 @@
-//! Parity tests for the prompt hook at a workspace parent (P4-46).
+//! Parity tests for the prompt hook at a workspace parent.
 //!
 //! The prompt hook runs `sieve query <prompt> . --json -n 3`,
 //! so at a parent it gets the federated result.
@@ -54,7 +54,7 @@ fn pack(blocks: &str) -> String {
     )
 }
 
-/// P4-46: at the parent the hook injects the federated top three, each
+/// At the parent the hook injects the federated top three, each
 /// pointer prefixed with its child.
 #[test]
 fn test_p4_46_prompt_hook_federates_at_a_workspace_parent() {
@@ -74,7 +74,7 @@ fn test_p4_46_prompt_hook_federates_at_a_workspace_parent() {
     assert_eq!(out.status.code(), Some(0));
 }
 
-/// P4-46: a structural prompt federates too, and only the gamma child
+/// A structural prompt federates too, and only the gamma child
 /// answers it.
 #[test]
 fn test_p4_46_prompt_hook_structural_prompt_at_a_parent() {
@@ -92,7 +92,7 @@ fn test_p4_46_prompt_hook_structural_prompt_at_a_parent() {
     assert_eq!(String::from_utf8_lossy(&out.stdout), expected);
 }
 
-/// P4-46: a prompt with no hit at the parent injects nothing, with exit 0.
+/// A prompt with no hit at the parent injects nothing, with exit 0.
 #[test]
 fn test_p4_46_prompt_hook_no_hit_at_a_parent_is_silent() {
     let copy = built("p446-nohit");

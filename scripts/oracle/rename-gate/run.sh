@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Rename gate. Usage: run.sh <repo-dir> [--sample N]
 # Runs the cross-file rename gate against one TS or JS repo. Dry runs only.
-# Method: docs/design/rename.md, section E. Bash 3.2 compatible (macOS).
+# Bash 3.2 compatible (macOS).
 set -euo pipefail
 
 SEED=20261026

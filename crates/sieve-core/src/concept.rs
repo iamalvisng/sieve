@@ -1,6 +1,5 @@
 //! The deep-layer reader: a concept node's frontmatter (`sieve/<slug>.md`)
-//! and `sieve/manifest.json` (the `deep-tier.md` note
-//! sections 1.2, 1.3, 2.6 and 4.4). Sieve never writes a concept node body,
+//! and `sieve/manifest.json`. Sieve never writes a concept node body,
 //! a summary, or the manifest — this module only reads what a
 //! `--deep` pass already wrote.
 
@@ -152,7 +151,7 @@ impl Manifest {
 }
 
 // ponytail: `digestSources`'s sha256-over-sorted-`path:hash`-lines helper
-// (note section 1.2) is not built here. No row up to
+// is not built here. No row up to
 // this one needs to verify a digest; add it beside the row that does
 // (`check.rs`, row 5) rather than carry dead code now.
 
@@ -243,7 +242,7 @@ fn is_root_file_card(
 
 /// Reads and parses every concept-node `.md` in a context dir, skipping
 /// `INDEX.md` and every root-level per-file card, sorted by slug with ICU
-/// collation (note section 2.6).
+/// collation.
 pub fn read_nodes(context_dir: &Path) -> Vec<ConceptNode> {
     let manifest = Manifest::read(context_dir);
     let file_card_stems = root_file_card_stems(manifest.as_ref());
@@ -322,7 +321,7 @@ mod tests {
         );
     }
 
-    /// DV8 (P1-07): a `sources` entry with no `hash` still parses, as
+    /// A `sources` entry with no `hash` still parses, as
     /// the reader takes the frontmatter as is.
     #[test]
     fn test_p1_07_dv8_parse_reads_a_source_with_no_hash() {

@@ -1,4 +1,4 @@
-//! Parity tests for `sieve impact --export-viz <dir>` (P1-24, P1-65), against
+//! Parity tests for `sieve impact --export-viz <dir>`, against
 //! the goldens under `tests/fixtures/edges.expected/blast-viz/`. Each case is
 //! one `tests/inputs/blast-viz/<id>.sh` in the `blast-fmt` shape. Each golden
 //! holds the stdout, stderr, the exit code and the written `index.html`.
@@ -242,7 +242,7 @@ fn assert_case_matches_golden(id: &str) {
     }
 }
 
-/// P1-24, P1-65: the standard edits at depth 1 export one `changed:`
+/// The standard edits at depth 1 export one `changed:`
 /// node, no edge, and print the `--export-viz:` note on stderr before
 /// the text report.
 #[test]
@@ -250,7 +250,7 @@ fn test_p1_24_p1_65_export_viz_d1_one_area() {
     assert_case_matches_golden("d1");
 }
 
-/// P1-24, P1-65: two areas and two modules export `changed:` and
+/// Two areas and two modules export `changed:` and
 /// `affected:` nodes with evidence and owners, `depends_on` edges, and
 /// the `--title` subtitle.
 #[test]
@@ -258,14 +258,14 @@ fn test_p1_24_p1_65_export_viz_two_areas_and_two_modules() {
     assert_case_matches_golden("modules");
 }
 
-/// P1-24, P1-65: an `origin` remote names the page after the remote's
+/// An `origin` remote names the page after the remote's
 /// last path segment, not the directory.
 #[test]
 fn test_p1_24_p1_65_export_viz_repo_name_from_origin() {
     assert_case_matches_golden("origin");
 }
 
-/// P1-24, P1-65: a diff no parser claims exports an empty graph with the
+/// A diff no parser claims exports an empty graph with the
 /// "no parser claims" empty note.
 #[test]
 fn test_p1_24_p1_65_export_viz_unindexed_diff_has_no_nodes() {

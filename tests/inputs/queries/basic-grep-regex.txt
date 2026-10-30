@@ -1,4 +1,4 @@
-# grep regex-engine parity queries (P1-12, P3-16). They run in a copy of
+# grep regex-engine parity queries. They run in a copy of
 # the built basic fixture plus tests/parity/grep-regex/regex-cases.ts at
 # src/regex-cases.ts. Format: <id><TAB><arguments after "sieve">. The
 # pattern sits in single quotes; an optional "-i" follows it. The unit

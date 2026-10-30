@@ -1,6 +1,5 @@
 //! The `ask` sidecar index: the tokenizer, the per-node bags, and the
-//! `.cache/ask-index.json` file (the `ask-ranking.md` note
-//! sections 1 and 2).
+//! `.cache/ask-index.json` file.
 
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
@@ -15,7 +14,7 @@ use crate::collate::collate;
 use crate::wiring::Graph;
 
 /// The stop word list, verbatim and in source order
-/// (`ask-ranking.md` section 2.2). The note names this list "27 words" but
+///. The note names this list "27 words" but
 /// lists 32; Sieve keeps the full listed word set, since the note gives the
 /// word list as the source of truth over the count.
 pub const STOP_WORDS: [&str; 32] = [
@@ -127,12 +126,11 @@ fn doc_of(node: &crate::wiring::Node) -> AskDoc {
     }
 }
 
-/// Builds the `ask` sidecar index from `graph` (`ask-ranking.md` sections
-/// 1.4 to 1.7 and 2.3).
+/// Builds the `ask` sidecar index from `graph`.
 ///
 /// The `body` bag on the `basic` parity fixture must give `avgBodyLen ==
 /// 8.857142857142858` once `sieve-parse` fills in `body_text`; that number
-/// pins the body extraction (section 10.10). `sieve-parse`
+/// pins the body extraction. `sieve-parse`
 /// owns that test, because this crate builds no `body_text` of its own.
 pub fn build_ask_index(graph: &Graph) -> AskIndex {
     let mut nodes: Vec<_> = graph.nodes.iter().collect();
@@ -251,7 +249,7 @@ fn tmp_path_for(path: &Path) -> PathBuf {
 ///
 /// Returns `None` when the file is missing, fails to parse, holds a
 /// `version` other than `1`, or holds a `docCount` that does not match
-/// `docs.len()` (`ask-ranking.md` section 1.8).
+/// `docs.len()`.
 pub fn read_ask_index(path: &Path) -> Option<AskIndex> {
     let text = fs::read_to_string(path).ok()?;
     let index: AskIndex = serde_json::from_str(&text).ok()?;

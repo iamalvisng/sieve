@@ -1,7 +1,6 @@
 //! Parity test: `ask` against the `ask-*` goldens, for every parity
-//! fixture (the `ask-ranking.md` note).
+//! fixture.
 //!
-//! Cites P3-01 to P3-13.
 
 use std::fs;
 use std::path::PathBuf;
@@ -371,9 +370,9 @@ fn test_p3_05_pagerank_matches_the_sieve_golden_on_basic() {
 }
 
 /// Strips a trailing answer line header plus its blank line,
-/// when the golden carries one (section 7.9). None of the `ask-*` goldens
+/// when the golden carries one. None of the `ask-*` goldens
 /// this crate ports carry one — the `--source` savings sentence is empty
-/// on every parity fixture (section 11, `basic/ask-source`) — but the
+/// on every parity fixture — but the
 /// stripping runs anyway, so a future fixture with one still passes.
 fn strip_savings_header(golden: &str) -> &str {
     // The saving is the last line of a golden. Keep the newline before it.
@@ -415,10 +414,10 @@ fn line_diff(want: &str, got: &str) -> String {
 }
 
 /// Parity test: every `ask-*` query, rendered text or `--json`, matches
-/// the golden byte for byte (P1-02 to P1-11, P3-04, P3-15). The
-/// `askx` fixture pins the `related:` line (P1-07), the 0.35 test-path
-/// factor in a `--json` score (P3-04) and the 80-line `--source --full`
-/// cap (P3-15).
+/// the golden byte for byte. The
+/// `askx` fixture pins the `related:` line, the 0.35 test-path
+/// factor in a `--json` score and the 80-line `--source --full`
+/// cap.
 #[test]
 fn test_p1_02_to_11_p3_15_ask_output_matches_golden() {
     let fixtures = [

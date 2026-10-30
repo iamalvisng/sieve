@@ -42,12 +42,12 @@ map-max2	map --max-dirs 2
 map-max1	map --max-dirs 1
 check	check
 check-json	check --json
-# P1-02: each ask flag by its long name (P1-02).
+# Each ask flag by its long name.
 ask-nograph	ask "double" --no-graph-rank
 ask-norefresh	ask "double" --no-refresh
 ask-full	ask "double" --full
 ask-limit2	ask "double" --limit 2
-# P1-03, P1-04, P1-06: a structural hit and a structural fallthrough.
+# A structural hit and a structural fallthrough.
 ask-calls	ask "who calls double"
 ask-calls-miss	ask "who calls zzznothing"
 callers-p3-23-file-depth2	callers util.ts --depth 2

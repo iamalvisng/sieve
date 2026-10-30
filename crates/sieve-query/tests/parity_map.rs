@@ -1,7 +1,6 @@
 //! Parity test: `build_repo_map` plus `format_repo_map` against the
 //! `map*` goldens, for every fixture in `tests/inputs/queries/`.
 //!
-//! Cites P1-29 to P1-32 and P3-27 to P3-31.
 
 use std::collections::HashSet;
 use std::fs;
@@ -85,8 +84,7 @@ fn load_query_lines(fixture: &str) -> Vec<(String, String)> {
 
 /// The savings baseline the CLI attaches to a `map --json` payload, for
 /// the one golden (`map-json`) that needs the full byte-for-byte match.
-/// `map.rs` itself never carries this field — the CLI adds it, per the
-/// parity note — so this test builds it once, the same way
+/// `map.rs` itself never carries this field — the CLI adds it, so this test builds it once, the same way
 /// `sieve-savings::savings_for` would, without adding that crate as a
 /// dependency of `sieve-query`.
 #[derive(Serialize)]

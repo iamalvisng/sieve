@@ -1,5 +1,5 @@
-//! Parity tests for the prompt hook's scope hint (P4-23, P4-17), the
-//! UTF-16 prompt floor (P4-17) and the UTF-16 session-start cut (P4-13),
+//! Parity tests for the prompt hook's scope hint, the
+//! UTF-16 prompt floor and the UTF-16 session-start cut,
 //! against the goldens under `tests/fixtures/workspace.expected/hooks/`.
 //!
 //! The workspace fixture has two scopes, so it is the one fixture where

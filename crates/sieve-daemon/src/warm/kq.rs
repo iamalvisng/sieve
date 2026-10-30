@@ -1,11 +1,11 @@
 //! The macOS sync of the warm index: one kqueue watches every dir and file of
-//! the walk (`docs/design/daemon-speed.md`, V1b). A drain with a zero timeout
+//! the walk. A drain with a zero timeout
 //! before each call proves that the dirty set holds every write that ended
 //! before the call, so no cookie file and no wait are needed.
 //!
 //! Every `unsafe` block here calls `libc` (`open`, `close`, `kevent`,
-//! `kqueue`, `getrlimit`). The ledger entry "2026-10-30, kqueue in place of
-//! the cookie on macOS" covers them.
+//! `kqueue`, `getrlimit`). The kqueue replaces the cookie file on macOS, and the
+//! libc calls are the only way to reach it.
 
 use std::collections::{HashMap, HashSet};
 use std::ffi::CString;

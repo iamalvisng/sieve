@@ -1,14 +1,14 @@
 //! Lookup routing.
 //!
-//! Slice 1: a `PostToolUse` hook on the Grep tool re-prints the
+//! Grep: a `PostToolUse` hook on the Grep tool re-prints the
 //! matches grouped by file and by enclosing symbol. The new text keeps
 //! every `path:line` pair of the original, in the original order. If it
 //! cannot, the hook keeps the original output and records a pass reason.
 //!
-//! Slice 3 routes Bash on the stdout. The lexer in `lex.rs` splits the
+//! Bash: the hook routes the stdout. The lexer in `lex.rs` splits the
 //! command into segments. Each search segment counts as one lookup.
 //!
-//! Slice 3b splits the stdout into runs of lines. A run of `path:line:text`
+//! The hook splits the stdout into runs of lines. A run of `path:line:text`
 //! rows with current indexed files becomes one regrouped block. Every other
 //! line stays in place, byte for byte. Every search segment of the call gets
 //! the same outcome. The hook adds no `-n` and never changes a command.
@@ -1544,7 +1544,7 @@ crates/engine/src/handlers/group_01_handlers.rs
         let text = run("grep -rn total .", &mixed, Want::Routed(1));
         let want = format!("[sieve] routed:replaced\n{readme}./{G0}\n  L4 in fn handle_0_0:");
         assert!(text.starts_with(&want), "{text}");
-        // Slice 3b: other lines stay in place; the rows around them route.
+        // Other lines stay in place; the rows around them route.
         let block = GOLDEN_TWO_FILES.strip_prefix("[sieve] routed:replaced\n");
         let block = block.expect("golden header");
         let sed_lines: String = (1..=5).map(|n| file_line(root, G0, n) + "\n").collect();
@@ -1580,7 +1580,7 @@ crates/engine/src/handlers/group_01_handlers.rs
         let real = rows(G0, G0, &[4]);
         let text = run(&command, &(real + &chained), Want::Routed(1));
         assert_eq!(text.matches("L4 in fn handle_0_0").count(), 2, "{text}");
-        // E1: a bare row in a call with two searches is `compound`.
+        // A bare row in a call with two searches is `compound`.
         let command = format!("ls; grep -n a {G0}; grep -n b {G1}");
         run(&command, &split, Want::Passed("compound", 2));
         // A mixed output that does not shrink to 90% passes.

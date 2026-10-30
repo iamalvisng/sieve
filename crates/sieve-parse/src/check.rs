@@ -1,5 +1,5 @@
 //! `check_graph`/`check_context` — is the committed wiring graph still in
-//! sync with the code? (P1-33 to P1-36, P4-42)
+//! sync with the code?
 //!
 //! This is a deterministic re-extraction, diffed against the committed graph by
 //! `id` and `body_hash`, no LLM call.
@@ -102,8 +102,8 @@ pub struct ContextCheck {
 /// `body_hash`, the same three-way split `checkGraph` runs.
 pub fn check_graph(root: &Path, context_dir: &Path) -> io::Result<GraphCheck> {
     // The last build's `--only-dir` whitelist rides in the fingerprint
-    // (P1-70). The warm guard runs on its file count, before the wiring is
-    // parsed (S0, B3).
+    // . The warm guard runs on its file count, before the wiring is
+    // parsed.
     let stamp = crate::extractor_stamp();
     let fp = read_fingerprint(&fingerprint_path(context_dir, &stamp), &stamp);
     // With no usable fingerprint, the walk gives the file count.
@@ -135,7 +135,7 @@ pub fn check_graph(root: &Path, context_dir: &Path) -> io::Result<GraphCheck> {
     let mut opts = BuildOptions {
         only_dirs: fp.and_then(|fp| fp.only_dirs).unwrap_or_default(),
         no_reuse: false,
-        // Nothing writes a file at all (P1-35).
+        // Nothing writes a file at all.
         read_only: true,
         progress: None,
         keep_raw: false,
@@ -241,9 +241,9 @@ fn extracted_ids(
 }
 
 /// Counts the drift of the committed graph from the lookup index and the
-/// files that drifted, with no whole-repo build (S3).
+/// files that drifted, with no whole-repo build.
 ///
-/// A removed path gives the empty set with no read (E1). An added or
+/// A removed path gives the empty set with no read. An added or
 /// changed path is diffed by id and body hash against a fresh extraction.
 pub fn check_graph_lookup(root: &Path, context_dir: &Path) -> io::Result<LookupCheck> {
     let wiring_path = context_dir.join(".graph").join("wiring.json");
@@ -325,7 +325,7 @@ pub fn check_graph_lookup(root: &Path, context_dir: &Path) -> io::Result<LookupC
 /// code.
 ///
 /// Sieve never writes `manifest.json` or a concept node body (Phase 1
-/// scope, the `deep-tier.md` note rule); this
+/// scope); this
 /// reads only what a meaning-tier build already left on disk. A missing
 /// manifest reports `missing: true` with every array empty, matching
 /// the report for a Tier-1-only build. With a manifest present, this
@@ -536,7 +536,7 @@ pub fn format_check_report(c: &ContextCheck) -> String {
     lines.join("\n")
 }
 
-/// The workspace `check` text (P1-59, P4-44): one line per child, then the
+/// The workspace `check` text: one line per child, then the
 /// coverage note, ending in a newline. `loaded` holds each built child's dir
 /// name and repo root. `missing` holds the unbuilt names. Returns the text and
 /// whether every built child is in sync. The CLI and the MCP server both print

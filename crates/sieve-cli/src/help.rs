@@ -1,9 +1,9 @@
 //! The literal --help text sieve prints, byte for byte matched to
-//! the recorded Commander-rendered help (P1-01). The usage line
+//! the recorded Commander-rendered help. The usage line
 //! names the program as sieve, so this text keeps that
 //! name too.
 
-/// The byte-for-byte help text (P1-01). Route every print
+/// The byte-for-byte help text. Route every print
 /// site through [`help_text`], never this constant directly, so the
 /// active product's name replaces `sieve` (P2 rename).
 pub const HELP_TEXT: &str = r#"Usage: sieve [options] [command]
@@ -73,7 +73,7 @@ pub fn help_text() -> String {
 }
 
 /// The recorded `<cmd> --help` text for each command Sieve shares with the
-/// recorded help (P1-63), byte for byte as commander prints it. A literal table,
+/// recorded help, byte for byte as commander prints it. A literal table,
 /// like [`HELP_TEXT`]: it is the least code and the goldens catch drift.
 /// Sieve has no `upgrade`, `trail` or `claude-md`.
 /// Sieve-only commands are not here; clap prints their help.

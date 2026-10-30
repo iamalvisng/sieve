@@ -1,5 +1,5 @@
-//! Parity tests for a source file that is not valid UTF-8 (P3-26), and
-//! for the files `check` writes (P1-35), against recorded goldens
+//! Parity tests for a source file that is not valid UTF-8, and
+//! for the files `check` writes, against recorded goldens
 //! under `tests/fixtures/edges.expected/utf8-read/`.
 //!
 //! `tests/inputs/utf8-read/setup.sh seed` writes two TypeScript files with
@@ -134,7 +134,7 @@ fn build_seeded(label: &str) -> (TempDir, (String, String, i32)) {
     (temp, built)
 }
 
-/// P3-26: the build keeps a file that is not valid UTF-8. The node count
+/// The build keeps a file that is not valid UTF-8. The node count
 /// line and `wiring.json` match the golden byte for byte, so U+FFFD leaves
 /// every span, `chars` count and body hash where the golden puts them.
 #[test]
@@ -150,7 +150,7 @@ fn test_p3_26_utf8_build_keeps_a_latin1_file_like_golden() {
     );
 }
 
-/// P3-26: `skeleton` lists the symbols of a Latin-1 file, and prints a
+/// `skeleton` lists the symbols of a Latin-1 file, and prints a
 /// function name that holds U+FFFD.
 #[test]
 fn test_p3_26_utf8_skeleton_matches_golden() {
@@ -165,14 +165,14 @@ fn test_p3_26_utf8_skeleton_matches_golden() {
     );
 }
 
-/// P3-26: `grep` searches the decoded text and quotes a line with U+FFFD.
+/// `grep` searches the decoded text and quotes a line with U+FFFD.
 #[test]
 fn test_p3_26_utf8_grep_matches_golden() {
     let (temp, _) = build_seeded("grep");
     assert_matches_golden("grep", run_sieve(&temp.path, &["grep", "latinString"]));
 }
 
-/// P3-26: `callers` quotes a call-site line that holds an invalid byte.
+/// `callers` quotes a call-site line that holds an invalid byte.
 #[test]
 fn test_p3_26_utf8_callers_quotes_a_latin1_line_like_golden() {
     let (temp, _) = build_seeded("callers");
@@ -182,7 +182,7 @@ fn test_p3_26_utf8_callers_quotes_a_latin1_line_like_golden() {
     );
 }
 
-/// P3-26: `ask --source` prints the source slice with U+FFFD, and finds a
+/// `ask --source` prints the source slice with U+FFFD, and finds a
 /// symbol whose name holds U+FFFD.
 #[test]
 fn test_p3_26_utf8_ask_source_matches_golden() {
@@ -197,7 +197,7 @@ fn test_p3_26_utf8_ask_source_matches_golden() {
     );
 }
 
-/// P3-26: after a `touch`, the freshness probe re-hashes the decoded text
+/// After a `touch`, the freshness probe re-hashes the decoded text
 /// and finds no drift, so the query prints no refresh note.
 #[test]
 fn test_p3_26_utf8_touched_latin1_file_is_not_drift() {
@@ -212,7 +212,7 @@ fn test_p3_26_utf8_touched_latin1_file_is_not_drift() {
     );
 }
 
-/// P3-26, DV7: `blast` seeds the function a Latin-1 edit adds.
+/// `blast` seeds the function a Latin-1 edit adds.
 #[test]
 fn test_p3_26_dv7_blast_seeds_a_latin1_edit_like_golden() {
     let (temp, _) = build_seeded("blast");
@@ -252,7 +252,7 @@ fn file_names(dir: &Path) -> Vec<String> {
     names
 }
 
-/// P1-35: `check` writes no file. It never calls
+/// `check` writes no file. It never calls
 /// `writeExtractCache`, so a `check` after the extract sidecar is gone
 /// leaves the cache dir as it found it.
 #[test]

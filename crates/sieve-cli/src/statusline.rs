@@ -1,5 +1,4 @@
-//! `sieve statusline`: the Claude Code statusline (the `hosts-hooks.md` note
-//! section 4).
+//! `sieve statusline`: the Claude Code statusline.
 
 use std::io::Read as _;
 use std::path::Path;
@@ -665,7 +664,7 @@ fn cached_setup_note(context_dir: &Path, now: u64, compute: impl FnOnce() -> Str
 const CAP_NOTE_PASS: &str = " \u{b7} index over the size cap; hooks pass through";
 
 /// The note for an index over the size cap. A valid lookup keeps the hooks
-/// working, so only the prompt context and the MCP tools are off (E7).
+/// working, so only the prompt context and the MCP tools are off.
 fn cap_note_text(project_dir: &Path) -> &'static str {
     let context_dir = hook::resolve_context_dir(project_dir);
     if hook::open_lookup(&context_dir).is_some() {

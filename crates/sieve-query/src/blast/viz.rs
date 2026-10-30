@@ -1,4 +1,4 @@
-//! `blast --export-viz` (P1-24, P1-65): the context graph of one blast report,
+//! `blast --export-viz`: the context graph of one blast report,
 //! plus the `repoLabel`. The page itself comes from
 //! `crate::viz::export_page_with`.
 
@@ -357,7 +357,7 @@ pub fn blast_viz_graph(r: &BlastReport, root: Option<&Path>) -> ContextGraph {
     }
 }
 
-/// Drops the secret from a remote URL (P1-65 security rule). Removes the
+/// Drops the secret from a remote URL (a security rule). Removes the
 /// userinfo of a `scheme://` URL. An `ssh` URL keeps its user name and loses
 /// only a `:password`. An scp-style remote and a URL with no userinfo stay as
 /// is.
@@ -409,7 +409,7 @@ mod tests {
     use super::*;
     use crate::test_support::TempDir;
 
-    /// P1-65: `isoDay` is the UTC day of the epoch ms.
+    /// `isoDay` is the UTC day of the epoch ms.
     #[test]
     fn test_p1_65_iso_day_is_the_utc_day() {
         assert_eq!(iso_day(0), "1970-01-01");
@@ -421,7 +421,7 @@ mod tests {
         assert_eq!(iso_day(-1), "1969-12-31");
     }
 
-    /// P1-65: `list` names up to three, then counts the rest.
+    /// `list` names up to three, then counts the rest.
     #[test]
     fn test_p1_65_list_names_three_then_counts() {
         assert_eq!(list(&["a"]), "a");
@@ -528,7 +528,7 @@ mod tests {
         }
     }
 
-    /// P1-24, P1-65: the graph carries one node per area and module, the
+    /// The graph carries one node per area and module, the
     /// summaries, the folded hunk evidence, the reference line with its
     /// `calls x` note, the owners without scores, and one deduplicated
     /// `depends_on` edge per module and area.
@@ -576,7 +576,7 @@ mod tests {
         assert!(g.nodes[1].evidence.is_none());
     }
 
-    /// P1-65: the empty notes name the reason.
+    /// The empty notes name the reason.
     #[test]
     fn test_p1_65_empty_note_names_the_reason() {
         let dir = TempDir::new("blast-viz-empty");
@@ -600,7 +600,7 @@ mod tests {
         );
     }
 
-    /// P1-65: `repoLabel` reads the origin remote, else the basename.
+    /// `repoLabel` reads the origin remote, else the basename.
     #[test]
     fn test_p1_65_repo_label_prefers_origin() {
         let dir = TempDir::new("blast-viz-label");
@@ -625,7 +625,7 @@ mod tests {
         assert_eq!(repo_label(&root), "sieve-demo");
     }
 
-    /// P1-65: the rule table for `strip_url_credentials`.
+    /// The rule table for `strip_url_credentials`.
     #[test]
     fn test_p1_65_origin_url_drops_credentials_table() {
         let cases = [
@@ -649,7 +649,7 @@ mod tests {
         }
     }
 
-    /// P1-65: a token in the origin never reaches the repo label, even
+    /// A token in the origin never reaches the repo label, even
     /// when the URL has no path and the label is the authority.
     #[test]
     fn test_p1_65_origin_url_drops_credentials_in_repo_label() {

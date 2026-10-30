@@ -1,5 +1,5 @@
 //! Structural mode: "who calls X" and "what does X call" queries
-//! (the `ask-ranking.md` note section 6).
+//!.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
@@ -12,7 +12,7 @@ use super::{path_under_prefix, snippet_of, AskHit};
 use crate::blast::JS_WS;
 use crate::callers::GraphIndex;
 
-/// The relations an incoming-edge (caller) query walks (section 6.3).
+/// The relations an incoming-edge (caller) query walks.
 const INCOMING_RELS: [Relation; 4] = [
     Relation::Calls,
     Relation::References,
@@ -20,7 +20,7 @@ const INCOMING_RELS: [Relation; 4] = [
     Relation::Extends,
 ];
 
-/// The relations an outgoing-edge (callee) query walks (section 6.3).
+/// The relations an outgoing-edge (callee) query walks.
 const OUTGOING_RELS: [Relation; 5] = [
     Relation::Calls,
     Relation::References,
@@ -30,7 +30,7 @@ const OUTGOING_RELS: [Relation; 5] = [
 ];
 
 /// Matches a "who calls / callers of / used by" query. Case-sensitive: no
-/// `i` flag (section 6.1). The pattern has no `u`
+/// `i` flag. The pattern has no `u`
 /// flag, so its `\b` is ASCII: `éuses` matches. `(?-u:\b)` pins that.
 fn incoming_re() -> Option<&'static Regex> {
     static RE: OnceLock<Option<Regex>> = OnceLock::new();
@@ -45,7 +45,7 @@ fn incoming_re() -> Option<&'static Regex> {
 }
 
 /// Matches a "what does X call / callees / imports / depends on" query.
-/// Case-sensitive: no `i` flag (section 6.1). The pattern
+/// Case-sensitive: no `i` flag. The pattern
 /// has no `u` flag, so `\b` and `\w` are ASCII: `what does
 /// résumé call` does not match. `(?-u:...)` pins both.
 fn outgoing_re() -> Option<&'static Regex> {
@@ -62,7 +62,7 @@ fn outgoing_re() -> Option<&'static Regex> {
 
 /// Splits a prose query into word-like tokens, keeping dots so a qualified
 /// name (`Cache.get`) survives as one token. Dedups, first-occurrence order
-/// (section 6.2, `subjectWords`).
+///.
 pub(crate) fn subject_words(query: &str) -> Vec<String> {
     let mut seen = HashSet::new();
     let mut words = Vec::new();
@@ -214,7 +214,7 @@ pub(crate) fn resolve_symbol_with<'a>(
 }
 
 /// Resolves the query's structural subject, trying each `subjectWords` word
-/// longest-first until one resolves (section 6.2, `findSubjectNodes`).
+/// longest-first until one resolves.
 /// Returns the empty vector, plus the word tried last, when nothing
 /// resolved.
 fn find_subject_nodes<'a>(
@@ -235,7 +235,7 @@ fn find_subject_nodes<'a>(
 }
 
 /// The loud, never-silent note a fallthrough to lexical mode carries
-/// (section 6.2, `fallthroughNoteFor`).
+///.
 fn fallthrough_note_for(subject: &str) -> String {
     let name = sieve_core::product().name;
     format!(
@@ -256,7 +256,7 @@ fn edge_kind_word(outgoing: bool) -> &'static str {
 
 /// What `structural()` found: a genuine structural result, a signal to fall
 /// through to lexical mode with a loud note, or no structural intent at all
-/// (section 6, `StructuralOutcome`).
+///.
 pub(crate) enum StructuralOutcome {
     Result {
         /// The resolved subject's name (`subjects[0].name`).
@@ -322,7 +322,7 @@ pub(crate) fn incoming_counts(graph: &Graph) -> HashMap<&str, usize> {
 
 /// Runs the structural mode: walks incoming or outgoing edges of the
 /// query's resolved subject. Returns [`StructuralOutcome::None`] when the
-/// query has no structural intent (section 6.1).
+/// query has no structural intent.
 pub(crate) fn structural(
     query: &str,
     graph: &Graph,
@@ -403,7 +403,7 @@ pub(crate) fn structural(
 mod tests {
     use super::*;
 
-    /// P1-04: the `JS_WS` class holds the same chars as `is_js_whitespace`,
+    /// The `JS_WS` class holds the same chars as `is_js_whitespace`,
     /// over the whole BMP plus the astral plane edge.
     #[test]
     fn test_p1_04_js_ws_class_matches_is_js_whitespace() {
@@ -465,7 +465,7 @@ mod tests {
         }
     }
 
-    /// P1-04 (DV2): the intent regexes have no `u` flag, so `\b` and
+    /// The intent regexes have no `u` flag, so `\b` and
     /// `\w` are ASCII. A non-ASCII letter is a boundary, not a word char.
     #[test]
     fn test_p1_04_intent_regexes_use_ascii_word_boundaries() {

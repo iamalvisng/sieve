@@ -1,5 +1,5 @@
-//! Parity tests for workspace step 5: the federated `ask` at a workspace parent
-//! (P1-56) and the federated MCP `find_code` (P4-44), against the goldens under
+//! Parity tests for the workspace: the federated `ask` at a workspace parent
+//!  and the federated MCP `find_code`, against the goldens under
 //! `tests/fixtures/ws.expected/workspace5/`. The copies come from
 //! `tests/fixtures/ws-ask/`; `tests/inputs/ws-ask/` holds the variant table and
 //! the case list. The helpers live in `support/ws.rs`.
@@ -124,7 +124,7 @@ fn assert_case(id: &str) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
 
-/// P1-56: `ask` at the parent runs every child and fuses by reciprocal
+/// `ask` at the parent runs every child and fuses by reciprocal
 /// rank. The root scope of gamma labels as `[gamma/]`, a package scope as
 /// `[gamma/packages/x/]`, and the body-only child beta is only mentioned.
 #[test]
@@ -135,14 +135,14 @@ fn test_p1_56_default_text_federates_the_children() {
     assert!(stdout.contains("matched in: alpha/ (3) · gamma/packages/x/ (2)"));
 }
 
-/// P1-56: `-n 3` cuts the round robin at three hits, and the nudge shows.
+/// `-n 3` cuts the round robin at three hits, and the nudge shows.
 #[test]
 fn test_p1_56_limit_three_cuts_the_merged_list() {
     let stdout = assert_case("n3");
     assert!(stdout.contains("only 3 hits"));
 }
 
-/// P1-56: `-n 0` gives mode `empty` and the no-match note across the
+/// `-n 0` gives mode `empty` and the no-match note across the
 /// built children.
 #[test]
 fn test_p1_56_limit_zero_gives_empty_mode_and_the_note() {
@@ -151,14 +151,14 @@ fn test_p1_56_limit_zero_gives_empty_mode_and_the_note() {
     assert!(stdout.contains("no matching symbols across 3 workspace repos"));
 }
 
-/// P1-56: the `--json` result keeps the key order, the fused scores
+/// The `--json` result keeps the key order, the fused scores
 /// and the `scopes` footer; a hit with no child scope gets `scope` last.
 #[test]
 fn test_p1_56_json_key_order_and_scores() {
     assert_case("json");
 }
 
-/// P1-56: with `--source` the key `scope` of a hit with no child scope
+/// With `--source` the key `scope` of a hit with no child scope
 /// comes after `code`; a hit with a child scope keeps it before `code`.
 #[test]
 fn test_p1_56_json_source_scope_after_code_for_a_child_hit() {
@@ -169,7 +169,7 @@ fn test_p1_56_json_source_scope_after_code_for_a_child_hit() {
     assert!(stdout.contains("\"scope\": \"gamma/packages/x\",\n      \"code\": "));
 }
 
-/// P1-56: `--source` inlines the code per hit, with no savings line.
+/// `--source` inlines the code per hit, with no savings line.
 #[test]
 fn test_p1_56_source_text_inlines_code_per_child() {
     let stdout = assert_case("source");
@@ -177,14 +177,14 @@ fn test_p1_56_source_text_inlines_code_per_child() {
     assert!(!stdout.contains("tokens saved"));
 }
 
-/// P1-56: `--source --full` inlines the whole definition span. The fixture
+/// `--source --full` inlines the whole definition span. The fixture
 /// has no crux, so `--full` changes no byte; the case pins the bytes only.
 #[test]
 fn test_p1_56_source_full_inlines_whole_spans() {
     assert_case("source-full");
 }
 
-/// P1-56: `--no-graph-rank` never reaches a child, so the bytes equal the
+/// `--no-graph-rank` never reaches a child, so the bytes equal the
 /// plain run.
 #[test]
 fn test_p1_56_no_graph_rank_gives_the_same_bytes() {
@@ -192,7 +192,7 @@ fn test_p1_56_no_graph_rank_gives_the_same_bytes() {
     assert_eq!(stdout, golden(GOLDEN, "default.stdout.txt"));
 }
 
-/// P1-56: `--in beta` skips the strength gate, so the body-only child
+/// `--in beta` skips the strength gate, so the body-only child
 /// answers.
 #[test]
 fn test_p1_56_in_child_skips_the_gate() {
@@ -200,7 +200,7 @@ fn test_p1_56_in_child_skips_the_gate() {
     assert!(stdout.contains("[beta/] render"));
 }
 
-/// P1-56: `--in gamma` keeps the root-scope hit under the bare child
+/// `--in gamma` keeps the root-scope hit under the bare child
 /// scope, and the JSON lists the scope `gamma` with no slash.
 #[test]
 fn test_p1_56_root_scope_hit_uses_the_bare_child_scope() {
@@ -210,14 +210,14 @@ fn test_p1_56_root_scope_hit_uses_the_bare_child_scope() {
     assert!(json.contains("\"gamma\","));
 }
 
-/// P1-56: `--in gamma/packages/x` hands the rest of the path to the child
+/// `--in gamma/packages/x` hands the rest of the path to the child
 /// as its own `--in`.
 #[test]
 fn test_p1_56_in_child_sub_scope() {
     assert_case("in-gamma-x");
 }
 
-/// P1-56: a sub-prefix the child does not index throws in the child, and
+/// A sub-prefix the child does not index throws in the child, and
 /// the child is skipped: the result is empty.
 #[test]
 fn test_p1_56_in_bad_sub_prefix_skips_the_child() {
@@ -225,7 +225,7 @@ fn test_p1_56_in_bad_sub_prefix_skips_the_child() {
     assert!(stdout.contains("\u{b7} empty"));
 }
 
-/// P1-56: an unknown first `--in` segment prints the plain message on
+/// An unknown first `--in` segment prints the plain message on
 /// stderr and exits 1.
 #[test]
 fn test_p1_56_in_unknown_child_exits_one() {
@@ -237,14 +237,14 @@ fn test_p1_56_in_unknown_child_exits_one() {
     assert!(!stderr.contains('✗'));
 }
 
-/// P1-56: `--in ""` means no scope: the bytes equal the plain run.
+/// `--in ""` means no scope: the bytes equal the plain run.
 #[test]
 fn test_p1_56_in_empty_string_means_no_scope() {
     let stdout = assert_case("in-empty");
     assert_eq!(stdout, golden(GOLDEN, "default.stdout.txt"));
 }
 
-/// P1-56: a body-only child is gated out of the fusion and shows as
+/// A body-only child is gated out of the fusion and shows as
 /// `alsoMatched` with its best pointer prefixed.
 #[test]
 fn test_p1_56_body_only_child_is_also_matched() {
@@ -252,7 +252,7 @@ fn test_p1_56_body_only_child_is_also_matched() {
     assert!(stdout.contains("\"bestId\": \"beta/src/b.ts:L1-L4\""));
 }
 
-/// P1-56: a structural child has no ranking, so its coverage reads 0 and
+/// A structural child has no ranking, so its coverage reads 0 and
 /// the gate drops it unless `--in` names it.
 #[test]
 fn test_p1_56_structural_child_is_gated_out_without_in() {
@@ -261,7 +261,7 @@ fn test_p1_56_structural_child_is_gated_out_without_in() {
     assert!(!stdout.contains("[caller]"));
 }
 
-/// P1-56: `--in alpha` keeps the structural hits: mode lexical, no
+/// `--in alpha` keeps the structural hits: mode lexical, no
 /// subject, labeled `[alpha/]`.
 #[test]
 fn test_p1_56_structural_in_child_keeps_the_hits() {
@@ -271,7 +271,7 @@ fn test_p1_56_structural_in_child_keeps_the_hits() {
     assert!(!json.contains("subject"));
 }
 
-/// P1-56: a concept pointer gets the child prefix on each path.
+/// A concept pointer gets the child prefix on each path.
 #[test]
 fn test_p1_56_concept_pointer_gets_the_child_prefix() {
     let stdout = assert_case("concept");
@@ -279,7 +279,7 @@ fn test_p1_56_concept_pointer_gets_the_child_prefix() {
     assert_case("concept-json");
 }
 
-/// P1-56: a concept that tops a child's baseline takes the lock, and its
+/// A concept that tops a child's baseline takes the lock, and its
 /// group stays a singleton.
 #[test]
 fn test_p1_56_concept_at_a_child_top_locks_first() {
@@ -288,7 +288,7 @@ fn test_p1_56_concept_at_a_child_top_locks_first() {
     assert_case("concept-gamma-json");
 }
 
-/// P1-56: an unbuilt child adds the coverage line after the header, and
+/// An unbuilt child adds the coverage line after the header, and
 /// the hits come from the built children.
 #[test]
 fn test_p1_56_unbuilt_child_adds_the_coverage_note() {
@@ -296,7 +296,7 @@ fn test_p1_56_unbuilt_child_adds_the_coverage_note() {
     assert!(stdout.contains("2 of 3 workspace repos have graphs; run sieve build to cover beta"));
 }
 
-/// P1-56: `--in <unbuilt child>` passes the name check, then gives the
+/// `--in <unbuilt child>` passes the name check, then gives the
 /// empty note and the coverage line.
 #[test]
 fn test_p1_56_in_missing_child_gives_note_and_coverage() {
@@ -305,7 +305,7 @@ fn test_p1_56_in_missing_child_gives_note_and_coverage() {
     assert!(stdout.contains("2 of 3 workspace repos have graphs"));
 }
 
-/// P1-56: eleven baseline entries tie in score. The baseline stream keeps
+/// Eleven baseline entries tie in score. The baseline stream keeps
 /// the unpadded index in its doc id, so `gamma 10` sorts before `gamma 9`
 /// and the lock takes `parseConfigRb`, not `parseConfigRa`.
 #[test]
@@ -314,7 +314,7 @@ fn test_p1_56_baseline_ties_order_by_unpadded_id() {
     assert!(stdout.contains("1  [gamma/] parseConfigRb  fn"));
 }
 
-/// P1-56: a package scope below a quarter of the best leader across the
+/// A package scope below a quarter of the best leader across the
 /// children is gated out of the fusion. Its `bestId` is the file doc id,
 /// `gamma file 00000002`, padded to eight digits.
 #[test]
@@ -325,7 +325,7 @@ fn test_p1_56_weak_sub_scope_is_also_matched() {
     assert!(json.contains("\"bestId\": \"gamma file 00000002\""));
 }
 
-/// P1-56: a child with 24 file groups under `-n 1` keeps the first 20
+/// A child with 24 file groups under `-n 1` keeps the first 20
 /// (`max(4n, 20)`). The package scope `y` leads group 7 and stays in the
 /// footer. The package scope `z` leads group 24 and drops out.
 #[test]
@@ -335,7 +335,7 @@ fn test_p1_56_file_slice_is_max_of_four_n_and_twenty() {
     assert!(!stdout.contains("\"gamma/packages/z\""));
 }
 
-/// P1-56: the baseline top of beta is a file node, whose strong share is 0,
+/// The baseline top of beta is a file node, whose strong share is 0,
 /// and its coverage is under one half, so the baseline gate fails. The file
 /// gate reads the union of the donor symbols' name terms
 /// (`unionStrongCoverage`), so beta still joins the fusion. With no baseline
@@ -348,7 +348,7 @@ fn test_p1_56_file_gate_reads_the_union_strong_coverage() {
     assert!(json.contains("\"federated\": [\n      \"beta\"\n    ]"));
 }
 
-/// P1-56: the lock tail takes the file-stream score of its group leader.
+/// The lock tail takes the file-stream score of its group leader.
 /// Rb sits in the second root file, so its group ranks second in the file
 /// stream (61/62), while the lock itself carries the baseline score 1. The
 /// tail hit `parseTail` shows the 61/62 score in the JSON.
@@ -359,7 +359,7 @@ fn test_p1_56_lock_tail_takes_the_group_leader_score() {
     assert!(json.contains("\"score\": 0.9838709677419354"));
 }
 
-/// P1-56: the strong terms of a file group fold plurals, so `zetas` and
+/// The strong terms of a file group fold plurals, so `zetas` and
 /// `omegas` match the name tokens `zeta` and `omega`, and beta joins.
 #[test]
 fn test_p1_56_file_gate_strong_terms_fold_plurals() {
@@ -367,7 +367,7 @@ fn test_p1_56_file_gate_strong_terms_fold_plurals() {
     assert!(stdout.contains("[beta/] zeta-omega-sigma-rho.ts"));
 }
 
-/// P1-56: with a crux in the graph, `--source` inlines the crux excerpt and
+/// With a crux in the graph, `--source` inlines the crux excerpt and
 /// `--source --full` inlines the whole span, so `--full` reaches each child.
 #[test]
 fn test_p1_56_full_reaches_the_children() {
@@ -377,7 +377,7 @@ fn test_p1_56_full_reaches_the_children() {
     assert!(!full.contains("rerun with --full"));
 }
 
-/// P4-44: a federated `find_code` that throws drops the refresh note,
+/// A federated `find_code` that throws drops the refresh note,
 /// because the call path catches the throw before it adds the note.
 #[test]
 fn test_p4_44_find_code_error_drops_the_refresh_note() {
@@ -385,7 +385,7 @@ fn test_p4_44_find_code_error_drops_the_refresh_note() {
     assert_session_matches("findcode-throw", &copy.path);
 }
 
-/// P4-44: a federated `find_code` that answers keeps the refresh note.
+/// A federated `find_code` that answers keeps the refresh note.
 #[test]
 fn test_p4_44_find_code_keeps_the_refresh_note() {
     let copy = built("ws5-mcp-edited", "edited");
@@ -451,7 +451,7 @@ fn assert_session_matches(id: &str, root: &Path) {
     }
 }
 
-/// P4-44: `find_code` at the parent runs the federated `ask` with source
+/// `find_code` at the parent runs the federated `ask` with source
 /// inlined and no savings line, and an unknown `in` child is an error
 /// reply with the plain message.
 #[test]
@@ -460,7 +460,7 @@ fn test_p4_44_find_code_federates_at_a_workspace_parent() {
     assert_session_matches("findcode-federated", &copy.path);
 }
 
-/// P4-44: with a child unbuilt, `find_code` adds the coverage note.
+/// With a child unbuilt, `find_code` adds the coverage note.
 #[test]
 fn test_p4_44_find_code_adds_the_coverage_note_with_a_child_unbuilt() {
     let copy = built("ws5-mcp-unbuilt", "unbuilt");

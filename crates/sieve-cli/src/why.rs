@@ -315,7 +315,7 @@ fn parse_entries(doc: &str, text: &str) -> Vec<RawEntry> {
 }
 
 // ---------------------------------------------------------------------------
-// Supersede rule (design section 4)
+// Supersede rule
 // ---------------------------------------------------------------------------
 
 /// Lowercases, turns an em dash, an en dash and a comma into a space, and

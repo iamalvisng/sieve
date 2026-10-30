@@ -1,9 +1,9 @@
 //! `ask`: the lexical, structural and graph-rank query engine
-//! (the `ask-ranking.md` note).
+//!.
 //!
 //! This module covers the whole engine: single-scope and multi-scope
-//! lexical ranking, the structural "who calls X" mode (section 6),
-//! `--source` inlining (section 7.8), and the text and JSON renderers
+//! lexical ranking, the structural "who calls X" mode,
+//! `--source` inlining, and the text and JSON renderers
 //! (`format_ask`, `format_ask_json`).
 
 mod concept;
@@ -15,7 +15,7 @@ mod pagerank;
 mod select;
 /// `pub(crate)` so `callers.rs` can reuse `resolve_symbol`, the same
 ///  resolution `callers` itself needs
-/// (the `query-commands.md` note section 2.4).
+///.
 pub(crate) mod structural;
 
 pub use def::{define, format_def, single_ident, Def, Ident};
@@ -32,32 +32,32 @@ use sieve_core::{askindex::AskIndex, Graph, Kind, Node};
 use thiserror::Error;
 
 /// The most source lines `--source` inlines per hit before it truncates
-/// (section 7.8).
+///.
 pub const MAX_SPAN_LINES: usize = 80;
 
 pub use lexical::query_terms;
 
-/// The BM25 term-frequency saturation constant (section 3.3).
+/// The BM25 term-frequency saturation constant.
 pub const K1: f64 = 1.2;
-/// The BM25 length-normalization constant (section 3.3).
+/// The BM25 length-normalization constant.
 pub const B: f64 = 0.75;
-/// The personalized PageRank restart probability (section 4.3).
+/// The personalized PageRank restart probability.
 pub const ALPHA: f64 = 0.25;
-/// The fixed personalized PageRank iteration count (section 4.3).
+/// The fixed personalized PageRank iteration count.
 pub const ITERS: u32 = 25;
 /// The weight the graph score carries in a candidate's baseline
-/// (section 5.2).
+///.
 pub const GRAPH_WEIGHT: f64 = 0.5;
 /// The minimum normalized PageRank score a zero-lexical node needs to
-/// join the candidate set (section 5.2).
+/// join the candidate set.
 pub const RESCUE_FLOOR: f64 = 0.15;
 /// The score multiplier a test-path candidate carries when the query does
-/// not itself ask about tests (section 3.5).
+/// not itself ask about tests.
 pub const TEST_RANK_PENALTY: f64 = 0.35;
 /// The scope-fusion participation gate: a scope must reach this fraction
-/// of the best scope's top score to federate (section 8.5).
+/// of the best scope's top score to federate.
 pub const PARTICIPATION_RATIO: f64 = 0.25;
-/// The default hit count `ask` returns (section 5.9).
+/// The default hit count `ask` returns.
 pub const DEFAULT_LIMIT: usize = 8;
 
 /// The flags one `ask` call runs with.
@@ -70,7 +70,7 @@ pub struct AskOptions {
     /// Run the personalized PageRank pass. `false` matches
     /// `--no-graph-rank`.
     pub graph_rank: bool,
-    /// Inline each hit's source lines (section 7.8). `false` matches no
+    /// Inline each hit's source lines. `false` matches no
     /// `--source` flag.
     pub source: bool,
     /// On Tier-1 (no crux), `--full` changes nothing: every hit already
@@ -94,26 +94,25 @@ impl Default for AskOptions {
 /// ranking score.
 ///
 /// `id`, `path` and `span` are internal bookkeeping and never serialize;
-/// the JSON key order (section 7.10) is `kind`, `title`, `pointer`,
+/// the JSON key order is `kind`, `title`, `pointer`,
 /// `snippet`, `relation`, `score`, `scope`, `code`.
 #[derive(Debug, Clone)]
 pub struct AskHit {
     pub id: String,
     /// `"symbol"` for a lexical or empty hit; `"caller"`/`"callee"` for a
-    /// structural hit (section 7.5, section 6.3).
+    /// structural hit.
     pub kind: String,
     pub title: String,
     pub pointer: String,
     pub snippet: String,
     /// A concept hit's `links[].to` roster, frontmatter order. Empty and
-    /// unset on every other hit (the `deep-tier.md` note
-    /// section 2.8).
+    /// unset on every other hit.
     pub related: Vec<String>,
     /// The edge relation a structural hit walked. Unset on every other hit.
     pub relation: Option<String>,
     pub score: f64,
     pub scope: Option<String>,
-    /// The hit's inlined source, set only under `--source` (section 7.8).
+    /// The hit's inlined source, set only under `--source`.
     pub code: Option<String>,
     /// Set on a federated hit whose `scope` key is new: the
     /// `qualifyHit` step appends it after `code`.
@@ -154,7 +153,7 @@ impl Serialize for AskHit {
 }
 
 /// One scope gated out of a federated multi-scope result: it matched, but
-/// too weakly to join the pack (section 8.5, `fuse.ts`'s `alsoMatched`).
+/// too weakly to join the pack (`alsoMatched`).
 #[derive(Debug, Clone, Serialize)]
 pub struct AlsoMatched {
     /// The scope's raw path prefix (`""` = root).
@@ -164,8 +163,7 @@ pub struct AlsoMatched {
     pub best_id: String,
 }
 
-/// The scope footer of a multi-scope `ask` run (section 8, `fuse.ts`'s
-/// `FusionResult`). Matches the `scopeMeta` shape: raw scope
+/// The scope footer of a multi-scope `ask` run. It matches the `scopeMeta` shape: raw scope
 /// prefixes, not rendered labels — `scope_label` renders them at display
 /// time (`format.rs`, `empty_note`).
 #[derive(Debug, Clone, Default, Serialize)]
@@ -177,14 +175,14 @@ pub struct ScopeMeta {
     pub also_matched: Vec<AlsoMatched>,
 }
 
-/// `"lexical"` when at least one hit scored, else `"empty"` (section 5.10).
+/// `"lexical"` when at least one hit scored, else `"empty"`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AskMode {
     Lexical,
     Empty,
     /// A resolved structural query: a walk over caller or callee edges
-    /// (section 6).
+    ///.
     Structural,
 }
 
@@ -208,7 +206,7 @@ pub(crate) enum Top<'a> {
 
 /// The full result of one `ask` run, ready for a renderer.
 ///
-/// The field order is the `--json` key order (section 7.10, and `saved`
+/// The field order is the `--json` key order, with `saved`
 /// last, as `ask()` assigns it after the result exists).
 #[derive(Debug, Clone, Serialize)]
 pub struct AskResult {
@@ -287,7 +285,7 @@ fn scopes_here_clause(labels: &[String]) -> String {
 
 /// Renders the `PrefixNotIndexed` message, with the scope list only when
 /// there is more than one scope to name. Matches `grep`'s wording
-/// (`ask-ranking.md` section 8.8).
+///.
 fn prefix_not_indexed_message(prefix: &str, scopes: &[String]) -> String {
     let clause = if scopes.len() > 1 {
         format!(" (scopes here: {})", scopes.join(" \u{b7} "))
@@ -340,7 +338,7 @@ fn path_under_prefix(path: &str, prefix: &str) -> bool {
     prefix.is_empty() || path == prefix || path.starts_with(&format!("{prefix}/"))
 }
 
-/// The word `ask` prints for a node's kind in a hit title (section 7.5).
+/// The word `ask` prints for a node's kind in a hit title.
 pub(crate) fn kind_word(kind: Kind) -> &'static str {
     match kind {
         Kind::File => "file",
@@ -379,7 +377,7 @@ fn span_of(node: &Node) -> Option<String> {
 }
 
 /// The snippet: the first line of `summary`, trimmed, else `signature`,
-/// else `""` (section 7.4).
+/// else `""`.
 fn snippet_of(node: &Node) -> String {
     if let Some(summary) = &node.summary {
         if let Some(first) = summary.lines().next() {
@@ -416,17 +414,17 @@ fn is_test_path_re() -> Option<&'static Regex> {
     .as_ref()
 }
 
-/// Whether the query itself asks about tests (section 3.5).
+/// Whether the query itself asks about tests.
 pub(crate) fn wants_tests(query: &str) -> bool {
     wants_tests_re().is_some_and(|re| re.is_match(query))
 }
 
-/// Whether `path` looks like a test file (section 3.5).
+/// Whether `path` looks like a test file.
 pub(crate) fn is_test_path(path: &str) -> bool {
     is_test_path_re().is_some_and(|re| re.is_match(path))
 }
 
-/// A candidate's test-path score multiplier (section 3.5).
+/// A candidate's test-path score multiplier.
 pub(crate) fn test_factor(query_wants_tests: bool, path: &str) -> f64 {
     if !query_wants_tests && is_test_path(path) {
         TEST_RANK_PENALTY
@@ -453,7 +451,7 @@ pub(crate) fn is_test_module_name(name: &str) -> bool {
 
 /// Runs one `ask` query over `graph`, reading each hit's source under
 /// `repo_root` when `opts.source` is set, using `index` when it is usable
-/// (`ask-ranking.md` section 1.9).
+///.
 pub fn ask(
     graph: &Graph,
     index: Option<&AskIndex>,
@@ -517,7 +515,7 @@ fn ask_inner(
 
     // Structural mode runs first, before any lexical scoring. A genuine
     // structural result returns immediately; a fallthrough note carries
-    // through to the lexical result below (section 6.4).
+    // through to the lexical result below.
     let structural_outcome = structural::structural(query, graph, opts.limit, prefix.as_deref());
     if let structural::StructuralOutcome::Result {
         subject,
@@ -563,7 +561,7 @@ fn ask_inner(
         .collect();
 
     // `loadCorpus` reads every top-level concept `.md` with no slug test
-    // (the `deep-tier.md` note section 2.8).
+    //.
     //
     // ponytail: the context dir name comes from the product table
     // (`context_dir_name`), so Sieve reads `sieve/`
@@ -582,8 +580,8 @@ fn ask_inner(
     let lex = lexical::score_all(&active_nodes, &all_docs, &corpus, &terms, query_wants_tests);
 
     // The multi-scope branch keys on the graph's declared scope count, not on
-    // how many scopes the active node set happens to touch (section 8.1:
-    // `scopesOfGraph(graph).length > 1`). It walks each scope's own subgraph
+    // how many scopes the active node set happens to touch
+    // (`scopesOfGraph(graph).length > 1`). It walks each scope's own subgraph
     // separately (`preparePageRankPartitions`), so it computes its own PageRank
     // per scope rather than reusing one graph-wide walk. Both branches merge
     // the concept hits.
@@ -723,7 +721,7 @@ fn ask_inner(
     };
     // A structural-intent query that fell through still gets a prominent
     // note on the lexical result, joined ahead of any lexical note
-    // (section 6.4).
+    //.
     let note = match (fallthrough_note, lexical_note) {
         (Some(fallthrough), Some(lexical)) => Some(format!("{fallthrough}\n{lexical}")),
         (Some(fallthrough), None) => Some(fallthrough),
@@ -765,7 +763,7 @@ fn ask_inner(
 
 /// Parses a `path:L<from>-L<to>` pointer into its parts. Returns `None` for
 /// a pointer with no span, such as a file node's bare path, or an
-/// unresolved structural target (section 7.8).
+/// unresolved structural target.
 fn parse_span_pointer(pointer: &str) -> Option<(&str, u32, u32)> {
     let (path, span) = pointer.rsplit_once(':')?;
     let rest = span.strip_prefix('L')?;
@@ -775,7 +773,7 @@ fn parse_span_pointer(pointer: &str) -> Option<(&str, u32, u32)> {
 
 /// Reads the source lines `[from, to]` (1-indexed, inclusive) of `path`
 /// under `repo_root`, clamped to the file length, and capped at
-/// [`MAX_SPAN_LINES`] with a truncation marker (section 7.8).
+/// [`MAX_SPAN_LINES`] with a truncation marker.
 fn slice_span(repo_root: &Path, path: &str, from: u32, to: u32) -> Option<String> {
     slice_span_capped(repo_root, path, from, to, MAX_SPAN_LINES, None)
 }
@@ -863,7 +861,7 @@ fn cut_to_units(line: &str, cap: usize) -> String {
 /// Attaches inlined source to every hit whose pointer is a real
 /// `path:span`. Crux-first: a node with a graph-stored crux and `full` off
 /// gets that short excerpt with an escalation marker; otherwise the whole
-/// span is read from disk (section 7.8).
+/// span is read from disk.
 fn inline_source<'h>(
     repo_root: &Path,
     graph: &Graph,
@@ -1043,9 +1041,9 @@ mod source_tests {
         }
     }
 
-    /// P3-14: a `stale` node still keeps its own `crux`, and `--source`
+    /// A `stale` node still keeps its own `crux`, and `--source`
     /// still prints it verbatim — the crux is never re-sliced from the
-    /// (now different) source (note section 2.9).
+    /// (now different) source.
     #[test]
     fn inline_source_prints_a_stale_nodes_crux_verbatim() {
         let node = node_with_crux(
@@ -1095,7 +1093,7 @@ mod source_tests {
     }
 
     /// `--full` skips the crux map entirely, even for a node that carries
-    /// one, and reads the span from disk instead (note section 2.9).
+    /// one, and reads the span from disk instead.
     #[test]
     fn inline_source_full_skips_the_crux_map() {
         let dir = tempdir("inline-full");
@@ -1295,7 +1293,7 @@ mod scope_prefix_tests {
         );
     }
 
-    /// P1-05 (DV6): the zero-hit note names every scope, in stored order,
+    /// The zero-hit note names every scope, in stored order,
     /// root as `(root)`; a one-scope graph gets no clause.
     #[test]
     fn test_p1_05_empty_note_lists_the_scopes_in_graph_order() {
@@ -1342,7 +1340,7 @@ mod scope_prefix_tests {
         g
     }
 
-    /// P3-08: the multi-scope branch merges the concept hits, and the top lock
+    /// The multi-scope branch merges the concept hits, and the top lock
     /// compares the concept with the best candidate's fused score. With graph
     /// rank on, the raw baseline of the best candidate is 1.5, but its fused
     /// score is 1.0. The concept ties at 1.0 and wins on title, so it comes
@@ -1377,7 +1375,7 @@ mod scope_prefix_tests {
         );
     }
 
-    /// P3-08: with `--in` on a two-scope graph only one scope has active
+    /// With `--in` on a two-scope graph only one scope has active
     /// nodes, and the hit keeps that scope label.
     #[test]
     fn test_p3_08_in_prefix_on_a_two_scope_graph_keeps_the_scope_label() {
@@ -1394,7 +1392,7 @@ mod scope_prefix_tests {
         assert_eq!(result.hits[0].scope.as_deref(), Some("packages/alpha"));
     }
 
-    /// P3-08: after the top lock, the footer puts the
+    /// After the top lock, the footer puts the
     /// top hit's scope first. The top is `renderAardvark` (title wins the
     /// tie), which lives in `packages/beta`, although `packages/alpha`
     /// sorts first by name.
@@ -1410,7 +1408,7 @@ mod scope_prefix_tests {
         assert_eq!(meta.federated, ["packages/beta", "packages/alpha"]);
     }
 
-    /// P1-02 (DV3): `-n 0` on a scoring query keeps the `lexical` mode
+    /// `-n 0` on a scoring query keeps the `lexical` mode
     /// with no hits; the mode reads the scored set, not the cut list.
     #[test]
     fn test_p1_02_limit_zero_keeps_the_lexical_mode() {

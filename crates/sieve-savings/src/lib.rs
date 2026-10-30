@@ -1,5 +1,5 @@
 //! The savings line: token estimates and the "saved" line every retrieval
-//! command puts last in its output (P3-34 to P3-39).
+//! command puts last in its output.
 
 use std::collections::HashSet;
 

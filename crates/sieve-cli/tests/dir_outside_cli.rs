@@ -1,4 +1,4 @@
-//! Parity test for P1-45: a context dir given through `--dir`, outside the
+//! Parity test: a context dir given through `--dir`, outside the
 //! repo, must never leak into the repo-root resolution. `main.rs`'s global
 //! `--dir` flag and each subcommand's own `[dir]` positional both derived
 //! their clap id from the field name `dir`, so the one `--dir` value filled
@@ -196,7 +196,7 @@ fn assert_mcp_session_matches_golden(stdout: &str) {
     );
 }
 
-/// P1-45: a `--dir` outside the repo must resolve every query's repo root
+/// A `--dir` outside the repo must resolve every query's repo root
 /// from `cwd` (or an explicit `[dir]`), never from the context dir.
 #[test]
 fn test_p1_45_context_dir_outside_the_repo() {
@@ -215,7 +215,7 @@ fn test_p1_45_context_dir_outside_the_repo() {
     );
 
     // A `--dir` outside the repo disables both the `.gitignore` and the
-    // `.ignore` edit (build note section 1): neither file exists.
+    // `.ignore` edit: neither file exists.
     assert!(
         !repo.path.join(".gitignore").exists(),
         "a build with --dir outside the repo must not write .gitignore"

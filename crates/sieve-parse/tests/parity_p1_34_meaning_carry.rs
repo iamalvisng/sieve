@@ -1,5 +1,4 @@
-//! Pins the Tier-1 meaning-tier carry (P1-34 `stale` half, prerequisite
-//! for P3-14): a rebuild must carry `summary`, `crux`, and
+//! Pins the Tier-1 meaning-tier carry (the `stale` half): a rebuild must carry `summary`, `crux`, and
 //! `summary_state` forward from the prior `wiring.json`, never drop them
 //! (`crates/sieve-parse/src/build.rs`, `carry_meaning_layer`).
 

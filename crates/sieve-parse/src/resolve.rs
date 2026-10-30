@@ -1,5 +1,5 @@
-//! Edge resolution: turns raw edges into real graph edges. Every rule
-//! cites the `edges-ts-py.md` note, section 7.
+//! Edge resolution: turns raw edges into real graph edges. Each rule
+//! follows the TypeScript and Python edge rules.
 
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -16,8 +16,7 @@ use crate::kt_index::KtIndex;
 use crate::py_tree::{Outcome as PyOutcome, PyIndex};
 use crate::rust_tree::{Outcome, RustIndex, RustPackage};
 
-/// Known source extensions `resolveImport` probes, in probe order (edge
-/// note, section 3).
+/// Known source extensions `resolveImport` probes, in probe order.
 const EXTS: [&str; 9] = [
     ".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs", ".py",
 ];
@@ -50,8 +49,7 @@ struct Indexes<'a> {
     owner_method: HashMap<String, Vec<NodeRef<'a>>>,
     class_parents: HashMap<String, Vec<String>>,
     /// A PHP class name to the trait names it pulls in with `use`, built
-    /// only from `implements` raw edges in `.php` files (edges note,
-    /// section 4, `resolveTraitMember`).
+    /// only from `implements` raw edges in `.php` files.
     class_traits: HashMap<String, Vec<String>>,
     /// A `.go` file's directory (posix) to the ids of every `.go` file
     /// node in it, for `resolveGoImport`.
@@ -98,16 +96,14 @@ struct Indexes<'a> {
     accessors: HashSet<&'a str>,
 }
 
-/// Resolves every raw edge into a real graph edge, per the edge note,
-/// section 7. Drops a raw edge that resolution cannot place. Equivalent
+/// Resolves every raw edge into a real graph edge. Drops a raw edge that resolution cannot place. Equivalent
 /// to [`resolve_edges_with_go_modules`] with no discovered Go modules, so
 /// a `.go` file's import stays an external package string.
 pub fn resolve_edges(nodes: &[Node], raw: &[RawEdge]) -> Vec<Edge> {
     resolve_edges_with_go_modules(nodes, raw, &[])
 }
 
-/// Resolves every raw edge into a real graph edge, per the edge note,
-/// section 7, with `go_modules` enabling Go module imports for `.go`
+/// Resolves every raw edge into a real graph edge, with `go_modules` enabling Go module imports for `.go`
 /// files. A TS or JS call to a named import resolves through its
 /// specifier, and a call bound to a Node built-in module loses its
 /// name-matched edge. Drops a raw edge that resolution cannot place.
@@ -154,7 +150,7 @@ pub fn resolve_edges_with_context(
     out
 }
 
-/// Builds the three name indexes and the `classParents` map, per section 7.
+/// Builds the three name indexes and the `classParents` map.
 fn build_indexes<'a>(nodes: &'a [Node], raw: &'a [RawEdge]) -> Indexes<'a> {
     let node_ids: HashSet<&str> = nodes.iter().map(|n| n.id.as_str()).collect();
     let callable_ids: HashSet<&str> = nodes
@@ -985,7 +981,7 @@ fn is_node_builtin(specifier: &str) -> bool {
 /// The kind set a bare call resolves against, by the calling file's
 /// grammar: a `.java` file widens to every type-shaped kind, because a
 /// bare Java call is a same-name constructor, never a free function
-/// (edges note, section 4). Every other known grammar keeps `function`.
+///. Every other known grammar keeps `function`.
 /// An explicit `raw.kinds` (R only) overrides this in `resolve_calls`.
 fn bare_kinds(file: &str) -> Vec<Kind> {
     if is_java_file(file) {
@@ -1023,7 +1019,7 @@ fn resolve_heritage(
 /// Resolves a `references` raw edge. With a specifier (an import-bound
 /// name), the specifier resolves to a file id, then the candidates of
 /// that name in that file with no kind filter give the target. With no
-/// specifier (generic origin, `languages-lsp.md` line 151), `raw.kinds`
+/// specifier (generic origin), `raw.kinds`
 /// names the candidate kind set and [`resolve_name`] finds the target,
 /// same-file first, else repo-wide unique. Either path drops a self-loop.
 fn resolve_reference(raw: &RawEdge, idx: &Indexes, go_modules: &[GoModule]) -> Option<Edge> {
@@ -1187,7 +1183,7 @@ fn narrow_by_arity<'a>(
 /// `resolveTraitMember`: a PHP class's own traits (`classTraits`, built
 /// from `implements` raw edges) each get one direct `owner_method`
 /// lookup, no further climb, before `resolve_typed_member` climbs to a
-/// parent class (edges note, section 4).
+/// parent class.
 fn resolve_trait_member(
     file: &str,
     class_name: &str,
@@ -1232,7 +1228,7 @@ fn reachable(from_path: &str, to_path: &str) -> bool {
 /// The resolution family of a file path's grammar: the grouped family
 /// name for `[typescript, tsx]`, `[java, kotlin, scala, clojure]`, and
 /// `[c, cpp]`; the grammar's own name otherwise; `None` only when no
-/// grammar recognizes the path at all (edges note, section 4, "Families").
+/// grammar recognizes the path at all.
 /// A breadth-tier path (`generic_lang_of`) is its own singleton family
 /// too, so a Ruby name and a Lua name never cross-reach, even though
 /// neither is a depth-tier grammar.

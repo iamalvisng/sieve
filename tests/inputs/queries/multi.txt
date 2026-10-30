@@ -13,6 +13,6 @@ map	map
 map-max1	map --max-dirs 1
 map-json	map --json
 check	check
-# P1-11, P1-43: a bad --in prefix on a multi-scope repo names the scopes.
+# A bad --in prefix on a multi-scope repo names the scopes.
 ask-in-bad	ask "render" --in nowhere
 grep-in-bad	grep "add" --fixed --in nowhere

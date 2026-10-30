@@ -1,4 +1,4 @@
-# Commander error-form queries for tests/fixtures/basic (P1-01, P1-51).
+# Commander error-form queries for tests/fixtures/basic.
 # Format: <id><TAB><arguments after "sieve">. Run in the built temp copy.
 # Source: commander 15.0.0 lib/command.js (unknownOption, missingArgument,
 # optionMissingArgument, _excessArguments) and lib/suggestSimilar.js.

@@ -1,5 +1,5 @@
 //! Parity tests for `sieve symbols`, `sieve callers`, `sieve map` and
-//! `sieve check` (P1-17 to P1-36, P3-20 to P3-33): each command's report,
+//! `sieve check`: each command's report,
 //! against the goldens under `tests/fixtures/<name>.expected/queries/`.
 
 mod support;
@@ -241,14 +241,14 @@ fn test_p1_17_to_36_p3_20_to_33_query_cli_matches_golden() {
     }
 }
 
-/// P1-21: in `zed`'s span, `doubled(` comes before `double(`, so a
+/// In `zed`'s span, `doubled(` comes before `double(`, so a
 /// substring match quotes the wrong line. Sieve quotes the whole-word line.
 #[test]
 fn test_p1_21_callers_quotes_the_whole_word_line() {
     assert_fixture_ids_match_golden("callx", &["callers-p1-21-double"]);
 }
 
-/// P3-25: sieve lists the hits in edge order, sorted by (source, relation,
+/// Sieve lists the hits in edge order, sorted by (source, relation,
 /// target). From `zed`, the `calls` hits come before the `references` hit
 /// to `Widget`, so the hit order is not id order.
 #[test]
@@ -256,27 +256,27 @@ fn test_p3_25_callers_keeps_edge_order_not_id_order() {
     assert_fixture_ids_match_golden("callx", &["callers-p3-25-zed-out"]);
 }
 
-/// P1-22: a zero-hit `--json` match carries the `note` string.
+/// A zero-hit `--json` match carries the `note` string.
 #[test]
 fn test_p1_22_callers_json_zero_hit_carries_note() {
     assert_fixture_ids_match_golden("symbols", &["callers-p1-22-method-json"]);
 }
 
-/// P3-23: a file seed at depth 2 walks from the file node and from every
+/// A file seed at depth 2 walks from the file node and from every
 /// symbol in that file.
 #[test]
 fn test_p3_23_callers_file_seed_walks_every_symbol_in_the_file() {
     assert_fixture_ids_match_golden("basic", &["callers-p3-23-file-depth2"]);
 }
 
-/// P1-17: an exact repo-relative path wins, even when a second file
+/// An exact repo-relative path wins, even when a second file
 /// shares the basename; only the bare basename is ambiguous.
 #[test]
 fn test_p1_17_skeleton_exact_path_wins_over_a_basename_twin() {
     assert_fixture_ids_match_golden("multi", &["skeleton-exact", "skeleton-amb"]);
 }
 
-/// P1-19: `-d`, `--depth full`, `--depth max` and `--no-refresh` each run
+/// `-d`, `--depth full`, `--depth max` and `--no-refresh` each run
 /// the documented way. `full` and `max` query `double`, whose chain
 /// `double <- quadruple <- run <- main` has depth 3. So a parse that
 /// maps `full` or `max` to depth 2 drops `main` and fails.
@@ -293,7 +293,7 @@ fn test_p1_19_callers_depth_grammar_and_no_refresh_match_golden() {
     );
 }
 
-/// P1-21: `callers app.ts --direction out` lists two import hits. Sieve
+/// `callers app.ts --direction out` lists two import hits. Sieve
 /// marks `zod` as `(unresolved import)` and gives `util.ts` a file span.
 /// Sieve quotes no call-site line for either hit. The golden pins both.
 #[test]
@@ -301,13 +301,13 @@ fn test_p1_21_callers_quotes_no_line_for_an_unresolved_import() {
     assert_fixture_ids_match_golden("basic", &["callers-file-out"]);
 }
 
-/// P1-23: `--depth 0` exits 1 with the `✗` line.
+/// `--depth 0` exits 1 with the `✗` line.
 #[test]
 fn test_p1_23_callers_exits_1_on_a_bad_depth() {
     assert_fixture_ids_match_golden("basic", &["callers-depth0"]);
 }
 
-/// P1-23: `callers` with no graph exits 1 with the `✗` line, the
+/// `callers` with no graph exits 1 with the `✗` line, the
 /// scratch path masked as `<TMP>`.
 #[test]
 fn test_p1_23_callers_exits_1_without_graph() {
@@ -320,21 +320,21 @@ fn test_p1_23_callers_exits_1_without_graph() {
     );
 }
 
-/// P1-28: with 19 one-file directories and 13 called symbols, the
+/// With 19 one-file directories and 13 called symbols, the
 /// defaults show 16 directories, `+3 more directories`, and 12 hotspots.
 #[test]
 fn test_p1_28_map_defaults_drop_the_17th_directory_and_the_13th_hotspot() {
     assert_fixture_ids_match_golden("wide", &["map"]);
 }
 
-/// P1-31: two dropped directories read `directories`, one reads
+/// Two dropped directories read `directories`, one reads
 /// `directory`.
 #[test]
 fn test_p1_31_map_dropped_note_uses_the_plural() {
     assert_fixture_ids_match_golden("basic", &["map-max1", "map-max2"]);
 }
 
-/// P1-36: `check` and `check --json` with no graph exit 1.
+/// `check` and `check --json` with no graph exit 1.
 #[test]
 fn test_p1_36_check_exits_1_without_graph() {
     let temp = unbuilt_fixture("basic");
@@ -348,7 +348,7 @@ fn test_p1_36_check_exits_1_without_graph() {
     );
 }
 
-/// P1-36: `check` after one source line changes, with no rebuild,
+/// `check` after one source line changes, with no rebuild,
 /// reports STALE and exits 1.
 #[test]
 fn test_p1_36_check_exits_1_on_drift() {

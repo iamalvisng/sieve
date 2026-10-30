@@ -1,6 +1,5 @@
 //! Tests for the `build`, `init` and `uninstall` flags against the goldens
-//! under `tests/fixtures/basic.expected/flags/` (P1-70, P1-71, P1-72,
-//! P4-47, P4-48). `SIEVE_BLESS=1` writes the goldens.
+//! under `tests/fixtures/basic.expected/flags/`. `SIEVE_BLESS=1` writes the goldens.
 //!
 //! Every `init` and `uninstall` run sets `HOME` to a temp dir, and the
 //! test asserts that dir is not the real home. Sieve writes under `HOME`
@@ -210,7 +209,7 @@ fn file_or_absent(path: &Path) -> String {
     fs::read_to_string(path).unwrap_or_else(|_| "<absent>\n".to_string())
 }
 
-/// P1-70: each bad flag value exits 1 with the line, before any write.
+/// Each bad flag value exits 1 with the line, before any write.
 #[test]
 fn test_p1_70_build_flag_errors_match_golden() {
     let home = scratch_home();
@@ -228,7 +227,7 @@ fn test_p1_70_build_flag_errors_match_golden() {
     }
 }
 
-/// P1-70: `--include-dir dist` admits the skipped dir, persists the name
+/// `--include-dir dist` admits the skipped dir, persists the name
 /// to `.sieve/config.json` with its `.gitignore` block, and a later plain
 /// build reads the persisted override.
 #[test]
@@ -272,7 +271,7 @@ fn test_p1_70_build_include_dir_admits_and_persists() {
     assert_case("build-include-dir-persisted", &out, false);
 }
 
-/// P1-70: `--only-dir ./src/` normalizes to `src`, indexes only that
+/// `--only-dir ./src/` normalizes to `src`, indexes only that
 /// tree, records the whitelist in the fingerprint, and `check` honours it.
 #[test]
 fn test_p1_70_build_only_dir_filters_and_check_honours_it() {
@@ -327,7 +326,7 @@ fn test_p1_70_build_only_dir_filters_and_check_honours_it() {
     assert_case("build-only-dir-src-grep", &out, true);
 }
 
-/// P1-70: a warm second build replays every file; `--no-reuse` parses
+/// A warm second build replays every file; `--no-reuse` parses
 /// them all again.
 #[test]
 fn test_p1_70_build_no_reuse_parses_every_file() {
@@ -341,7 +340,7 @@ fn test_p1_70_build_no_reuse_parses_every_file() {
     assert_case("build-no-reuse", &out, false);
 }
 
-/// P1-70: a repeated `-e` adds to the list on `build` and `check`, so the
+/// A repeated `-e` adds to the list on `build` and `check`, so the
 /// unknown `.zzz` still warns. The `supported:` line lists each binary's
 /// own parser set, so the compare drops it.
 #[test]
@@ -374,7 +373,7 @@ fn test_p1_70_repeated_extensions_accumulate() {
     );
 }
 
-/// P1-71: `--no-gitignore`, `--no-ignore` and their env vars each skip
+/// `--no-gitignore`, `--no-ignore` and their env vars each skip
 /// one file and change the footer line.
 #[test]
 fn test_p1_71_no_gitignore_no_ignore_flags_and_env() {
@@ -460,7 +459,7 @@ fn assert_init_case(case: &str, copy: &Path, args: &[&str], compare_stderr: bool
     );
 }
 
-/// P4-47: each init flag gates its write set. `--dry-run`
+/// Each init flag gates its write set. `--dry-run`
 /// writes nothing; its plan text is pinned in commander_errors_parity, so only the write set,
 /// stdout and exit code count there.
 #[test]
@@ -507,7 +506,7 @@ fn test_p4_47_init_flags_gate_the_write_set() {
     assert_init_case("init-yes", &copy.path, &["init", "-y"], true);
 }
 
-/// P4-48: `--no-global` writes nothing outside the repo and prints
+/// `--no-global` writes nothing outside the repo and prints
 /// The skip line.
 #[test]
 fn test_p4_48_init_no_global_skips_home() {
@@ -524,7 +523,7 @@ fn test_p4_48_init_no_global_skips_home() {
         .all(|l| !l.starts_with("home/")));
 }
 
-/// P1-72: `uninstall` without `-y` removes nothing; `-y` removes the
+/// `uninstall` without `-y` removes nothing; `-y` removes the
 /// wiring and the cache; `--keep-cache` leaves `sieve/` and `.gitignore`;
 /// `--no-global` removes nothing outside the repo.
 #[test]
@@ -564,7 +563,7 @@ fn test_p1_72_uninstall_flags_match_golden() {
             case == "uninstall-dry",
             "{case}: dry-run line"
         );
-        // `--no-global` drops Sieve's own `--global` hint (P1-72).
+        // `--no-global` drops Sieve's own `--global` hint.
         if case == "uninstall-no-global" {
             assert!(
                 !out.stderr.contains("pass --global"),

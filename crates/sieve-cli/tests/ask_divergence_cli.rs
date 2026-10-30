@@ -1,5 +1,5 @@
 //! Parity tests for the `sieve query` divergences from a recorded run
-//! (DV1 to DV8, P1-02 to P1-07), against the goldens under
+//!, against the goldens under
 //! `tests/fixtures/<name>.expected/ask-dv/`. The query lists live in
 //! `tests/inputs/ask-dv/<name>.txt`.
 //!
@@ -168,7 +168,7 @@ fn mismatches_in(name: &str, dir: &Path, runs: &[(&str, &[&str])]) -> Vec<String
     failed
 }
 
-/// DV1 (P1-06): a structural `--json` result carries `subject` and no
+/// A structural `--json` result carries `subject` and no
 /// `coverage`; an empty result carries neither.
 #[test]
 fn test_p1_06_dv1_structural_json_has_subject_and_no_coverage() {
@@ -176,7 +176,7 @@ fn test_p1_06_dv1_structural_json_has_subject_and_no_coverage() {
     assert!(failed.is_empty(), "DV1 mismatched sieve: {failed:?}");
 }
 
-/// DV2 (P1-04): the structural intent regex uses ASCII word boundaries, so
+/// The structural intent regex uses ASCII word boundaries, so
 /// `éuses` still matches `\buses\b` and `résumé` never matches `\w+`.
 #[test]
 fn test_p1_04_dv2_structural_regex_is_ascii() {
@@ -184,7 +184,7 @@ fn test_p1_04_dv2_structural_regex_is_ascii() {
     assert!(failed.is_empty(), "DV2 mismatched sieve: {failed:?}");
 }
 
-/// DV3 (P1-02): `-n 0` keeps the `lexical` mode and prints `no matches.`;
+/// `-n 0` keeps the `lexical` mode and prints `no matches.`;
 /// the mode reads the scored set, not the cut hit list.
 #[test]
 fn test_p1_02_dv3_limit_zero_keeps_the_lexical_mode() {
@@ -192,7 +192,7 @@ fn test_p1_02_dv3_limit_zero_keeps_the_lexical_mode() {
     assert!(failed.is_empty(), "DV3 mismatched sieve: {failed:?}");
 }
 
-/// DV5 (P1-02): `--source --json` appends `saved` with the file count and
+/// `--source --json` appends `saved` with the file count and
 /// the baseline chars, in lexical and structural mode, and omits it when
 /// no hit names a file.
 #[test]
@@ -202,7 +202,7 @@ fn test_p1_02_dv5_source_json_carries_saved() {
     assert!(failed.is_empty(), "DV5 mismatched sieve: {failed:?}");
 }
 
-/// DV6 (P1-05): a zero-hit note on a multi-scope graph ends with the
+/// A zero-hit note on a multi-scope graph ends with the
 /// `scopes here:` clause, in graph scope order, root last as `(root)`.
 #[test]
 fn test_p1_05_dv6_multi_scope_zero_hit_note_lists_scopes() {
@@ -210,7 +210,7 @@ fn test_p1_05_dv6_multi_scope_zero_hit_note_lists_scopes() {
     assert!(failed.is_empty(), "DV6 mismatched sieve: {failed:?}");
 }
 
-/// DV7 (P1-06): a concept top hit carries `coverage` and `coverageStrong`
+/// A concept top hit carries `coverage` and `coverageStrong`
 /// from the concept's name and body bags.
 #[test]
 fn test_p1_06_dv7_concept_top_json_carries_coverage() {
@@ -218,7 +218,7 @@ fn test_p1_06_dv7_concept_top_json_carries_coverage() {
     assert!(failed.is_empty(), "DV7 mismatched sieve: {failed:?}");
 }
 
-/// DV3 with `--in` (P1-02): the one-scope branch of the multi-scope path
+/// With `--in`: the one-scope branch of the multi-scope path
 /// keeps the `lexical` mode with `-n 0`.
 #[test]
 fn test_p1_02_dv3_limit_zero_with_in_keeps_the_lexical_mode() {
@@ -226,7 +226,7 @@ fn test_p1_02_dv3_limit_zero_with_in_keeps_the_lexical_mode() {
     assert!(failed.is_empty(), "DV3 --in mismatched sieve: {failed:?}");
 }
 
-/// P1-02: the default limit is 8. `render` has 12 hits at `-n 20`, and
+/// The default limit is 8. `render` has 12 hits at `-n 20`, and
 /// the run with no `-n` prints 8.
 #[test]
 fn test_p1_02_default_limit_is_eight() {
@@ -248,7 +248,7 @@ fn test_p1_02_default_limit_is_eight() {
     );
 }
 
-/// P1-02: `--no-refresh` answers from the stale graph. The copy gains
+/// `--no-refresh` answers from the stale graph. The copy gains
 /// `src/extra.ts` after the build; the run with the flag finds nothing,
 /// and the run without the flag refreshes and finds `septuple`.
 #[test]
@@ -273,7 +273,7 @@ fn test_p1_02_no_refresh_answers_from_the_stale_graph() {
     );
 }
 
-/// DV8 (P1-07): a concept source with no `hash` still parses. The title
+/// A concept source with no `hash` still parses. The title
 /// and the pointer come from the frontmatter, not from the file stem.
 #[test]
 fn test_p1_07_dv8_concept_source_without_hash_still_parses() {
@@ -298,7 +298,7 @@ fn test_p1_07_dv8_concept_source_without_hash_still_parses() {
     assert!(failed.is_empty(), "DV8 mismatched sieve: {failed:?}");
 }
 
-/// DV9 (P1-07): a `links:` entry with no `relation` still parses. Sieve
+/// A `links:` entry with no `relation` still parses. Sieve
 /// keeps the concept, its title, and its `related` roster.
 #[test]
 fn test_p1_07_dv9_concept_link_without_relation_still_parses() {
@@ -323,7 +323,7 @@ fn test_p1_07_dv9_concept_link_without_relation_still_parses() {
     assert!(failed.is_empty(), "DV9 mismatched sieve: {failed:?}");
 }
 
-/// DV10 (P1-07): with `--source`, a span that ends past the end of the
+/// With `--source`, a span that ends past the end of the
 /// file gives no code. Sieve sets the code only when it is not empty, so
 /// there is no empty code block (text) and no `"code": ""` (JSON). The
 /// source file is cut short after the build and read with `--no-refresh`.

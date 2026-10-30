@@ -1,5 +1,5 @@
 //! Who to tag on a pull request: the people git names on the areas a
-//! diff changes or reaches (P1-25, P3-25).
+//! diff changes or reaches.
 //!
 //! One `git log` per area over that area's own files, weighted by
 //! recency, ranked, capped. A handle prints only when the commit email
@@ -480,7 +480,7 @@ mod tests {
 
     const DAY: i64 = 86_400_000;
 
-    /// P1-25: git's `%aI` parses to the same ms as `Date.parse`.
+    /// Git's `%aI` parses to the same ms as `Date.parse`.
     #[test]
     fn test_p1_25_parse_iso_ms_matches_date_parse() {
         assert_eq!(parse_iso_ms("1970-01-01T00:00:00+00:00"), Some(0));
@@ -495,7 +495,7 @@ mod tests {
         assert_eq!(parse_iso_ms("not a date"), None);
     }
 
-    /// P1-25: `sinceLabel` rounds to days, then months, then years.
+    /// `sinceLabel` rounds to days, then months, then years.
     #[test]
     fn test_p1_25_since_label_steps() {
         let now = 10_000 * DAY;
@@ -507,7 +507,7 @@ mod tests {
         assert_eq!(since_label(now + DAY, now), "today");
     }
 
-    /// P1-25: only a noreply address yields a handle, and bots are dropped.
+    /// Only a noreply address yields a handle, and bots are dropped.
     #[test]
     fn test_p1_25_handle_and_bot_rules() {
         assert_eq!(
@@ -520,7 +520,7 @@ mod tests {
         assert!(!is_bot("Other Person", "other@example.com"));
     }
 
-    /// P1-25: a co-author trailer yields both its halves.
+    /// A co-author trailer yields both its halves.
     #[test]
     fn test_p1_25_trailer_re_splits_name_and_email() {
         let m = trailer_re()

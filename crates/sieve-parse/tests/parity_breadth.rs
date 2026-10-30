@@ -1,5 +1,5 @@
 //! Parity tests for the container tier (`.vue`) and the breadth tier
-//! (P2-05, P2-09, P2-10), pinned against the golden `wiring.json` of
+//! , pinned against the golden `wiring.json` of
 //! `tests/fixtures/langs`.
 
 use std::fs;
@@ -119,7 +119,7 @@ fn test_p2_05_09_10_vue_and_breadth_match_golden() {
 
 /// A breadth file node's `chars` is its UTF-8 byte length; a depth or
 /// container file node's `chars` is its UTF-16 length
-/// (`languages-lsp.md` section 7).
+///.
 #[test]
 fn test_p2_05_09_10_file_node_chars_match_the_tier_encoding() {
     let built = built_graph();

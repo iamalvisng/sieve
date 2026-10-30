@@ -1,4 +1,4 @@
-//! Integration test for `sieve build` (P2-28): the golden wiring.json
+//! Integration test for `sieve build`: the golden wiring.json
 //! write, byte for byte, and the missing-dir error.
 
 mod support;
@@ -123,9 +123,9 @@ fn test_p3_02_refresh_rewrites_the_ask_sidecar() {
     assert_eq!(index["docCount"], 21);
 }
 
-/// P2-37: an explicit `sieve build` backfills the `covers:` block into a
+/// An explicit `sieve build` backfills the `covers:` block into a
 /// hand-made concept file. A later plain query never rewrites that block
-/// (deep-tier.md section 3: `writeCovers` runs only on an explicit build).
+///.
 #[test]
 fn test_p2_37_build_writes_covers_and_a_query_never_rewrites_them() {
     let fixture = support::manifest_dir().join("../../tests/fixtures/basic");
@@ -340,7 +340,7 @@ fn bless_fixture(golden: &Path, dir: &Path, stdout: &str, stderr: &str, tmp_body
 }
 
 /// Runs `sieve build` over one fixture and checks every golden file byte
-/// for byte, once, then a second time for idempotence (P2-26 to P2-32).
+/// for byte, once, then a second time for idempotence.
 fn assert_fixture_matches_golden(name: &str) {
     let fixture = support::manifest_dir().join(format!("../../tests/fixtures/{name}"));
     let golden = support::manifest_dir().join(format!("../../tests/fixtures/{name}.expected"));
@@ -706,8 +706,8 @@ fn test_p2_32_ignore_edits_are_idempotent_and_gated() {
 /// Sieve prints a `--dir` value as typed on the `index in` line;
 /// without `--dir` it prints the path of `sieve/` relative to the cwd.
 /// The expected lines are recorded output for the same commands. The
-/// stdout golden of the build tree test sits under P2-32 (DV11 names the
-/// same `--dir tools/ctx` case).
+/// stdout golden of the build tree test sits under the test below. Another golden
+/// names the same `--dir tools/ctx` case.
 #[test]
 fn test_p2_32_build_prints_the_dir_flag_as_typed_like_golden() {
     let fixture = support::manifest_dir().join("../../tests/fixtures/basic");

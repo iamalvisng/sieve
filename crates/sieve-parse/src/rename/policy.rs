@@ -1,4 +1,4 @@
-//! The repo-level facts for design rule S5: when a non-relative import
+//! The repo-level facts for the import rule: when a non-relative import
 //! specifier is proven to be a different module.
 
 use std::collections::HashSet;
@@ -10,10 +10,10 @@ use super::Reason;
 /// How deep an `extends` chain may go before the scan gives up.
 const MAX_EXTENDS_DEPTH: usize = 16;
 
-/// Prefixes that mark a bundler alias or a package `imports` entry (S5 c).
+/// Prefixes that mark a bundler alias or a package `imports` entry (import rule, item c).
 const ALIAS_PREFIXES: [&str; 5] = ["#", "@/", "~", "$", "virtual:"];
 
-/// The repo facts that decide a non-relative specifier (S5 a to e).
+/// The repo facts that decide a non-relative specifier (import rule, items a to e).
 #[derive(Debug, Default)]
 pub(super) struct Policy {
     /// True when a tsconfig or jsconfig sets `paths` or `baseUrl`, or the
@@ -79,7 +79,7 @@ impl Policy {
         policy
     }
 
-    /// True when a config keeps link paths in resolution (S13b).
+    /// True when a config keeps link paths in resolution (symlink rule).
     pub(super) fn preserve_symlinks(&self) -> bool {
         self.preserve_symlinks
     }

@@ -1,5 +1,4 @@
-//! Parity tests for Go, Java, and PHP extraction and resolution (P2-14 to
-//! P2-16), pinned against the recorded golden `wiring.json`
+//! Parity tests for Go, Java, and PHP extraction and resolution, pinned against the recorded golden `wiring.json`
 //! for `tests/fixtures/langs`.
 //!
 //! Every other language file in the fixture produces zero nodes today,
@@ -85,7 +84,7 @@ fn test_p2_14_to_16_go_java_php_match_golden() {
     }
 }
 
-/// Swift and R against the same golden (edges note, sections 1.4 and 1.6).
+/// Swift and R against the same golden.
 #[test]
 fn test_p2_14_to_16_swift_r_match_golden() {
     let built = built_graph();
@@ -96,7 +95,7 @@ fn test_p2_14_to_16_swift_r_match_golden() {
     }
 }
 
-/// Kotlin against the same golden (edges note, section 1.3).
+/// Kotlin against the same golden.
 #[test]
 fn test_p2_14_kotlin_matches_golden() {
     let built = built_graph();
@@ -105,7 +104,7 @@ fn test_p2_14_kotlin_matches_golden() {
     run_prefix(&built, &golden, "kotlin/");
 }
 
-/// P2-16: every language `resolve_edges` dispatches to its own resolver
+/// Every language `resolve_edges` dispatches to its own resolver
 /// (Go, Java, C, Rust, PHP) resolves an in-repo import edge to the right
 /// file node, byte for byte with the golden. `run_prefix` above already
 /// pins every node and edge under each language's directory; this test
@@ -135,7 +134,7 @@ fn test_p2_16_imports_resolve_per_language_like_golden() {
     }
 }
 
-/// P2-21: cross-file resolution is gated by language family. A same-family
+/// Cross-file resolution is gated by language family. A same-family
 /// call resolves (Java calling a Kotlin class, C calling a C++ function);
 /// a cross-family call with the same kind and name available drops (Java
 /// calling a same-named C struct, Python calling a same-named TypeScript
@@ -235,7 +234,7 @@ fn run_prefix(built: &Graph, golden: &Graph, prefix: &str) {
     }
 }
 
-/// P2-14, P2-15 (DV18, DV19): PHP closures are function nodes that own
+/// PHP closures are function nodes that own
 /// their calls, and a class-name or `static::`/`parent::` receiver
 /// resolves a call edge. Ids and edges come from the golden.
 #[test]
@@ -278,7 +277,7 @@ fn test_p2_14_php_closures_and_static_receivers_match_golden() {
     assert!(!stray, "`$obj->m()` must not resolve to a method");
 }
 
-/// P2-14 (DV17): a Kotlin enum signature ends at `enum_class_body`, for a
+/// A Kotlin enum signature ends at `enum_class_body`, for a
 /// one-line enum, an enum with entries, and an enum whose entries hold a
 /// body. Signatures come from the golden.
 #[test]
@@ -298,7 +297,7 @@ fn test_p2_14_kotlin_enum_signatures_end_at_the_enum_body() {
     }
 }
 
-/// P2-14, P2-15: a call through `this`, and a call inside a trailing
+/// A call through `this`, and a call inside a trailing
 /// lambda, resolve as the golden does. The lambda call belongs to the
 /// enclosing function. `each` has two calls edges: `helper` and, since the receiver proof,
 /// the proved `Box.make()`. The golden gives no edge for `forEach`, `run` or
@@ -325,7 +324,7 @@ fn test_p2_15_kotlin_this_and_trailing_lambda_calls_match_golden() {
     );
 }
 
-/// P2-05 (DV16): a Kotlin file gives the nodes and `contains` edges that
+/// A Kotlin file gives the nodes and `contains` edges that
 /// the golden gives for the same file: 9 nodes, 8 edges. The fwcd grammar
 /// finds the class, object, interface and top-level function.
 #[test]

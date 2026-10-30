@@ -1,11 +1,9 @@
 //! `sieve uninstall [dir]`: removes every file `sieve init` wrote, never
-//! touching a foreign key it merged alongside its own (the `hosts-hooks.md`
-//! note section 1.12). The report: lines grouped by host, "would remove" in the
-//! dry run (P1-72).
+//! touching a foreign key it merged alongside its own. The report: lines grouped by host, "would remove" in the
+//! dry run.
 //!
 //! `sieve uninstall -y` leaves `.cursor/hooks.json` behind. The golden
-//! fixture pins this: Sieve never writes a `.cjs` shim file (the ledger's
-//! "no `.cjs` shim" rule), and never removes the hooks file either.
+//! fixture pins this: Sieve never writes a `.cjs` shim file (a fixed product rule), and never removes the hooks file either.
 
 use std::path::{Path, PathBuf};
 
@@ -29,14 +27,14 @@ pub struct UninstallArgs {
     pub yes: bool,
 
     /// Removes files under `HOME` too. Without this flag, `uninstall`
-    /// touches only the repo (ledger "sieve init writes under HOME only
-    /// with --global", 2026-09-16).
+    /// touches only the repo (a fixed product rule: only `--global`
+    /// writes under `HOME`).
     #[arg(long = "global", conflicts_with = "no_global")]
     pub global: bool,
 
     /// Leaves out-of-repo files alone. Sieve already leaves them without
     /// `--global`; this flag only drops the `--global` hint line.
-    // P1-72: the doc comments here reach the derived `--help`
+    // The doc comments here reach the derived `--help`
     // (`help_cli.rs` pins the text).
     #[arg(long = "no-global")]
     pub no_global: bool,
@@ -259,7 +257,7 @@ fn targets(root: &Path, home: &Path, global: bool, cache: bool) -> Vec<Target> {
     }
 
     // Codex and opencode belong to the `agents` host; each needs the
-    // host's own config dir (P4-51).
+    // host's own config dir.
     if global {
         if let Some(path) = hosts::codex_mcp_path(home) {
             let run = with(&path, hosts::strip_mcp_toml);

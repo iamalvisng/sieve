@@ -1,6 +1,6 @@
 //! `sieve hook <event>`: the five Claude Code hook events that the hook shim
 //! answers — `session-start`, `prompt`, `post-edit`, `tool-savings`, `stop`
-//! (the `hosts-hooks.md` note section 3) — plus `pre-read`, Sieve's own repeat-read rule
+//! — plus `pre-read`, Sieve's own repeat-read rule
 //! event that denies a second read of a file whose content has not changed
 //! since the last read.
 
@@ -33,8 +33,7 @@ pub struct HookArgs {
     pub event: Option<String>,
 }
 
-/// Prompts shorter than this never trigger retrieval (`hosts-hooks.md`
-/// section 3, `MIN_PROMPT_CHARS`).
+/// Prompts shorter than this never trigger retrieval.
 const MIN_PROMPT_CHARS: usize = 12;
 /// A pack earns its place only above this name-field match strength, or
 /// the broader [`HIGH_FLOOR`] ('s `STRONG_FLOOR`).
@@ -70,8 +69,8 @@ pub fn run(args: &HookArgs, _dir_override: Option<&Path>) -> Result<(), String> 
         "cursor-post-tool" => handle_cursor_post_tool(&input, &project_dir),
         "cursor-mcp" => handle_cursor_mcp(&input, &project_dir),
         // Sieve force-closes the conversation into a `session_summary`
-        // telemetry event here. Sieve sends no telemetry (P4-35 to P4-38 are
-        // deviations), so the event has nothing to do.
+        // telemetry event here. Sieve sends no telemetry (a known
+        // deviation), so the event has nothing to do.
         "cursor-session-end" => {}
         "pre-read" => {
             let text = if is_bash_call(&input) {
@@ -225,7 +224,7 @@ pub(crate) fn open_lookup(context_dir: &Path) -> Option<sieve_core::lookup::Look
     sieve_core::lookup::Lookup::open(&sieve_parse::lookup_path(context_dir), stamp)
 }
 
-/// Helpers the S3 reader tests share.
+/// Helpers the lookup reader tests share.
 #[cfg(test)]
 pub(crate) mod s3_support {
     use super::*;
@@ -556,7 +555,7 @@ pub struct LookupDay {
     pub passed: u64,
 }
 
-/// What happened to one code lookup (design `lookup-routing.md`, section 1).
+/// What happened to one code lookup.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Lookup {
     /// The agent called Sieve itself.
@@ -927,8 +926,7 @@ fn index_over_cap(project_dir: &Path, context_dir: &Path) -> bool {
 
 fn handle_session_start(project_dir: &Path) {
     let context_dir = resolve_context_dir(project_dir);
-    // Sieve ships no telemetry and no update nudge (LEDGER.md, 2026-09-13,
-    // "Sieve ships no telemetry in Phase 1").
+    // Sieve ships no telemetry and no update nudge (a fixed product rule for phase 1).
     // No INDEX.md (never built here): nothing to say.
     if let Ok(index_md) = std::fs::read_to_string(context_dir.join("INDEX.md")) {
         let freshness = index_freshness(project_dir, &context_dir);
@@ -1028,7 +1026,7 @@ fn run_ask_for_prompt(
         force_hash: false,
     };
     // At a workspace parent `sieve query` federates, and
-    // its prelude refreshes each child (P4-46). A federated error, such as
+    // its prelude refreshes each child. A federated error, such as
     // an unknown `--in` child, is a failed call too.
     if let Some(ws) = sieve_core::workspace::read(context_dir) {
         let _ = ensure_fresh_children(project_dir, &ws.children, &opts);
@@ -1071,7 +1069,7 @@ fn last_file_scope_hint(context_dir: &Path, last_file: Option<&str>) -> Option<S
         if scopes.len() <= 1 {
             return None;
         }
-        // Dedupe by scope, not by path (E6): two paths in one scope give a hint.
+        // Dedupe by scope, not by path: two paths in one scope give a hint.
         lookup
             .paths()
             .filter(|p| *p == last_file || p.ends_with(&suffix))
@@ -3831,7 +3829,7 @@ mod tests {
         let names = [
             Some("only.ts"),
             Some("page.ts"),
-            // Two paths in one scope: one hint (E6).
+            // Two paths in one scope: one hint.
             Some("sub/util.ts"),
             // Two scopes: no hint.
             Some("util.ts"),

@@ -1,5 +1,5 @@
 //! The `sieve query` subcommand: a ranked-hit query over the indexed graph
-//! (the `ask-ranking.md` note).
+//!.
 
 use std::path::{Path, PathBuf};
 
@@ -129,7 +129,7 @@ fn render_def(
     append_line(&body, &def_line(&top.name, baseline, &body))
 }
 
-/// The workspace `ask` (P1-56): each child answers, and the merged result
+/// The workspace `ask`: each child answers, and the merged result
 /// prints with no savings line. `--no-graph-rank` never reaches a child. An
 /// unknown `--in` child prints its message with no prefix and exits 1.
 fn run_workspace(args: &AskArgs, root: &Path, context_dir: &Path) -> Result<(), String> {

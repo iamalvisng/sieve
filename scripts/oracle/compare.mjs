@@ -2,7 +2,7 @@
 // wiring.json is <repo>/sieve/.graph/wiring.json, which `sieve build` writes. It holds
 // nodes {id, path, name, span "L1-L9"} and edges {source, target, relation, confidence}.
 // The script keeps the Extracted calls edges between two files.
-// Count 1 (slice 1): the key is (source file, target file, name).
+// Count 1: the key is (source file, target file, name).
 // Count 2 (gate): a row matches an edge only if the row line is inside the
 // span of the edge source node, and the target file and name also match.
 // A row with arg true is a function passed as a call argument. A call row or an arg row can match an edge.

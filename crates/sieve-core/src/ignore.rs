@@ -1,6 +1,5 @@
 //! The `.gitignore` and `.ignore` footer edits Sieve makes next to a
-//! context dir it did not put there (section 6 of the build-cards-freshness
-//! note).
+//! context dir it did not put there.
 
 use std::fs;
 use std::io;

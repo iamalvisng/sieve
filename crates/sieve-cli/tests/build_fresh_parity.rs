@@ -1,5 +1,5 @@
-//! Parity tests for the build's freshness rule (P2-35, P1-46) and for an
-//! unreadable file or dir (P2-01), against recorded goldens under
+//! Parity tests for the build's freshness rule and for an
+//! unreadable file or dir, against recorded goldens under
 //! `tests/fixtures/basic.expected/build-fresh/`.
 //!
 //! Sieve reads and hashes every file on every build and replays only the parse.
@@ -195,7 +195,7 @@ impl Drop for Locked {
     }
 }
 
-/// P2-35: a `touch` on an unchanged file replays it from the cache,
+/// A `touch` on an unchanged file replays it from the cache,
 /// because the build hashes every file and compares the hash, not the
 /// stat. The `parsed:` line reads `0 of 7 files (7 replayed from cache)`.
 #[test]
@@ -213,7 +213,7 @@ fn test_p2_35_touch_replays_every_file_like_golden() {
     assert_matches_golden("touch", built);
 }
 
-/// P2-35: a same-size edit with the mtime put back re-parses the file.
+/// A same-size edit with the mtime put back re-parses the file.
 /// The `parsed:` line counts one parse, and `wiring.json` holds the new
 /// `dubble` name, byte for byte as sieve writes it.
 #[test]
@@ -227,7 +227,7 @@ fn test_p2_35_same_size_edit_with_mtime_restored_reparses_like_golden() {
     assert_wiring_matches_golden("same-size", &temp.path);
 }
 
-/// P1-46: `SIEVE_REFRESH=hash` on the same edit refreshes the graph once,
+/// `SIEVE_REFRESH=hash` on the same edit refreshes the graph once,
 /// with the note on stderr, and the second run prints no note.
 #[test]
 fn test_p1_46_refresh_hash_rebuilds_once_like_golden() {
@@ -242,7 +242,7 @@ fn test_p1_46_refresh_hash_rebuilds_once_like_golden() {
     assert_matches_golden("hash-refresh-2", second);
 }
 
-/// P2-01: an unreadable file prints Node's `EACCES` `open` line on
+/// An unreadable file prints Node's `EACCES` `open` line on
 /// stderr, the build exits 0, `wiring.json` has no node for the file, and
 /// the fingerprint records the file with an empty hash.
 #[cfg(unix)]
@@ -280,7 +280,7 @@ fn test_p2_01_unreadable_file_is_reported_not_fatal_like_golden() {
     );
 }
 
-/// P2-01: with no git, an unreadable dir fails the build with Node's
+/// With no git, an unreadable dir fails the build with Node's
 /// `EACCES` `scandir` line, in the error shape, and exit 1.
 #[cfg(unix)]
 #[test]

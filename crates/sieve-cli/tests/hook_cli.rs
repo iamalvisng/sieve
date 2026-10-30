@@ -1,8 +1,6 @@
-//! Parity tests for `sieve hook <event>` and `sieve statusline` (P4-13 to
-//! P4-23, P4-43, P4-24, P4-25): the five Claude Code hook events and the
+//! Parity tests for `sieve hook <event>` and `sieve statusline`: the five Claude Code hook events and the
 //! statusline, against the goldens under
-//! `tests/fixtures/basic.expected/{hooks,statusline}/` (the `hosts-hooks.md`
-//! note).
+//! `tests/fixtures/basic.expected/{hooks,statusline}/`.
 
 mod support;
 
@@ -226,7 +224,7 @@ fn test_p4_13_to_23_p4_43_hooks_match_golden() {
 }
 
 // ---------------------------------------------------------------------------
-// Per-item hook tests (P4-13 to P4-22). Each test runs in its own built copy
+// Per-item hook tests. Each test runs in its own built copy
 // and its own session id, so no test touches the state the 11-event test pins.
 // The hand-made inputs (a long INDEX.md, a tally transcript) live under
 // `tests/inputs/hooks/`.
@@ -456,7 +454,7 @@ fn test_p4_22_novelty_gate_drops_a_repeated_prompt() {
     assert_hook_matches_golden("p4-22-reworded", &output);
 }
 
-/// P4-22 (c): the top hit is a concept, and one prompt word in twelve
+/// The top hit is a concept, and one prompt word in twelve
 /// matches it. The strength gate reads the concept's coverage, so the
 /// hook prints the weak-match nudge, not the pack.
 #[test]
@@ -479,7 +477,7 @@ fn test_p4_22_strength_gate_reads_a_concept_top_coverage() {
 }
 
 // ---------------------------------------------------------------------------
-// P4-53 to P4-56: the hook events the 11-event golden test does not drive.
+// The hook events the 11-event golden test does not drive.
 // Each expected value is what the recorded run printed or wrote for the same
 // stdin, read with the audit's `hk.sh` compare.
 // ---------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-//! The three hidden subcommands (P1-68): `_update-check`,
+//! The three hidden subcommands: `_update-check`,
 //! `_telemetry-flush` and `_brain-refresh [dir]`. They stand for background
 //! jobs that need the network: an update check, a telemetry post and a
 //! brain pull. Sieve stops before the network step, prints nothing, and

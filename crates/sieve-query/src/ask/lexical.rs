@@ -1,5 +1,5 @@
 //! The lexical corpus, the tokenizer wrapper, and BM25/name/path scoring
-//! (`ask-ranking.md` sections 1 to 3).
+//!.
 
 use std::collections::{HashMap, HashSet};
 
@@ -52,7 +52,7 @@ fn doc_bag_from_ask_doc(doc: &AskDoc) -> DocBag {
 }
 
 /// Builds every graph node's token bags, using the sidecar when it is
-/// usable (section 1.9), else tokenizing live (section 1.10).
+/// usable, else tokenizing live.
 pub(crate) fn build_docs<'a>(
     graph: &'a Graph,
     index: Option<&AskIndex>,
@@ -79,7 +79,7 @@ pub(crate) fn build_docs<'a>(
         .collect()
 }
 
-/// The query's unique tokens, in first-occurrence order (section 2.5).
+/// The query's unique tokens, in first-occurrence order.
 pub fn query_terms(query: &str) -> Vec<String> {
     let mut seen = HashSet::new();
     let mut out = Vec::new();
@@ -109,11 +109,11 @@ fn is_how_does_work(query: &str) -> bool {
 }
 
 /// The document-frequency table and average body length over one active
-/// node set (section 1.11).
+/// node set.
 #[derive(Debug, Clone)]
 pub(crate) struct Corpus {
     pub(crate) idf: HashMap<String, f64>,
-    /// `ln(1 + docCount)`, the coverage-function fallback (section 3.1).
+    /// `ln(1 + docCount)`, the coverage-function fallback.
     pub dflt_idf: f64,
     pub avg_body_len: f64,
 }
@@ -191,7 +191,7 @@ pub(crate) fn js_ln(x: f64) -> f64 {
 impl Corpus {
     /// Builds the corpus over `active_nodes`, then folds every concept
     /// document's own term set into `df` as one more document, with `n =
-    /// docCount + conceptBags.length` (the `deep-tier.md` note section 2.8).
+    /// docCount + conceptBags.length`.
     /// `avgBodyLen` never counts a concept: BM25 never scores one.
     pub(crate) fn build_with_concepts(
         active_nodes: &[&Node],
@@ -243,7 +243,7 @@ impl Corpus {
     }
 
     /// A token's `idf`, or `dfltIdf` when the corpus never saw it
-    /// (section 3.1, the coverage-function site).
+    /// (the coverage-function site).
     pub(crate) fn idf_or_default(&self, term: &str) -> f64 {
         *self.idf.get(term).unwrap_or(&self.dflt_idf)
     }
@@ -253,9 +253,9 @@ fn bag_count(bag: &Bag, term: &str) -> Option<u32> {
     bag.iter().find(|(t, _)| t == term).map(|(_, c)| *c)
 }
 
-/// `score(query, doc, idf)` (section 3.2): exact term equality, no plural
-/// folding. Also the concept score's building block (note section 2.8:
-/// `total = score(name)*3 + score(body)`, no BM25 for a concept).
+/// `score(query, doc, idf)`: exact term equality, no plural
+/// folding. Also the concept score's building block:
+/// `total = score(name)*3 + score(body)`, with no BM25 for a concept.
 pub(crate) fn score(terms: &[String], doc: &Bag, corpus: &Corpus) -> f64 {
     terms
         .iter()
@@ -263,7 +263,7 @@ pub(crate) fn score(terms: &[String], doc: &Bag, corpus: &Corpus) -> f64 {
         .sum()
 }
 
-/// `bm25(query, doc, idf)` (section 3.3).
+/// `bm25(query, doc, idf)`.
 pub(crate) fn bm25(terms: &[String], body: &Bag, corpus: &Corpus, dl: u32) -> f64 {
     let avg = if corpus.avg_body_len != 0.0 {
         corpus.avg_body_len
@@ -354,7 +354,7 @@ pub(crate) fn inline_test_factor(query_wants_tests: bool, doc: &DocBag, terms: &
     }
 }
 
-/// One node's lexical total (section 3.4).
+/// One node's lexical total.
 pub(crate) fn node_total(
     terms: &[String],
     doc: &DocBag,
@@ -370,7 +370,7 @@ pub(crate) fn node_total(
     (name_score + path_score + body_score) * factor
 }
 
-/// Scores every active node, keeping only a positive total (section 3.4).
+/// Scores every active node, keeping only a positive total.
 pub(crate) fn score_all(
     active_nodes: &[&Node],
     docs: &HashMap<&str, DocBag>,
@@ -392,7 +392,7 @@ pub(crate) fn score_all(
 }
 
 /// Whether `bag` holds `term`, folding one trailing `s` either way
-/// (section 8.4). Ports `hasTerm`: `t`, `t + "s"`, and
+///. Ports `hasTerm`: `t`, `t + "s"`, and
 /// `t` without its last `s`. A term that ends in `s` checks all three, so
 /// `pass` also finds `passs`.
 pub(crate) fn has_term(bag: &Bag, term: &str) -> bool {
@@ -711,7 +711,7 @@ mod tests {
         assert_eq!(strong_share(Kind::File, &d.name, &terms, &corpus), 0.0);
     }
 
-    /// P3-03: the idf is `Math.log(1 + n / (1 + df))`.
+    /// The idf is `Math.log(1 + n / (1 + df))`.
     /// These inputs make the system `ln` differ from V8's `Math.log` in
     /// the last bit. The expected values come from node 24.
     #[test]
@@ -726,7 +726,7 @@ mod tests {
         }
     }
 
-    /// P3-03: inputs in `[1, sqrt(2))` take the `k == 0` branches. The
+    /// Inputs in `[1, sqrt(2))` take the `k == 0` branches. The
     /// expected values come from node 24 on arm64. The unfused form of
     /// those branches differs from them in the last bit.
     #[test]
@@ -758,7 +758,7 @@ mod tests {
 
     #[test]
     fn bm25_matches_golden_op_order_on_the_multi_fixture_render_footer_values() {
-        // Pins P3-15: 's `idf * ((tf * (k1 + 1)) / (tf + norm))`
+        // Pins the `idf * ((tf * (k1 + 1)) / (tf + norm))`
         // op order. `idf * tf * (k1 + 1) / (tf + norm)` rounds one ULP high
         // on these inputs, the `multi` fixture's `render.ts#renderFooter`
         // row (`ask-json.stdout.txt`, score `0.8255402111579943`).
@@ -821,7 +821,7 @@ mod tests {
         assert!(!has_term(&b, "help"));
     }
 
-    /// P1-06: a term that ends in `s` also finds itself plus `s`, so `pass`
+    /// A term that ends in `s` also finds itself plus `s`, so `pass`
     /// finds `passs`.
     #[test]
     fn test_p1_06_has_term_checks_the_term_plus_s_when_it_ends_in_s() {

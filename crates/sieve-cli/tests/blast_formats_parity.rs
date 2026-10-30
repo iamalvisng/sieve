@@ -1,5 +1,5 @@
 //! Parity tests for `sieve impact --format markdown`, `--format mermaid`
-//! and the owner block (DV1 and DV5; P1-24, P1-25, P1-26, P3-25), against
+//! and the owner block, against
 //! the goldens under `tests/fixtures/edges.expected/blast-fmt/`. Each
 //! case is one `tests/inputs/blast-fmt/<id>.sh` in the `blast-dv` shape.
 //!
@@ -179,14 +179,14 @@ fn assert_case_matches_golden(id: &str) {
     assert_eq!(got_exit, want_exit, "blast-fmt {id}: exit mismatch");
 }
 
-/// DV1 (P1-24, P1-26): markdown with no dependents prints the "Nothing
+/// Markdown with no dependents prints the "Nothing
 /// outside this diff depends on it" headline, no diagram and no table.
 #[test]
 fn test_p1_24_p1_26_dv1_markdown_with_no_dependents() {
     assert_case_matches_golden("md-empty");
 }
 
-/// DV1, DV5 (P1-24, P1-25, P1-26): markdown with two areas and two
+/// Markdown with two areas and two
 /// modules: the tag line, the diagram, the table, the owner table and the
 /// quoted evidence lines, in the section order.
 #[test]
@@ -194,7 +194,7 @@ fn test_p1_26_dv1_markdown_with_two_areas_and_two_modules() {
     assert_case_matches_golden("md-modules");
 }
 
-/// DV1 (P1-26): the markdown caps: 5 diagram boxes plus the tail circle,
+/// The markdown caps: 5 diagram boxes plus the tail circle,
 /// 6 table rows plus the "smaller areas" row, 60 listed symbols, and 8
 /// owner rows plus the "further area" row.
 #[test]
@@ -202,20 +202,20 @@ fn test_p1_26_dv1_markdown_caps() {
     assert_case_matches_golden("md-caps");
 }
 
-/// DV1 (P1-24): mermaid with no dependents prints `%% no dependents to
+/// Mermaid with no dependents prints `%% no dependents to
 /// draw` and exits 0.
 #[test]
 fn test_p1_24_dv1_mermaid_with_no_dependents() {
     assert_case_matches_golden("mermaid-empty");
 }
 
-/// DV1 (P1-24): mermaid with two dependent modules draws two circles.
+/// Mermaid with two dependent modules draws two circles.
 #[test]
 fn test_p1_24_dv1_mermaid_with_dependents() {
     assert_case_matches_golden("mermaid-modules");
 }
 
-/// DV5 (P1-25, P3-25): a second author ends the text report with a
+/// A second author ends the text report with a
 /// `who to tag` block that reads `last today`.
 #[test]
 fn test_p1_25_p3_25_dv5_second_author_in_text() {
@@ -242,7 +242,7 @@ fn mask_scores(value: &mut serde_json::Value) {
     }
 }
 
-/// DV5 (P1-25, P3-25): the JSON report carries `owners` with `name`,
+/// The JSON report carries `owners` with `name`,
 /// `commits`, `score` and `last`, and `reviewers` with `areas`. `last`
 /// is the pinned author date in ms; `score` is masked.
 #[test]
@@ -265,14 +265,14 @@ fn test_p1_25_p3_25_dv5_second_author_in_json() {
     );
 }
 
-/// DV5 (P1-24, P1-25): `--no-owners` leaves `owners` off every area and
+/// `--no-owners` leaves `owners` off every area and
 /// module, and `reviewers` absent.
 #[test]
 fn test_p1_24_dv5_no_owners_json() {
     assert_case_matches_golden("no-owners");
 }
 
-/// DV5 (P1-24, P1-25): `--pr-author <email>` drops that author, so the
+/// `--pr-author <email>` drops that author, so the
 /// other second author is the one to tag.
 #[test]
 fn test_p1_24_dv5_pr_author_drops_the_named_author() {

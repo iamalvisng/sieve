@@ -1,7 +1,6 @@
 //! Parity test: `skeleton` and `callers` against the `skeleton-*` and
 //! `callers-*` goldens, for every fixture in `tests/inputs/queries/`.
 //!
-//! Cites P1-17, P1-18, P1-19 to P1-23, P3-20 to P3-25, P3-32 and P3-33.
 
 use std::collections::HashSet;
 use std::fs;
@@ -327,7 +326,7 @@ struct CallersJsonWithSaved {
 
 #[test]
 fn test_p1_19_to_23_p3_20_to_25_callers_matches_golden() {
-    // callx pins P1-21 (whole-word quote) and P3-25 (discovery order).
+    // callx pins the whole-word quote and the discovery order.
     let fixtures = ["basic", "edges", "scopes", "symbols", "multi", "callx"];
     let mut failures = Vec::new();
 

@@ -68,7 +68,7 @@ struct GrepJson<'a> {
 
 /// Runs `sieve find`: the query prelude, then the search, then the report.
 /// At a workspace parent, the search runs in each child and merges
-/// (P1-57).
+/// .
 pub fn run(args: &GrepArgs, dir_override: Option<&Path>) -> Result<(), String> {
     let (root, context_dir) =
         query::run_prelude(args.dir.as_deref(), dir_override, args.no_refresh)?;
@@ -121,7 +121,7 @@ fn print_json_with(result: &GrepResult, saved: Option<&Savings>) -> Result<(), S
     Ok(())
 }
 
-/// The workspace `grep` (P1-57, P1-60): one search per built child,
+/// The workspace `grep`: one search per built child,
 /// merged, with the coverage note after the body, or after the zero-hit
 /// note on stderr. `--json` prints the merged result alone, and `--in`
 /// is ignored.

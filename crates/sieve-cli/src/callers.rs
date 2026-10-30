@@ -1,6 +1,6 @@
 //! The `sieve callers` subcommand: who calls, references, implements or
 //! extends a symbol, or (with `--direction out`) what it calls
-//! (the `query-commands.md` note section 2).
+//!.
 
 use std::path::{Path, PathBuf};
 
@@ -48,7 +48,7 @@ pub struct CallersArgs {
 }
 
 /// The `saved` key `--json` appends, key order `files` then
-/// `baselineChars` (section 2.9).
+/// `baselineChars`.
 #[derive(Serialize)]
 struct SavedJson {
     files: usize,
@@ -57,7 +57,7 @@ struct SavedJson {
 }
 
 /// The full JSON payload: [`CallersJson`]'s own fields, then `saved` when a
-/// baseline is known (section 2.9).
+/// baseline is known.
 #[derive(Serialize)]
 struct CallersResultJson<'a> {
     #[serde(flatten)]
@@ -66,7 +66,7 @@ struct CallersResultJson<'a> {
     saved: Option<SavedJson>,
 }
 
-/// True when hit lines carry a `[depth N]` tag (section 2.3).
+/// True when hit lines carry a `[depth N]` tag.
 fn show_depth(depth: Depth) -> bool {
     match depth {
         Depth(Some(n)) => n > 1,
@@ -80,7 +80,7 @@ fn show_depth(depth: Depth) -> bool {
 pub fn run(args: &CallersArgs, dir_override: Option<&Path>) -> Result<(), String> {
     let (root, context_dir) =
         query::run_prelude(args.dir.as_deref(), dir_override, args.no_refresh)?;
-    // Text `callers` at a workspace parent federates (P1-58);
+    // Text `callers` at a workspace parent federates;
     // `--json` falls through to the named no-graph line.
     if !args.json && workspace::read(&context_dir).is_some() {
         return run_workspace(args, &root, &context_dir);
@@ -120,7 +120,7 @@ pub fn run(args: &CallersArgs, dir_override: Option<&Path>) -> Result<(), String
     Ok(())
 }
 
-/// The workspace `callers` (P1-58): one block per child with a hit, each
+/// The workspace `callers`: one block per child with a hit, each
 /// with its own savings header, then the coverage note; a miss in every
 /// child is the `✗` line and exit 1. Sieve reads `--direction` and
 /// `--depth` leniently here: any other direction is `in`, and a bad depth
@@ -146,7 +146,7 @@ fn run_workspace(args: &CallersArgs, root: &Path, context_dir: &Path) -> Result<
 }
 
 /// Prints the `--json` payload, with a `saved` key appended when a
-/// baseline is known (section 2.9, no savings header in JSON).
+/// baseline is known (no savings header in JSON).
 fn print_json(
     graph: &sieve_core::Graph,
     query: &str,

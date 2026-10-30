@@ -1,5 +1,5 @@
 # args: blast --format text -d 1
-# DV6 (P3-25): two committed callers of `extra`, `alpha` in lib/ and `Zulu`
+# Two committed callers of `extra`, `alpha` in lib/ and `Zulu`
 # in lib2/. Module labels sort with localeCompare: alpha before Zulu.
 mkdir -p lib lib2
 printf 'import { extra } from "../ts/derived";\nexport function alpha(): number { return extra(); }\n' >lib/alpha.ts

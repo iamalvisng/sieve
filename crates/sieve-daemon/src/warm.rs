@@ -1,12 +1,12 @@
-//! The warm index of one MCP process (`docs/design/daemon-speed.md`, steps 3a
-//! and 3a v2).
+//! The warm index of one MCP process (the watcher, the dirty set and the
+//! in-memory patch).
 //!
 //! The process keeps the graph, the fingerprint record, every file's nodes and
 //! raw edges, and a savings word index in memory. A `notify` watcher feeds a
 //! dirty set. Before each call, a cookie file proves that the dirty set holds
 //! every write that ended before the call. A dirty source file swaps its own
-//! parse and links the whole set in memory (V2). Every case the watcher cannot
-//! vouch for runs the step 1 refresh (`ensure_fresh_graph`) instead. The disk
+//! parse and links the whole set in memory (the in-memory patch). Every case the watcher cannot
+//! vouch for runs the full refresh (`ensure_fresh_graph`) instead. The disk
 //! writes of a patch run after the reply. The MCP loop is the one worker
 //! thread, so calls run in series; the registry lock keeps that true for any
 //! caller.
@@ -156,13 +156,13 @@ impl Filter {
 /// Counters for tests and for `SIEVE_TIMING`.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Stats {
-    /// Calls that ran the step 1 refresh.
+    /// Calls that ran the full refresh.
     pub probes: usize,
     /// Probes that ran because the cookie event took over 200 ms.
     pub fallbacks: usize,
     /// Calls answered from memory with no probe.
     pub memory: usize,
-    /// Calls answered from a one-file patch (V2).
+    /// Calls answered from a one-file patch (the in-memory patch).
     pub patches: usize,
     /// Times the graph came from disk (a decode).
     pub decodes: usize,
@@ -172,7 +172,7 @@ pub(crate) struct Stats {
     pub sources: usize,
 }
 
-/// What the background checks of V4 found.
+/// What the background checks found.
 struct Ready {
     filter: Filter,
     watcher: Option<RecommendedWatcher>,
@@ -182,7 +182,7 @@ struct Ready {
     shortcut_ok: bool,
 }
 
-/// Every file's nodes and raw edges, in memory (V2).
+/// Every file's nodes and raw edges, in memory (the in-memory patch).
 struct Parts {
     /// The walk list, in walk order.
     files: Vec<PathBuf>,
@@ -386,7 +386,7 @@ fn test_hook(ctx: &Path) {
     }
 }
 
-/// Writes one job to disk under the build lock (V2 step 5). The cache goes
+/// Writes one job to disk under the build lock (the in-memory patch). The cache goes
 /// first and the fingerprint last, as a rebuild writes them. A moved
 /// fingerprint or a failed write gives `None`.
 fn write_job(ctx: &Path, job: Job) -> Option<(u64, SystemTime)> {
@@ -429,7 +429,7 @@ fn write_job(ctx: &Path, job: Job) -> Option<(u64, SystemTime)> {
 enum Plan {
     /// Every dirty file matches its record.
     Clean,
-    /// Run the step 1 probe.
+    /// Run the full probe.
     Probe,
     /// Swap these files; `walk` adds a fresh walk for a new or deleted file.
     Patch {
@@ -454,7 +454,7 @@ pub(crate) struct Warm {
     kq_limit: u64,
     /// The sender the checks thread answers on, until the thread starts.
     checks_tx: Option<Sender<Ready>>,
-    /// The background checks of V4. `None` once they arrive.
+    /// The background checks. `None` once they arrive.
     ready_rx: Option<Receiver<Ready>>,
     /// True once the checks arrived and the watcher runs.
     ready: bool,
@@ -603,7 +603,7 @@ fn excludes_path(configured: &str) -> Option<PathBuf> {
     fs::canonicalize(path).ok()
 }
 
-/// Runs the V4 checks: `mount`, `git config`, the canonical paths and the
+/// Runs the background checks: `mount`, `git config`, the canonical paths and the
 /// watcher start. A thread runs it, so the first call does not wait.
 fn check_and_watch(root: &Path, context_dir: &Path, tx: &Sender<Msg>) -> Ready {
     // Start both helper processes first, so they run beside the watcher.
@@ -707,7 +707,7 @@ fn id_of(root: &Path, path: &Path) -> Option<String> {
 impl Warm {
     /// Makes the warm state. The background checks and the watcher start after
     /// the first reply (`start_checks`), so the first call, which runs the
-    /// step 1 path, does not share the machine with two child processes.
+    /// full path, does not share the machine with two child processes.
     fn new(root: &Path, context_dir: &Path) -> Warm {
         let (tx, rx) = channel();
         let (ready_tx, ready_rx) = channel();
@@ -923,7 +923,7 @@ impl Warm {
             .is_some_and(|text| hash_source(text.as_bytes()) == print.hash)
     }
 
-    /// Sorts the dirty set: clean, a probe, or a one-file patch (V2).
+    /// Sorts the dirty set: clean, a probe, or a one-file patch (the in-memory patch).
     /// `clean` collects the source files that match their record, and `stale`
     /// says that a file outside the set may have moved the walk.
     fn plan(&self, clean: &mut Vec<String>, stale: &mut bool) -> Plan {
@@ -947,7 +947,7 @@ impl Warm {
                     if !source {
                         // A manifest or a dot file changes the walk or the link
                         // rules. Any other file only moves the walk list, which
-                        // step 1 reads at its next walk.
+                        // the full refresh reads at its next walk.
                         let dot = path
                             .file_name()
                             .is_some_and(|n| n.to_string_lossy().starts_with('.'));
@@ -1025,7 +1025,7 @@ impl Warm {
         }
     }
 
-    /// Swaps the dirty files in memory and links the whole set (V2). Gives
+    /// Swaps the dirty files in memory and links the whole set (the in-memory patch). Gives
     /// `false` when the call must run the probe. The disk writes wait in
     /// `pending`.
     fn patch(&mut self, ids: &[String], walk: bool, relink: bool) -> bool {
@@ -1275,7 +1275,7 @@ impl Warm {
     }
 
     /// The work that follows a reply, before the next call: the disk writes of
-    /// a patch, and (after a reply only) the checks of V4, the in-memory
+    /// a patch, and (after a reply only) the background checks, the in-memory
     /// parts and the word index.
     fn finish(&mut self, post_reply: bool) {
         self.hand_off();
@@ -1533,10 +1533,10 @@ pub(crate) fn current_graph(context_dir: &Path) -> Option<Arc<Graph>> {
 }
 
 /// The pre-call refresh for a single root: the warm path when an index
-/// exists and refresh is on, else the step 1 refresh.
+/// exists and refresh is on, else the full refresh.
 pub(crate) fn refresh(root: &Path, context_dir: &Path, opts: &RefreshOptions) -> RefreshOutcome {
     let has_index = context_dir.join(".graph").join("wiring.json").is_file();
-    // `<PRODUCT>_NO_WARM` keeps the step 1 path, to measure against it.
+    // `<PRODUCT>_NO_WARM` keeps the full path, to measure against it.
     let off = env_truthy(&sieve_core::product().env_var("NO_WARM"));
     if opts.disabled || !has_index || off {
         return ensure_fresh_graph(root, context_dir, opts);
@@ -1716,8 +1716,8 @@ mod tests {
         with(root, ctx, |w| w.stats).unwrap()
     }
 
-    /// Runs the step that follows a reply, as the MCP loop does: the checks
-    /// of V4, the parts and the word index.
+    /// Runs the step that follows a reply, as the MCP loop does: the
+    /// background checks, the parts and the word index.
     fn settle(root: &Path, ctx: &Path) {
         // The FSEvents start can take seconds on a busy machine.
         let until = Instant::now() + Duration::from_secs(60);
@@ -2470,7 +2470,7 @@ mod tests {
         after_reply(&root, &ctx);
         assert!(with(&root, &ctx, |w| w.pending.is_none()).unwrap());
         flush(&root, &ctx);
-        // A step 1 probe from another process sees a fresh index.
+        // A full probe from another process sees a fresh index.
         let opts = RefreshOptions::default();
         assert!(!ensure_fresh_graph(&root, &ctx, &opts).refreshed);
         let on_disk = fs::read_to_string(ctx.join(".graph").join("wiring.json")).unwrap();
@@ -2756,7 +2756,7 @@ mod tests {
         assert!(shows(&root, &ctx, "alpha"));
         let after = stats(&root, &ctx);
         assert_eq!(after.probes, before.probes, "{after:?}");
-        // A later patch walks again, because NEW.md may have moved the list.
+        // A later patch walks again, because a new file may have moved the list.
         fs::write(root.join("a.ts"), "export function alpha() { return 5; }\n").unwrap();
         trace(&root, &ctx, "alpha");
         let (memory, full) = memory_and_full(&root, &ctx);

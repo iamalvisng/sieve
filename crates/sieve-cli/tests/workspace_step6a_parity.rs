@@ -1,5 +1,5 @@
-//! Parity tests for workspace step 6a: `init` at a workspace parent wires the
-//! parent, then each child repo (P4-45). The expected text comes from a
+//! Parity tests for the workspace: `init` at a workspace parent wires the
+//! parent, then each child repo. The expected text comes from a
 //! recorded run in a scratch HOME, less the recorded deviations (no `.cjs`
 //! file, no wiring stamp, no update nudge).
 
@@ -73,7 +73,7 @@ building 2 workspace repos: a, b
 \u{b7} skipped graph build
 ";
 
-/// P4-45: `--verbose` prints the per-file report. Sieve wires the parent first, then each child. The parent build
+/// `--verbose` prints the per-file report. Sieve wires the parent first, then each child. The parent build
 /// builds both child graphs, so each child then skips its own build. The
 /// epilogue sums the child graphs (4 nodes, 2 edges).
 #[test]
@@ -92,7 +92,7 @@ fn test_p4_45_init_verbose_at_a_parent_wires_the_parent_then_each_child() {
     assert!(stderr.contains("  |___/_|\\___| \\_/ \\___|  4 symbols \u{b7} 2 links\n"));
 }
 
-/// P4-45, P4-47: the compact default at a parent. One graph line (the
+/// The compact default at a parent. One graph line (the
 /// parent build is the workspace build, so it has no node count), one line
 /// for the agent and two epilogue lines. The recorded run prints the same text,
 /// less the `+ 3 in ~/` tail.
@@ -122,7 +122,7 @@ done \u{b7} wrote 3 files in this repo \u{b7} nothing outside this repo was writ
     }
 }
 
-/// P4-45: the files sieve writes with `init --agents claude --no-global`
+/// The files sieve writes with `init --agents claude --no-global`
 /// at the parent: the parent's wiring, each child's wiring and graph, and
 /// `sieve/workspace.json` at the parent only.
 #[test]
@@ -168,7 +168,7 @@ fn test_p4_45_init_at_a_parent_writes_sieve_file_list() {
     );
 }
 
-/// P4-45: the real run writes the files the `--dry-run` plan lists, at the
+/// The real run writes the files the `--dry-run` plan lists, at the
 /// parent and under each child (`.gitignore`, `.ignore` and the index dir
 /// are not in the plan).
 #[test]
@@ -212,7 +212,7 @@ fn test_p4_45_init_dry_run_plan_equals_the_files_a_real_run_writes_at_a_parent()
     assert_eq!(written, planned);
 }
 
-/// P4-45: a second `init` at the parent builds nothing, because the parent
+/// A second `init` at the parent builds nothing, because the parent
 /// holds `sieve/workspace.json`.
 #[test]
 fn test_p4_45_second_init_at_a_parent_skips_the_build() {

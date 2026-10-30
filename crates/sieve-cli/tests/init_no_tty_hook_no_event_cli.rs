@@ -1,5 +1,5 @@
-//! P4-58: bare `init` with no flag and no TTY prints the recorded help
-//! and writes nothing. P4-59: `hook` with no event,
+//! Bare `init` with no flag and no TTY prints the recorded help
+//! and writes nothing. `hook` with no event,
 //! or an unknown event, exits 0 with no output (`main`).
 //! The expected bytes come from `sieve init </dev/null` in scratch repos.
 

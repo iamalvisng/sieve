@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The UTF-8 read parity case (P3-26). Run it from the root of an `edges`
+# The UTF-8 read parity case. Run it from the root of an `edges`
 # fixture copy. `refresh.sh` and crates/sieve-cli/tests/utf8_read_parity.rs
 # both run this script, so the bytes live in one place.
 #
@@ -8,7 +8,7 @@
 #                    call-site line, and in a function name, plus a lead
 #                    byte 0xC3 cut off by the end of a line.
 #   setup.sh change  appends one function with a 0xE9 byte to ts/latin.ts
-#                    (the DV7 blast case).
+#                    (the blast case).
 #
 # Sieve decodes each file with `readFileSync(path, "utf8")`, so every
 # invalid byte becomes U+FFFD and the file still gets its symbols.

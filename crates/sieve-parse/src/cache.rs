@@ -1,7 +1,6 @@
-//! Per-file extraction memo (P2-35). A warm build reuses one file's nodes and
+//! Per-file extraction memo. A warm build reuses one file's nodes and
 //! raw edges from the last build, instead of re-reading and re-parsing the
-//! file, when its size and modified time still match. See the
-//! `build-cards-freshness.md` note section 7.
+//! file, when its size and modified time still match.
 
 use std::collections::BTreeMap;
 use std::fs;

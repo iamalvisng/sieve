@@ -1,6 +1,6 @@
 //! Parity tests for two P4 divergences outside the MCP server: the
-//! billed-session statusline (P4-24) and the `check -e` warning shape
-//! (P4-42), against the recorded captures under
+//! billed-session statusline and the `check -e` warning shape
+//! , against the recorded captures under
 //! `tests/fixtures/basic.expected/mcp-dv/`.
 
 mod support;
@@ -78,7 +78,7 @@ fn run_sieve(copy: &Path, home: &Path, args: &[&str], stdin_json: Option<&str>) 
     cmd.output().expect("run sieve")
 }
 
-/// P4-42, P1-36: `check -e .foo .bar` prints one `⚠` line per unknown
+/// `check -e .foo .bar` prints one `⚠` line per unknown
 /// value, then one `supported:` line with every extension the three
 /// parser tiers claim, byte for byte as Sieve prints it.
 #[test]
@@ -112,7 +112,7 @@ fn test_p4_42_check_two_unknown_extensions_warn_then_list_once() {
     assert_eq!(out.status.code(), Some(exit), "check -e exit");
 }
 
-/// P4-24: a session with `inputCostMicros` and `inputTokensBilled` keeps
+/// A session with `inputCostMicros` and `inputTokensBilled` keeps
 /// both fields through the tool-savings rewrite. The statusline text is
 /// not pinned: its mascot frame changes with the clock.
 #[test]

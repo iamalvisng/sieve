@@ -1,5 +1,4 @@
-//! Parity tests for CLI argument handling against a recorded run (P1-15, P1-21,
-//! P1-23), against the goldens under `tests/fixtures/basic.expected/cli-args/`.
+//! Parity tests for CLI argument handling against a recorded run, against the goldens under `tests/fixtures/basic.expected/cli-args/`.
 //! The query list lives in `tests/inputs/cli-args/basic.txt`; the four extra
 //! copies live in `tests/inputs/cli-args/`.
 //!
@@ -197,7 +196,7 @@ fn mismatches_argv(dir: &Path, runs: &[(&str, &[&str])]) -> Vec<String> {
         .collect()
 }
 
-/// DV2 (P1-23): with a graph, the command reports the unknown `--in` prefix or
+/// With a graph, the command reports the unknown `--in` prefix or
 /// the unknown symbol before a bad `--direction` or `--depth`.
 #[test]
 fn test_p1_23_dv2_callers_checks_symbol_before_flags() {
@@ -214,7 +213,7 @@ fn test_p1_23_dv2_callers_checks_symbol_before_flags() {
     assert!(failed.is_empty(), "DV2 mismatched sieve: {failed:?}");
 }
 
-/// DV2 (P1-23): with no graph, the command reports the missing graph before
+/// With no graph, the command reports the missing graph before
 /// any flag check.
 #[test]
 fn test_p1_23_dv2_callers_checks_graph_before_flags() {
@@ -262,8 +261,8 @@ fn build_with_extras(label: &str) -> TempDir {
     temp
 }
 
-/// DV1 (P1-21): the quote regex uses ASCII `\b`, so `café(2)` and
-/// `𝒻oo(3)` never quote; the hit line stands alone. DV5 (P1-21): JS
+/// The quote regex uses ASCII `\b`, so `café(2)` and
+/// `𝒻oo(3)` never quote; the hit line stands alone. JS
 /// `trim()` strips the BOM from a quoted line 1. The three runs share one
 /// copy in capture order: only the first prints the refresh note.
 #[test]
@@ -280,7 +279,7 @@ fn test_p1_21_dv1_dv5_quote_regex_is_ascii_and_trim_strips_the_bom() {
     assert!(failed.is_empty(), "DV1/DV5 mismatched sieve: {failed:?}");
 }
 
-/// grep DV1 (P1-15): `1 indexed file` and `2 indexed files` in the
+/// grep: `1 indexed file` and `2 indexed files` in the
 /// zero-hit note.
 #[test]
 fn test_p1_15_grep_dv1_unreadable_note_is_singular_or_plural() {
@@ -295,7 +294,7 @@ fn test_p1_15_grep_dv1_unreadable_note_is_singular_or_plural() {
     assert!(failed.is_empty(), "grep DV1 mismatched sieve: {failed:?}");
 }
 
-/// P1-23: a negative value reaches Sieve's own check and prints its
+/// A negative value reaches Sieve's own check and prints its
 /// `✗` line; a repeated flag keeps its last value.
 #[test]
 fn test_p1_23_clap_hyphen_values_and_repeated_flags_match_golden() {

@@ -1,7 +1,6 @@
 # Query list for tests/fixtures/deep. One query per line.
 # Format: <id><TAB><arguments after "sieve">
-# These seven queries pin the deep-tier consumers from
-# the deep-tier note section 5.5. Every one
+# These seven queries pin the deep-tier consumers. Every one
 # runs against the offline-replay build (tests/parity/refresh.sh deep).
 check-deep	check
 ask-concept	ask "how does run compute the result"

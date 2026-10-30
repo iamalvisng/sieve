@@ -1,5 +1,5 @@
 # args: blast -d 1 --export-viz vizout --title PR-7
-# P1-24, P1-65: two changed areas and two dependent modules, as the
+# Two changed areas and two dependent modules, as the
 # md-modules case. "Other Person" committed the modules and the second
 # area's file, so the nodes carry owners. The author date is pinned so
 # the owner `last` day in the page is byte-stable. The pinned date leaves

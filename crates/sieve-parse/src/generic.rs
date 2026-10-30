@@ -1,8 +1,7 @@
 //! The breadth tier: one language-agnostic extractor over any tree-sitter
 //! grammar plus its `tags.scm`. This is how Sieve covers the long tail of
 //! languages for about one registry row each, instead of a hand-written
-//! extractor per language (the depth tier in `extract.rs`). See
-//! the `languages-lsp.md` note section 3.
+//! extractor per language (the depth tier in `extract.rs`).
 //!
 //! What this emits (signature-only): one node per `@definition.<kind>`
 //! capture, and bare-name `calls` raw edges from `@reference.call`,
@@ -165,8 +164,7 @@ fn strip_predicates(scm: &str) -> String {
 /// grammar crate's `TAGS_QUERY` constant (`ruby`, `elixir`, `solidity`,
 /// `lua`). The other eight use a file written for Sieve in
 /// `crates/sieve-parse/queries/`. `ocaml` and
-/// `zig` have none and take the fallback walker (`languages-lsp.md`
-/// section 3).
+/// `zig` have none and take the fallback walker.
 fn scm_for(name: &str) -> Option<&'static str> {
     match name {
         "clojure" => Some(include_str!("../queries/clojure.scm")),
@@ -582,7 +580,7 @@ fn tags_extract(
             recv_type: None,
             arg_count: None,
             // A generic-origin bare call resolves against both `function`
-            // and `method` kinds (`languages-lsp.md` line 150), because the
+            // and `method` kinds, because the
             // breadth tier never types a call's receiver, so a member call
             // like `app.greet` reaches resolve.rs as a bare name.
             kinds: Some(vec![Kind::Function, Kind::Method]),
@@ -620,7 +618,7 @@ fn tags_extract(
             arg_count: None,
             // A generic-origin reference carries no specifier, so
             // resolve.rs's `resolve_reference` falls to this kind set
-            // instead (`languages-lsp.md` line 151).
+            // instead.
             kinds: Some(vec![
                 Kind::Class,
                 Kind::Interface,
@@ -987,7 +985,7 @@ mod tests {
         assert_eq!(cs_span(src, "A"), "L1-L4");
     }
 
-    /// P2-05: a C function with a multi-line body mints a span that
+    /// A C function with a multi-line body mints a span that
     /// covers the closing brace, not just the declarator line.
     #[test]
     fn test_p2_05_c_function_body_span_covers_closing_brace() {
@@ -1001,7 +999,7 @@ mod tests {
         assert_eq!(clear.span, "L1-L4");
     }
 
-    /// P2-05: an Objective-C-style header line parsed with the plain C
+    /// An Objective-C-style header line parsed with the plain C
     /// grammar recovers via `ERROR` nodes. That recovery must not mint a
     /// bogus `property` or `NS_SWIFT_NAME` definition, nor a `calls` raw
     /// edge from the recovered fragments.

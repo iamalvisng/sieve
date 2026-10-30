@@ -1,5 +1,5 @@
 //! NDJSON framing and method routing for `sieve mcp`
-//! (the `mcp-server.md` note sections 1, 2, 6, 7).
+//!.
 
 use std::io::{BufRead, Write};
 use std::path::{Component, Path, PathBuf};
@@ -18,7 +18,7 @@ use crate::tools;
 /// (`advertised`).
 ///
 /// `ancestor_note`, when given, is the one line the CLI's root walk may
-/// have printed (`query-prelude-grep.md`). This form has no boot upkeep
+/// have printed. This form has no boot upkeep
 /// lines; see [`serve_with_upkeep`].
 // One flag over the seven-argument cap: every caller passes the same
 // five session facts plus three streams, and a struct would only move
@@ -47,7 +47,7 @@ pub fn serve<R: BufRead, W1: Write, W2: Write>(
     )
 }
 
-/// Like [`serve`], plus the boot upkeep lines (P4-57). The server
+/// Like [`serve`], plus the boot upkeep lines. The server
 /// prints each line on stderr after the ancestor note, then puts the
 /// lines at the start of `instructions`, joined by a newline and
 /// followed by a blank line.
@@ -306,7 +306,7 @@ fn id_json(id: Option<&Value>) -> String {
 /// Writes one `{"jsonrpc":"2.0",["id":...,]"result":...}` line. `has_id`
 /// tells whether the reply carries an `id` key at all: `initialize`
 /// answers even a request with no `id`, and that reply then has no `id`
-/// key (section 2).
+/// key.
 fn write_result_line<W: Write>(out: &mut W, has_id: bool, id: Option<&Value>, result_json: &str) {
     let line = if has_id {
         format!(

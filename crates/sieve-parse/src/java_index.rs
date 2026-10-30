@@ -457,7 +457,7 @@ impl JavaIndex {
             match self.super_of(t, s) {
                 Res::Found(st) => {
                     if let Some(found) = self.member_type(st, n)? {
-                        // B2 for member types: a private type, or a package
+                        // The same rule for member types: a private type, or a package
                         // type of another package, is not inherited.
                         let v = self.ty(found).vis;
                         if v != 0 && (v != 1 || self.pkg(found) == self.pkg(t)) {

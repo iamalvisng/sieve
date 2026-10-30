@@ -1,4 +1,4 @@
-//! `sieve rename` (design `docs/design/rename.md`, slice RN3b): the dry run,
+//! `sieve rename`: the dry run,
 //! the `--write` and `--expect` rule, the exit codes, the JSON plan and
 //! `--recover`, on a small TypeScript repo built in a temp dir.
 

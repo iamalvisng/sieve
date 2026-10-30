@@ -1,6 +1,6 @@
 // Oracle for rename. Usage: node ts-rename.mjs <repo> <cases.jsonl>
 // The TypeScript LanguageService lists the rename locations of each case.
-// Design: docs/design/rename.md, section E.
+// Runs the TypeScript rename oracle.
 //
 // Case row (one JSON per line): {case, path, line, name, occ?}
 //   path is relative to <repo>. line is 1-based. name is the identifier.

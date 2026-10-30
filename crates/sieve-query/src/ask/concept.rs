@@ -1,5 +1,5 @@
 //! The concept corpus: `sieve/<slug>.md` read live at query time, scored, and
-//! merged into `ask`'s hit list (the `deep-tier.md` note section 2.8).
+//! merged into `ask`'s hit list.
 //!
 //! `loadCorpus` takes every top-level `.md` in the context dir except
 //! `INDEX.md`, with **no** slug test — unlike `sieve_core::concept::
@@ -146,7 +146,7 @@ pub(crate) fn normalize<'a>(scores: &[ConceptScore<'a>]) -> Vec<(&'a ConceptDoc,
 }
 
 /// The title Sieve renders for a concept: `name`, or `slug` when `name` is
-/// empty (the phantom-concept case in note section 2.8).
+/// empty (the phantom-concept case).
 pub(crate) fn title_of(doc: &ConceptDoc) -> String {
     if doc.name.is_empty() {
         doc.slug.clone()
@@ -188,7 +188,7 @@ mod tests {
         crate::test_support::TempDir::new(label)
     }
 
-    /// DV7: a concept's coverage reads the name and body bags; the strong
+    /// A concept's coverage reads the name and body bags; the strong
     /// share reads the name bag alone.
     #[test]
     fn test_p1_06_dv7_coverage_of_reads_name_and_body_bags() {
@@ -216,7 +216,7 @@ mod tests {
         assert!((strong - 0.5).abs() < 1e-12, "coverageStrong: {strong}");
     }
 
-    /// P3-01: `firstProse` skips a blank line, a heading, an HTML
+    /// `firstProse` skips a blank line, a heading, an HTML
     /// comment and a Markdown list item, and returns the first real prose
     /// line.
     #[test]
@@ -243,7 +243,7 @@ mod tests {
         assert_eq!(first_prose("# heading\n<!-- c -->\n- item\n"), "");
     }
 
-    /// P3-02: the concept score is `name*3 + body`, with no BM25 term.
+    /// The concept score is `name*3 + body`, with no BM25 term.
     #[test]
     fn test_p3_02_concept_score_is_name_times_three_plus_body() {
         let corpus = Corpus::build_with_concepts(&[], &std::collections::HashMap::new(), &[]);
@@ -264,7 +264,7 @@ mod tests {
         assert!((scored[0].raw - 5.0).abs() < 1e-12);
     }
 
-    /// P3-03: a concept's own term set folds into the shared idf table as
+    /// A concept's own term set folds into the shared idf table as
     /// one more document, changing a symbol hit's idf.
     #[test]
     fn test_p3_03_idf_fold_changes_a_symbol_hits_idf() {
@@ -318,7 +318,7 @@ mod tests {
         assert!(without_concepts.idf("run") != with_concepts.idf("run"));
     }
 
-    /// P3-04: every concept score normalizes so the best concept is
+    /// Every concept score normalizes so the best concept is
     /// exactly `1`.
     #[test]
     fn test_p3_04_concept_scores_normalize_to_a_max_of_one() {
@@ -347,7 +347,7 @@ mod tests {
         assert_eq!(normalized[1].1, 0.25);
     }
 
-    /// P3-05 (render): `related:` prints in frontmatter order, not
+    /// (render): `related:` prints in frontmatter order, not
     /// sorted.
     #[test]
     fn test_p3_05_to_hit_carries_related_in_frontmatter_order() {
@@ -368,7 +368,7 @@ mod tests {
 
     /// A concept with no sources falls back to its slug as its pointer,
     /// and to its slug as its title when its name is empty — the phantom
-    /// concept case (note section 2.8).
+    /// concept case.
     #[test]
     fn test_p3_05_a_phantom_concept_falls_back_to_its_slug() {
         let doc = ConceptDoc {
@@ -400,7 +400,7 @@ mod tests {
         assert_eq!(docs[0].snippet, "The widget summary line.");
     }
 
-    /// P3-09: Node lists the context dir sorted by name, so
+    /// Node lists the context dir sorted by name, so
     /// the corpus order, and with it a concept score tie, follows the file
     /// name and not the file system's own order.
     #[test]
@@ -422,7 +422,7 @@ mod tests {
         assert_eq!(slugs.first().map(String::as_str), Some("c0-list-page"));
     }
 
-    /// P3-07: the concept hit always carries `related`,
+    /// The concept hit always carries `related`,
     /// an empty array when the concept has no links. A symbol hit never
     /// carries the key.
     #[test]

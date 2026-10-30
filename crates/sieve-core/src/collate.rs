@@ -1,5 +1,5 @@
 //! ICU root collation, to match Node's `String.prototype.localeCompare`
-//! with no arguments (section 0 of the build-cards-freshness note).
+//! with no arguments.
 
 use std::cmp::Ordering;
 use std::sync::OnceLock;
@@ -80,7 +80,7 @@ mod tests {
         );
     }
 
-    /// P2-06 (DV5): scope prefixes of equal UTF-16 length sort by `collate`, as
+    /// Scope prefixes of equal UTF-16 length sort by `collate`, as
     /// JS `a.prefix.localeCompare(b.prefix)` does. The expected order is Node
     /// 24 `localeCompare` output. A run over 2744 three-unit strings (3,763,396
     /// pairs) found 0 mismatches.

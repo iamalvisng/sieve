@@ -1,7 +1,7 @@
 //! The `sieve impact` subcommand: what a diff's changed lines reach
-//! (the `query-commands.md` note section 3).
+//!.
 //!
-//! `blast` never prepends a savings header (section 0). All four
+//! `blast` never prepends a savings header. All four
 //! `--format` names render: `text`, `json`, `markdown` and `mermaid`.
 
 use std::path::{Path, PathBuf};
@@ -57,11 +57,10 @@ pub struct BlastArgs {
 }
 
 /// Runs `sieve impact`: refreshes the graph, validates `--format` then
-/// `--depth`, loads the graph, then runs the diff and the walk (section
-/// 3.1).
+/// `--depth`, loads the graph, then runs the diff and the walk.
 ///
 /// The refresh runs before the flag checks: on a dirty tree the refresh note
-/// comes before a flag error (P1-24, P1-27).
+/// comes before a flag error.
 pub fn run(args: &BlastArgs, dir_override: Option<&Path>) -> Result<(), String> {
     let loaded = query::load_graph_named(args.dir.as_deref(), dir_override, args.no_refresh);
     let format = parse_format(&args.format).map_err(|e| e.to_string())?;

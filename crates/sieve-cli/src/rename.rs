@@ -1,5 +1,5 @@
 //! The `sieve rename` subcommand: a cross-file rename of one symbol from
-//! proven edit sites (design `docs/design/rename.md`, section C). The
+//! proven edit sites. The
 //! default is a dry run. `--write` plans again under the build lock and
 //! writes only a plan that `--expect` names. Exit 0 is a ready or written
 //! plan, exit 2 is a refusal, exit 1 is a usage or I/O error.

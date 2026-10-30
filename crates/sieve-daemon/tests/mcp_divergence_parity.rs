@@ -1,5 +1,4 @@
-//! Parity tests for the P4 MCP divergences (P4-26, P4-28, P4-29, P4-31,
-//! P4-33) against the recorded `mcp-dv/` sessions
+//! Parity tests for the P4 MCP divergences against the recorded `mcp-dv/` sessions
 //! (`tests/fixtures/basic.expected/mcp-dv/`).
 //!
 //! The compare is by reply id, then by compact bytes, the same way
@@ -206,7 +205,7 @@ fn assert_session_matches(id: &str, stdout: &str, stderr: &str, exit: i32) {
     assert!(failures.is_empty(), "{id}:\n{}", failures.join("\n"));
 }
 
-/// P4-26, P4-28, P4-31, P4-33: the tool-argument coercions, the
+/// The tool-argument coercions, the
 /// `protocolVersion` echo, the `method not found` text, the silent
 /// non-object lines, the ask savings measure, the backticked unknown
 /// symbol text, the bare regex error and the fractional `max_dirs` note.
@@ -220,7 +219,7 @@ fn test_p4_26_28_31_33_mcp_divergence_session_matches_golden() {
     assert_session_matches("basic", &stdout, &stderr, exit);
 }
 
-/// P4-29: `tools/list` in a tree with no graph lists no tool.
+/// `tools/list` in a tree with no graph lists no tool.
 #[test]
 fn test_p4_29_tools_list_is_empty_with_no_graph() {
     let temp = TempDir::new("nograph");
@@ -230,7 +229,7 @@ fn test_p4_29_tools_list_is_empty_with_no_graph() {
     assert_session_matches("nograph", &stdout, &stderr, exit);
 }
 
-/// P4-29: a dir that holds only `sieve/workspace.json` still lists the
+/// A dir that holds only `sieve/workspace.json` still lists the
 /// six tools.
 #[test]
 fn test_p4_29_tools_list_is_full_with_only_a_workspace_index() {

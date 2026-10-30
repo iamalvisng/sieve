@@ -1,4 +1,4 @@
-//! The workspace index (P2-38). A parent folder with no `.git` of its own
+//! The workspace index. A parent folder with no `.git` of its own
 //! and two or more git children is a workspace: `build` builds each child
 //! on its own, and the parent's context dir holds only `workspace.json`.
 
@@ -127,7 +127,7 @@ mod tests {
         dir
     }
 
-    /// P2-38: the index is version 1, sorted, 2-space indented, with a
+    /// The index is version 1, sorted, 2-space indented, with a
     /// trailing newline; the read gives the same children back.
     #[test]
     fn test_p2_38_write_then_read_round_trips_the_sorted_index() {
@@ -149,7 +149,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// P2-38: a bad version, a bad shape, bad JSON or a missing file all
+    /// A bad version, a bad shape, bad JSON or a missing file all
     /// read as absent.
     #[test]
     fn test_p2_38_read_treats_a_bad_index_as_absent() {
@@ -178,7 +178,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// P2-38: discovery keeps a direct git child, skips a dot dir, a
+    /// Discovery keeps a direct git child, skips a dot dir, a
     /// `SKIP_DIRS` name and a plain dir; the build-root rule needs two
     /// children and no `.git` at the root, or a present index.
     #[test]
@@ -206,7 +206,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    /// P2-38: a symlink to a git child is not a child of its own, as
+    /// A symlink to a git child is not a child of its own, as
     /// a directory check reads a symlink.
     #[cfg(unix)]
     #[test]
@@ -220,7 +220,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    /// P1-55: the migration note names each child's context dir.
+    /// The migration note names each child's context dir.
     #[test]
     fn test_p1_55_migration_note_names_each_child() {
         let note = migration_note(&["alpha".to_string(), "beta".to_string()]);

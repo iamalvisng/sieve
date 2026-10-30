@@ -1,7 +1,6 @@
 //! Parity test: `blast` against the `blast*` goldens under the `edges`
 //! fixture (`tests/inputs/queries/edges.blast.txt`).
 //!
-//! Cites P1-24 to P1-28, P3-26.
 //!
 //! The harness commits the built `edges` fixture, edits and adds, then runs the
 //! `blast*` queries against the working tree. This test reproduces that git

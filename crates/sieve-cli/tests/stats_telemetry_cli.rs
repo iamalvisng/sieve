@@ -1,5 +1,5 @@
-//! Parity tests for `stats` (P1-64), `telemetry` (P1-67) and the hidden
-//! `_update-check`, `_telemetry-flush` and `_brain-refresh` commands (P1-68).
+//! Parity tests for `stats`, `telemetry` and the hidden
+//! `_update-check`, `_telemetry-flush` and `_brain-refresh` commands.
 //! Goldens from recorded runs under
 //! `tests/fixtures/basic.expected/stats-telemetry/`. Each test replays the same
 //! command sequence, in the same scratch-home state, and compares stdout,

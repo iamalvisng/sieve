@@ -1,7 +1,7 @@
 //! `sieve init [dir]`: wires every detected or selected agent host into
 //! the repo, merges Claude Code's `settings.json` and `.mcp.json`, and
 //! mirrors the hooks into `$HOME` for Claude and Codex
-//! (the `hosts-hooks.md` note section 1).
+//!.
 
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
@@ -49,13 +49,13 @@ pub struct InitArgs {
     #[arg(short = 'y', long = "yes")]
     pub yes: bool,
     /// Writes or removes files under `HOME` too. Without this flag, `init`
-    /// touches only the repo (ledger "sieve init writes under HOME only
-    /// with --global", 2026-09-16).
+    /// touches only the repo (a fixed product rule: only `--global`
+    /// writes under `HOME`).
     #[arg(long = "global", conflicts_with = "no_global")]
     pub global: bool,
     /// Skips writes outside this repo. Sieve already skips them without
     /// `--global`; this flag only picks the matching report line.
-    // P4-48: the doc comment above reaches the derived `--help`
+    // The doc comment above reaches the derived `--help`
     // (`help_cli.rs` pins the text).
     #[arg(long = "no-global")]
     pub no_global: bool,
@@ -68,7 +68,7 @@ pub struct InitArgs {
 }
 
 /// What one `init` step reports. The compact default prints only warnings
-/// (held for the end); `--verbose` prints every line at once (P4-47).
+/// (held for the end); `--verbose` prints every line at once.
 struct Out {
     verbose: bool,
     warnings: Vec<String>,
@@ -112,7 +112,7 @@ pub fn run(args: &InitArgs, context_dir_override: Option<&Path>) -> Result<(), S
         return Ok(());
     };
 
-    // P4-47: `--dry-run` writes nothing and prints the plan on stderr
+    // `--dry-run` writes nothing and prints the plan on stderr
     // (the parent plan, then one plan per workspace child).
     if args.dry_run {
         let home = home_dir()?;
@@ -235,7 +235,7 @@ fn wire_target(
 
     // Claude branch: runs only when the selection holds `claude`. The
     // `want_claude` flag is set from the selection and
-    // gates every Claude write on it. Section 1.2's
+    // gates every Claude write on it. The
     // "prepended always" describes the picker plan, not this write gate.
     let want_claude = selected.contains(&"claude");
     if want_claude {
@@ -265,7 +265,7 @@ fn wire_target(
         hosts::write_owned(&skill_path, &hosts::skill_template()).map_err(|e| e.to_string())?;
 
         // `--no-mcp` gates the other hosts only; `init` writes Claude's
-        // `.mcp.json` with no such gate (P4-47).
+        // `.mcp.json` with no such gate.
         let mcp_path = root.join(".mcp.json");
         let mcp_action = merge_mcp_json(&mcp_path, "mcpServers").map_err(|e| e.to_string())?;
 
@@ -348,7 +348,7 @@ fn wire_target(
         // The registry order (`json_mcp_targets`) interleaves `grok`'s
         // TOML target between `gemini` and `antigravity`; split the loop
         // so the report lines land in that same order. Codex and opencode
-        // come first, as the `agents` host does in the registry (P4-51).
+        // come first, as the `agents` host does in the registry.
         let home = home_dir()?;
         if selected.contains(&"agents") {
             if let Some(path) = hosts::codex_mcp_path(&home) {
@@ -415,7 +415,7 @@ fn wire_target(
     }
 
     // The hook lines run `codex-hooks`, `cursor-hooks`, then
-    // `antigravity-skill` (P4-52).
+    // `antigravity-skill`.
     if args.global && !args.no_hooks && selected.contains(&"agents") {
         match install_codex_hooks() {
             Ok(Some((path, action))) => {
@@ -440,7 +440,7 @@ fn wire_target(
             action.word()
         );
     }
-    // Sieve writes this skill under `--no-hooks` too: the P4-47 golden
+    // Sieve writes this skill under `--no-hooks` too: the golden
     // `init-no-hooks.written.txt` lists `home/.gemini/skills/sieve/SKILL.md`.
     if selected.contains(&"antigravity") {
         if args.global {
@@ -479,7 +479,7 @@ fn wire_target(
     if args.no_global {
         // The line is printed only when another host is selected and the plan
         // holds an out-of-repo write. Claude and antigravity are the hosts with
-        // such writes (P4-48).
+        // such writes.
         let others = selected.iter().any(|id| *id != "claude");
         if others && (want_claude || selected.contains(&"antigravity")) {
             say!(out, "· skipped out-of-repo writes (--no-global)");
@@ -558,7 +558,7 @@ fn say_build(out: &mut Out, built: bool) {
     }
 }
 
-/// Removes the wiring of every agent that is not selected now (P4-49).
+/// Removes the wiring of every agent that is not selected now.
 /// Order: instruction files, MCP entries, Claude files, then the
 /// `HOME` files with `--global`. Each removed target prints
 /// `- removed <path> (<what>) — agent not selected`. A file or entry that
@@ -586,7 +586,7 @@ fn retract_unselected(root: &Path, selected: &[&str], global: bool, verbose: boo
     }
     let mut seen: Vec<PathBuf> = Vec::new();
     // The ids of the agents that lost a file, once each, for the compact
-    // report `- removed <id> — agent not selected` (P4-47).
+    // report `- removed <id> — agent not selected`.
     let mut removed: Vec<String> = Vec::new();
     let mut run = |id: &str,
                    path: PathBuf,
@@ -635,7 +635,7 @@ fn retract_unselected(root: &Path, selected: &[&str], global: bool, verbose: boo
     let targets = json_mcp_targets();
     let json_target = |id: &str| targets.iter().find(|t| t.id == id).and_then(mcp_path);
     // Codex's config is a `HOME` file, so it needs `--global`; opencode's is
-    // in the repo. Both need the host's own config dir (P4-51).
+    // in the repo. Both need the host's own config dir.
     if !sel("agents") {
         if let Some(p) = home.as_deref().and_then(hosts::codex_mcp_path) {
             run("agents", p, "[mcp_servers.sieve]", &hosts::strip_mcp_toml);
@@ -754,7 +754,7 @@ fn write_host(root: &Path, host: &HostSpec, out: &mut Out) -> Result<(), String>
 }
 
 /// Runs `sieve build` in-process unless `--no-build` was given or a graph
-/// already exists at `<context dir>/.graph/wiring.json` (section 1.6).
+/// already exists at `<context dir>/.graph/wiring.json`.
 /// Returns `true` on a fresh build, `false` when the build was skipped OR
 /// failed. The caller prints the build's report line, after every Claude
 /// write (see the ordering note above the settings merge, in `run`'s
@@ -842,7 +842,7 @@ fn install_claude_global() -> Result<(), String> {
     let home = home_dir()?;
     let settings_path = home.join(".claude").join("settings.json");
     hosts::merge_claude_global_hooks(&settings_path).map_err(|e| e.to_string())?;
-    // Write 2 runs only after write 1 succeeded (section 1.9): the `?`
+    // Write 2 runs only after write 1 succeeded: the `?`
     // above already returns on a write-1 error, so nothing more to gate.
     let mcp_path = home.join(".claude.json");
     hosts::merge_mcp_json(&mcp_path, "mcpServers").map_err(|e| e.to_string())?;
@@ -897,7 +897,7 @@ fn plan_writes(
     all_rows: bool,
 ) -> Vec<PlanWrite> {
     // The compact report lists every file the agent can own,
-    // `planInit` does, whatever `--no-mcp` and `--no-hooks` skip (P4-47).
+    // `planInit` does, whatever `--no-mcp` and `--no-hooks` skip.
     let no_mcp = args.no_mcp && !all_rows;
     let no_hooks = args.no_hooks && !all_rows;
     let w = |path: PathBuf, global: bool, what: &str| PlanWrite {
@@ -970,7 +970,7 @@ fn plan_writes(
             ));
         }
         // Codex's config is global; opencode's is in the repo. Each needs
-        // the host's own config dir (P4-51).
+        // the host's own config dir.
         if host.id == "agents" && !no_mcp {
             if args.global {
                 if let Some(path) = hosts::codex_mcp_path(home) {
@@ -1317,7 +1317,7 @@ fn graph_line(ctx: &CompactCtx, res: &QuietBuild) -> String {
     }
 }
 
-/// Prints the compact `init` report (P4-47): a summary with the small
+/// Prints the compact `init` report: a summary with the small
 /// mascot on a terminal, the graph line, the removals, the warnings, one
 /// line per agent host, two tips, and a last line that says what `init`
 /// wrote. `--verbose` prints the per-file lines instead.
@@ -1563,7 +1563,7 @@ fn report_mcp_toml(out: &mut Out, id: &str, path: &Path, action: WriteAction) {
 }
 
 /// Writes the Codex hooks under `$HOME/.codex`, gated on that directory
-/// already existing (section 1.10).
+/// already existing.
 fn install_codex_hooks() -> Result<Option<(PathBuf, WriteAction)>, String> {
     let home = home_dir()?;
     if !home.join(".codex").is_dir() {
@@ -1581,7 +1581,7 @@ fn home_dir() -> Result<PathBuf, String> {
 }
 
 /// Returns `true` when an env var is set to something other than unset,
-/// `""`, `"0"`, or `"false"` (section 1.7).
+/// `""`, `"0"`, or `"false"`.
 fn env_truthy(name: &str) -> bool {
     match std::env::var(name) {
         Ok(v) => !matches!(v.as_str(), "" | "0" | "false"),
@@ -1590,7 +1590,7 @@ fn env_truthy(name: &str) -> bool {
 }
 
 /// Resolves which hosts `sieve init` writes to, in selection precedence
-/// order (section 1.3). Returns `None` when nothing should be written
+/// order. Returns `None` when nothing should be written
 /// (an empty selection, a cancelled picker, or a non-interactive run
 /// with no explicit flag) — the caller has already printed the reason.
 fn select_hosts(args: &InitArgs, root: &Path) -> Result<Option<Vec<&'static str>>, String> {
@@ -1800,7 +1800,7 @@ mod tests {
         }
     }
 
-    /// P4-01: detection probes `$HOME` and the repo, and always adds
+    /// Detection probes `$HOME` and the repo, and always adds
     /// `claude` first.
     #[test]
     fn test_p4_01_detect_hosts_probes_home_and_repo_and_adds_claude_first() {

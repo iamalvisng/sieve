@@ -1,5 +1,5 @@
 //! `blast --format markdown` and `--format mermaid` (the report text, plus the
-//! pieces the markdown symbol list quotes; P1-24, P1-26).
+//! pieces the markdown symbol list quotes).
 
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -687,14 +687,14 @@ mod tests {
         assert_eq!(blast_title("sieve"), "### sieve impact");
     }
 
-    /// P1-26: a label escapes quotes and angle brackets per line, then
+    /// A label escapes quotes and angle brackets per line, then
     /// joins with `<br/>`.
     #[test]
     fn test_p1_26_mermaid_label_escapes_each_line() {
         assert_eq!(label(&["a\"b", "<c>"]), "\"a#quot;b<br/>&lt;c&gt;\"");
     }
 
-    /// P1-26: `wordRe` is an ASCII word match; `export` misses `exportViz`.
+    /// `wordRe` is an ASCII word match; `export` misses `exportViz`.
     #[test]
     fn test_p1_26_word_re_is_a_whole_ascii_word() {
         let re = word_re("export").expect("compiles");
@@ -703,7 +703,7 @@ mod tests {
         assert!(re.is_match("éexport"));
     }
 
-    /// P1-26: the module-stem regex needs a quote, the stem as a word, and
+    /// The module-stem regex needs a quote, the stem as a word, and
     /// an optional ASCII extension before the closing quote.
     #[test]
     fn test_p1_26_module_stem_regex_matches_an_import_specifier() {
@@ -723,7 +723,7 @@ mod tests {
         assert!(!re.is_match("derived"));
     }
 
-    /// P1-26: `spanRange` reads both `L12-L34` and a bare `L12`.
+    /// `spanRange` reads both `L12-L34` and a bare `L12`.
     #[test]
     fn test_p1_26_span_range_accepts_a_single_line_span() {
         assert_eq!(span_range("L12-L34"), Some((12, 34)));

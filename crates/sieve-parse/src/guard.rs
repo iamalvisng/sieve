@@ -1,4 +1,4 @@
-//! The build memory guard (S0, B0): projects the build peak from the file
+//! The build memory guard: projects the build peak from the file
 //! count and refuses a build that would pass the ceiling.
 
 use std::fmt;
@@ -15,7 +15,7 @@ pub const CEILING_ENV: &str = "SIEVE_BUILD_CEILING_BYTES";
 /// M1 point.
 const FIT_MARGIN_PERCENT: u64 = 135;
 
-/// The warm factor in percent. S2 made the warm path no larger than the
+/// The warm factor in percent. The one-copy node change made the warm path no larger than the
 /// cold path, so the factor is 100. Change it here after a new measure.
 const WARM_FACTOR_PERCENT: u64 = 100;
 
@@ -25,8 +25,8 @@ const WARM_FACTOR_PERCENT: u64 = 100;
 ///
 /// The M1 points, projection against measure (MB): 880 files cold 348
 /// against 293; 2,273 files cold 761 against 750; 4,432 files cold 1,403
-/// against 1,059. Before S2 the warm measures were 1,503 MB and 1,635 MB, and
-/// the factor was 1.5. After S2 (2026-10-09), on 4,454 files, the warm peak
+/// against 1,059. Before that change the warm measures were 1,503 MB and 1,635 MB, and
+/// the factor was 1.5. After it (2026-10-09), on 4,454 files, the warm peak
 /// is 902 MB against a cold peak of 941 MB, so the factor is 1.0.
 pub fn projected_peak_bytes(files: usize, warm: bool) -> u64 {
     let cold = (64 * MB + 220 * KB * files as u64) * FIT_MARGIN_PERCENT / 100;

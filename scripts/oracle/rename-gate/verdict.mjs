@@ -1,6 +1,6 @@
 // Split oracle and plans by set, run rename-compare.mjs per set, apply the ship rules.
 // Usage: node verdict.mjs <oracle.jsonl> <plans.jsonl> <outdir>
-// Rules: docs/design/rename.md, section E. Writes compare-<set>.{txt,json} to <outdir>.
+// Writes compare-<set>.{txt,json} to <outdir>.
 // Prints the counts table and the verdict. Exit code is always 0 when it ran.
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -66,7 +66,7 @@ const r3 = planMed <= 3000;
 const pct = (x) => (100 * x).toFixed(1) + "%";
 const pf = (b) => (b ? "PASS" : "FAIL");
 
-console.log("\nShip rules (docs/design/rename.md, section E)");
+console.log("\nShip rules");
 console.log(`- Rule 1, 0 Wrong in plain and collision: ${pf(r1)} (plain Wrong ${pc.Wrong}, collision Wrong ${res.collision.counts.Wrong}${missing ? `, NoPlan/Unknown ${missing}` : ""})`);
 console.log(`- Rule 2a, Exact >= 25% of in-scope plain: ${pf(r2a)} (${pc.Exact}/${inScope} = ${pct(rate)}; excluded ${pc.Excluded}, package_self_import ${selfImp}; by site ${pct(siteRate)})`);
 console.log(`- Rule 2b, no reason above 50% of in-scope plain: ${pf(r2b)} (largest ${topReason} ${topN}/${inScope} = ${pct(topShare)})`);

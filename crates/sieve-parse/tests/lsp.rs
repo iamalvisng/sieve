@@ -1,8 +1,6 @@
-//! Integration tests for the optional LSP enrichment layer (P2-23 to
-//! P2-25), against a fake language server this test writes to a temp
+//! Integration tests for the optional LSP enrichment layer, against a fake language server this test writes to a temp
 //! dir. The fake server is a Python 3 script; a machine with no
-//! `python3` on `PATH` skips these tests with a clear message, per the
-//! task note that allows this fallback.
+//! `python3` on `PATH` skips these tests with a clear message.
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -82,7 +80,7 @@ fn has_python3() -> bool {
 /// A three-function Python fixture: `foo` calls `bar` directly (the AST
 /// resolver places this edge already, `confidence: extracted`); `baz`
 /// has no caller the AST sees. This lets the LSP layer both re-discover
-/// an edge that already exists (P2-25 dedupe) and add a new one (`foo`
+/// an edge that already exists (the dedupe rule) and add a new one (`foo`
 /// calling `baz` through the fake server's canned answer).
 const FIXTURE_SOURCE: &str =
     "def foo():\n    bar()\n\n\ndef bar():\n    pass\n\n\ndef baz():\n    pass\n";
@@ -226,7 +224,7 @@ fn setup_fake_server(label: &str) -> FakeServerSetup {
     let bar_line = line_of("bar") - 1;
     let baz_line = line_of("baz") - 1;
 
-    // P2-25's own precondition: the AST resolver already placed
+    // The precondition of the dedupe rule: the AST resolver already placed
     // `foo` calling `bar`, `confidence: extracted`. The LSP layer must
     // not double it.
     let foo_id = &graph
@@ -467,7 +465,7 @@ fn test_p2_24_a_mixed_rust_and_typescript_repo_picks_rust_analyzer() {
         return;
     }
     // A repo with a breadth-tier file (`.rs`) and a depth-tier file
-    // (`.ts`). Before the P2-24 fix, `repo_languages` only saw the
+    // (`.ts`). Before the fix, `repo_languages` only saw the
     // depth-tier label, so it dropped `rust` and `pick_server` fell
     // through to the TypeScript row. `rust-analyzer` sits before
     // `typescript-language-server` in the registry, so a correct

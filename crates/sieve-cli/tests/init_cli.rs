@@ -1,4 +1,4 @@
-//! Tests for `sieve init` and `sieve uninstall` (P4-01 to P4-12, P4-34):
+//! Tests for `sieve init` and `sieve uninstall`:
 //! every file `sieve init --all-agents` writes in the `basic` fixture,
 //! against the golden tree under `tests/fixtures/basic.expected/init/`.
 //! `SIEVE_BLESS=1` writes the goldens.
@@ -393,7 +393,7 @@ fn read_json(path: &Path) -> serde_json::Value {
 
 /// `sieve uninstall -y` must strip Sieve's own hooks and MCP entry from
 /// the three `$HOME`-scoped mirrors `install_claude_global` and
-/// `install_codex_hooks` write (P4-12, "Global `~/.claude` mirror: 3
+/// `install_codex_hooks` write ("Global `~/.claude` mirror: 3
 /// files, hooks-only, user-MCP-scope"), leaving a foreign hook or a
 /// foreign MCP server behind exactly as it was before `init`, and
 /// deleting `~/.claude.json` outright when `init` was the one that
@@ -656,7 +656,7 @@ fn test_init_warns_instead_of_failing_on_a_read_only_home() {
     );
 }
 
-/// A build failure never stops `init` (P4-01): `init` runs
+/// A build failure never stops `init`: `init` runs
 /// `buildGraphIfMissing` runs `sieve build .` as a child process, catches a
 /// non-zero exit, and returns `false`; its caller then finishes the whole
 /// report and the epilogue, and `sieve init` still exits 0. Pre-creating
@@ -761,7 +761,7 @@ fn test_init_warns_when_claude_settings_is_unparseable() {
 }
 
 /// `sieve init --all-agents` on a repo with no graph builds the graph
-/// in-process before it reports any of its own writes (P4-01): the build
+/// in-process before it reports any of its own writes: the build
 /// subprocess's own progress and report print first, then every `✓ wrote` / `✓
 /// mcp` / `✓ built the graph` line, matching the init flow, which runs
 /// `buildGraphIfMissing` inside itself and returns before its caller prints a
@@ -1143,7 +1143,7 @@ fn test_defect2_init_agents_accepts_every_listed_id() {
     }
 }
 
-/// P4-02, defect 3 (probe 2026-09-30): `sieve init --agents copilot` wrote the
+/// Defect 3 (probe 2026-09-30): `sieve init --agents copilot` wrote the
 /// Claude Code files. The init sets `wantClaude = ids.includes("claude")` and
 /// writes the Claude files only when it is true. Without `claude`, sieve writes
 /// the selected host, then reports the build on its own line after the host
@@ -1206,8 +1206,8 @@ fn test_p4_02_init_agents_without_claude_writes_no_claude_files() {
     );
 }
 
-/// The four Codex hook events the spec row for P4-05 lists
-/// (`04-hosts-mcp-hooks.md` section 1, "Codex hooks"), with every matcher and
+/// The four Codex hook events the recorded spec row lists
+///, with every matcher and
 /// every timeout. They nest under a top-level `hooks` key. The command form is
 /// `sieve hook <sub>`, not `node "<shim>" <sub>`, as a decision of
 /// 2026-09-12 ("Sieve writes no .cjs shim").
@@ -1255,7 +1255,7 @@ fn run_init_agents_global(home: &Path) -> String {
     stderr
 }
 
-/// P4-05: `init --global` with `~/.codex/` present writes `~/.codex/hooks.json`
+/// `init --global` with `~/.codex/` present writes `~/.codex/hooks.json`
 /// with exactly the four events, their matchers, their timeouts and the
 /// command form. Without `~/.codex/`, the gate holds and no file appears.
 #[test]
@@ -1329,7 +1329,7 @@ fn assert_has_statusline(settings: &serde_json::Value, label: &str) {
     }
 }
 
-/// P4-11: the `--no-statusline` flag writes no statusline key. The control
+/// The `--no-statusline` flag writes no statusline key. The control
 /// run without the flag writes both keys, so the assertion cannot pass on
 /// an empty file.
 #[test]
@@ -1341,7 +1341,7 @@ fn test_p4_11_no_statusline_flag_writes_no_statusline_key() {
     );
 }
 
-/// P4-11: under the sieve name, `SIEVE_NO_STATUSLINE=1` removes the key.
+/// Under the sieve name, `SIEVE_NO_STATUSLINE=1` removes the key.
 #[test]
 fn test_p4_11_sieve_env_removes_the_statusline_under_the_sieve_name() {
     assert_no_statusline(
@@ -1350,7 +1350,7 @@ fn test_p4_11_sieve_env_removes_the_statusline_under_the_sieve_name() {
     );
 }
 
-/// P4-11: the variable name follows the product. Under the sieve name,
+/// The variable name follows the product. Under the sieve name,
 /// `OTHER_NO_STATUSLINE=1` is a foreign variable and removes nothing.
 #[test]
 fn test_p4_11_a_foreign_env_does_not_remove_the_statusline() {
@@ -1383,7 +1383,7 @@ fn run_init_in(project: &Path, home: &Path, args: &[&str]) -> String {
     stderr
 }
 
-/// P4-02: `--agents` outranks `--all-agents`. With both flags, `init`
+/// `--agents` outranks `--all-agents`. With both flags, `init`
 /// writes the two kiro files and nothing else. `--dry-run`
 /// with the same flags lists only those two files.
 #[test]
@@ -1411,7 +1411,7 @@ fn test_p4_02_agents_flag_outranks_all_agents() {
     );
 }
 
-/// P4-03: an `owned` file with other content is overwritten and reported
+/// An `owned` file with other content is overwritten and reported
 /// `(replaced)`. A `section` file with user text keeps that text and gets
 /// the fenced block appended. A repeat run reports both `(unchanged)`.
 /// The expected bytes come from a fresh run in a second project, so the
@@ -1480,7 +1480,7 @@ fn init_claude_over_seed(seed: &str) -> (serde_json::Value, String, TempDir, Tem
     (read_json(&settings_path), stderr, project, home)
 }
 
-/// P4-06: a foreign `statusLine.command` is kept as-is and a warning
+/// A foreign `statusLine.command` is kept as-is and a warning
 /// prints. The absent `subagentStatusLine` is still set to Sieve's own,
 /// because each key is merged on its own.
 #[test]
@@ -1505,7 +1505,7 @@ fn test_p4_06_foreign_statusline_is_kept_with_a_warning() {
     );
 }
 
-/// One of Sieve's own Claude hook blocks, in the ledgered `sieve hook <sub>`
+/// One of Sieve's own Claude hook blocks, in the `sieve hook <sub>`
 /// command form (Sieve writes no .cjs shim).
 fn claude_hook_json(matcher: &str, sub: &str, timeout: u64) -> serde_json::Value {
     serde_json::json!({
@@ -1514,7 +1514,7 @@ fn claude_hook_json(matcher: &str, sub: &str, timeout: u64) -> serde_json::Value
     })
 }
 
-/// P4-07: the hooks merge keeps a foreign entry in place, drops a stale
+/// The hooks merge keeps a foreign entry in place, drops a stale
 /// entry of Sieve's own, and appends the exact current blocks after the
 /// foreign entry. An event Sieve does not manage survives untouched.
 #[test]
@@ -1549,7 +1549,7 @@ fn test_p4_07_hooks_merge_keeps_foreign_and_drops_stale_own_entries() {
     );
 }
 
-/// P4-09: the allow merge keeps a foreign entry, drops every prior entry
+/// The allow merge keeps a foreign entry, drops every prior entry
 /// of Sieve's own, then appends the three entries once, in order. A repeat
 /// run leaves the list as it is.
 ///
@@ -1584,7 +1584,7 @@ fn test_p4_09_allow_merge_appends_the_three_entries_once() {
     );
 }
 
-/// P4-09: a foreign `Bash(node dist/cli.js:*)` entry survives an init and
+/// A foreign `Bash(node dist/cli.js:*)` entry survives an init and
 /// an uninstall. Sieve never wrote it and never owned it.
 #[test]
 fn test_p4_09_foreign_node_dist_entry_survives_init_and_uninstall() {
@@ -1614,7 +1614,7 @@ fn test_p4_09_foreign_node_dist_entry_survives_init_and_uninstall() {
     );
 }
 
-/// P4-49: `init --agents claude` after `init --agents claude cursor` removes
+/// `init --agents claude` after `init --agents claude cursor` removes
 /// the Cursor wiring and prints the two removal lines before any `✓ wrote`
 /// line. The Claude files stay.
 #[test]
@@ -1644,7 +1644,7 @@ fn test_p4_49_init_retracts_the_unselected_agent() {
     assert!(root.join(".mcp.json").is_file());
 }
 
-/// P4-49: retract never removes what Sieve did not write. A user's prose in
+/// Retract never removes what Sieve did not write. A user's prose in
 /// `AGENTS.md`, a foreign server in `.cursor/mcp.json`, and a user's own
 /// `.claude/settings.json` and `.mcp.json` all survive. The last two hold no
 /// Sieve key, so they stay byte for byte and print no `removed` line.
@@ -1695,7 +1695,7 @@ fn test_p4_49_retract_keeps_user_owned_content() {
     }
 }
 
-/// P4-49: the `--dry-run` plan lists writes only and never retractions, and
+/// The `--dry-run` plan lists writes only and never retractions, and
 /// removes nothing. `--dry-run` with a smaller selection leaves the Cursor
 /// files in place.
 #[test]
@@ -1774,7 +1774,7 @@ fn assert_user_files_survive(label: &str, files: &[(&str, &str)], uninstall_too:
     }
 }
 
-/// P4-49 an `mcpServers` bucket with no Sieve key stays, even when it
+/// An `mcpServers` bucket with no Sieve key stays, even when it
 /// is empty.
 #[test]
 fn test_p4_49_empty_mcp_bucket_without_our_key_survives() {
@@ -1788,7 +1788,7 @@ fn test_p4_49_empty_mcp_bucket_without_our_key_survives() {
     );
 }
 
-/// P4-49 a user hook `my-sieve hook x` and an empty `permissions`
+/// A user hook `my-sieve hook x` and an empty `permissions`
 /// object stay.
 #[test]
 fn test_p4_49_user_claude_settings_survive() {
@@ -1796,7 +1796,7 @@ fn test_p4_49_user_claude_settings_survive() {
     assert_user_files_survive("f2", &[(".claude/settings.json", seed)], true);
 }
 
-/// P4-49 a commented TOML header and a marker quoted inside a line are
+/// A commented TOML header and a marker quoted inside a line are
 /// not Sieve's wiring (the strip anchors on whole trimmed lines).
 #[test]
 fn test_p4_49_quoted_headers_and_markers_survive() {
@@ -1816,7 +1816,7 @@ fn test_p4_49_quoted_headers_and_markers_survive() {
     );
 }
 
-/// P4-49 a removed file prunes the empty directories it leaves. A directory
+/// A removed file prunes the empty directories it leaves. A directory
 /// that holds another file stays, and the repo root stays.
 #[test]
 fn test_p4_49_retract_prunes_empty_dirs_only() {
@@ -1868,7 +1868,7 @@ fn assert_strip_keeps_order(label: &str, rel: &str, seed: &str, expected: &str) 
     }
 }
 
-/// P4-49: a stripped `.mcp.json` keeps the user's key order, a `null`, and a
+/// A stripped `.mcp.json` keeps the user's key order, a `null`, and a
 /// float, and loses only the Sieve server.
 #[test]
 fn test_p4_49_strip_keeps_mcp_json_key_order() {
@@ -1880,7 +1880,7 @@ fn test_p4_49_strip_keeps_mcp_json_key_order() {
     );
 }
 
-/// P4-49: a stripped `.claude/settings.json` keeps the user's key order,
+/// A stripped `.claude/settings.json` keeps the user's key order,
 /// a `null`, an empty array and an exponent number, and loses only the
 /// Sieve hook entry.
 #[test]
@@ -1945,7 +1945,7 @@ fn assert_merge_keeps_user_values(
 
 const USER_SETTINGS: &str = r#"{"zeta":null,"model":"x","permissions":{"deny":["a"],"n":1.50},"hooks":{"Stop":[{"hooks":[{"type":"command","command":"keep"}]}],"Alpha":[]},"alpha":1.5e3,"empty":[]}"#;
 
-/// P4-49: `init --agents claude` merges into a user's `.claude/settings.json`
+/// `init --agents claude` merges into a user's `.claude/settings.json`
 /// without sorting keys or turning `null` or a float into another value.
 #[test]
 fn test_p4_49_settings_merge_keeps_user_keys_and_values() {
@@ -1969,7 +1969,7 @@ fn test_p4_49_settings_merge_keeps_user_keys_and_values() {
     );
 }
 
-/// P4-49: the global hooks merge into `~/.claude/settings.json` keeps the
+/// The global hooks merge into `~/.claude/settings.json` keeps the
 /// user's keys and values the same way.
 #[test]
 fn test_p4_49_global_hooks_merge_keeps_user_keys_and_values() {
@@ -1983,7 +1983,7 @@ fn test_p4_49_global_hooks_merge_keeps_user_keys_and_values() {
     );
 }
 
-/// P4-49: the Codex hooks merge into `~/.codex/hooks.json` keeps the user's
+/// The Codex hooks merge into `~/.codex/hooks.json` keeps the user's
 /// keys and values. The four events sit under the `hooks` key, where `init`
 /// writes them.
 #[test]
@@ -1998,7 +1998,7 @@ fn test_p4_49_codex_hooks_merge_keeps_user_keys_and_values() {
     );
 }
 
-/// P4-49: an `mcpServers` value that is not an object stays, and `init`
+/// An `mcpServers` value that is not an object stays, and `init`
 /// prints the skip line, and leaves the file as it is for both seeds).
 #[test]
 fn test_p4_49_mcp_merge_skips_a_non_object_bucket() {
@@ -2026,7 +2026,7 @@ fn test_p4_49_mcp_merge_skips_a_non_object_bucket() {
     }
 }
 
-/// P4-49: a wrong-typed `hooks`, `permissions`, `statusLine` or hook event
+/// A wrong-typed `hooks`, `permissions`, `statusLine` or hook event
 /// is the user's value. The three merges skip them (the codex merge
 /// does the same; a plain Claude merge would spread
 /// or replace the value, which loses it).
@@ -2073,7 +2073,7 @@ fn test_p4_49_settings_merges_skip_wrong_shapes() {
     }
 }
 
-/// P4-50: a foreign tool's hook entries in `~/.codex/hooks.json` are not
+/// A foreign tool's hook entries in `~/.codex/hooks.json` are not
 /// Sieve's. A sieve merge and a sieve uninstall keep them.
 #[test]
 fn test_p4_50_sieve_codex_merge_and_strip_keep_foreign_entries() {
@@ -2109,7 +2109,7 @@ fn test_p4_50_sieve_codex_merge_and_strip_keep_foreign_entries() {
     assert_eq!(fs::read_to_string(&path).expect("read"), seed);
 }
 
-/// P4-49: a statusLine that is any truthy foreign value stays, here a
+/// A statusLine that is any truthy foreign value stays, here a
 /// bare string.
 #[test]
 fn test_p4_49_foreign_string_statusline_stays() {
@@ -2127,7 +2127,7 @@ fn test_p4_49_foreign_string_statusline_stays() {
     assert!(text.contains("\"statusLine\": \"mine\""), "{text}");
 }
 
-/// P4-49: after `init` retract and `uninstall -y --global`, the empty
+/// After `init` retract and `uninstall -y --global`, the empty
 /// `~/.claude` and `~/.codex` are pruned and HOME stays. A directory with
 /// another file stays.
 #[test]
@@ -2167,7 +2167,7 @@ fn home_with_codex_and_opencode(label: &str) -> TempDir {
     home
 }
 
-/// P4-51: `--agents agents --global` writes `~/.codex/config.toml` and
+/// `--agents agents --global` writes `~/.codex/config.toml` and
 /// `<repo>/opencode.json`. `init` prints `mcp codex`, `mcp opencode`, then
 /// `hook codex-hooks`, in that order. Without
 /// `--global` the `HOME` file is skipped. Without the opencode dir, no
@@ -2247,7 +2247,7 @@ fn test_p4_51_agents_write_the_codex_config_and_opencode_json() {
     assert!(!bare_project.path.join("opencode.json").exists());
 }
 
-/// P4-51: a user's own Codex tables and opencode servers stay, in their
+/// A user's own Codex tables and opencode servers stay, in their
 /// order. A later `init` that drops `agents` gives the user's bytes back.
 #[test]
 fn test_p4_51_codex_and_opencode_merges_keep_user_content() {
@@ -2278,7 +2278,7 @@ fn test_p4_51_codex_and_opencode_merges_keep_user_content() {
     assert_eq!(read_json(&project.path.join("opencode.json")), want);
 }
 
-/// P4-52: the report names the action per writer. A section appended to
+/// The report names the action per writer. A section appended to
 /// a user file says `appended`. A merge into a user JSON file says
 /// `updated`. The Codex hooks file prints a `hook codex-hooks` line.
 #[test]
@@ -2335,8 +2335,7 @@ fn run_uninstall_in(project: &Path, home: &Path, args: &[&str]) -> String {
 /// The expected `uninstall` report for a repo wired with every agent,
 /// with a user's `AGENTS.md`, `.mcp.json`, `opencode.json` and Codex
 /// `config.toml`. `{R}` is the repo and `{H}` is `HOME`.
-/// The shims are left out: Sieve writes no shim (ledger
-/// 2026-09-12).
+/// The shims are left out: Sieve writes no shim (a fixed product rule).
 const GOLDEN_UNINSTALL_REPORT: &str = "agents:
   ~ would remove: {R}/AGENTS.md (fenced sieve section)
   ~ would remove: {H}/.codex/config.toml [machine-wide] ([mcp_servers.sieve])
@@ -2379,7 +2378,7 @@ claude:
   - would remove: {H}/.claude/settings.json [machine-wide] (SessionStart / UserPromptSubmit / PostToolUse / Stop — deleted)
   - would remove: {H}/.claude.json [machine-wide] (mcpServers.sieve — deleted)";
 
-/// P1-72: the dry run groups lines by host and says `would remove`, then
+/// The dry run groups lines by host and says `would remove`, then
 /// the two closing lines. `-y` says `removed` and ends with the product
 /// line. Both equal the expected text. The dry run removes nothing.
 #[test]
@@ -2428,7 +2427,7 @@ fn test_p1_72_uninstall_report_matches_golden() {
     assert_eq!(dry, want);
 }
 
-/// P1-72: under the sieve product, `build` writes a `sieve/` block into
+/// Under the sieve product, `build` writes a `sieve/` block into
 /// `.gitignore` and `.ignore`, and `uninstall -y` removes both blocks and
 /// keeps every user line. The dry run lists both files.
 #[test]
@@ -2477,7 +2476,7 @@ fn run_init_compact(project: &Path, home: &Path, args: &[&str]) -> String {
     stderr
 }
 
-/// P4-47, P4-10: `init` prints the compact report by default. One graph
+/// `init` prints the compact report by default. One graph
 /// line, one line per agent (Claude Code first), then two epilogue lines.
 /// No per-file line and no banner appear.
 #[test]
@@ -2506,7 +2505,7 @@ done \u{b7} wrote 6 files in this repo \u{b7} nothing outside this repo was writ
     assert_eq!(lines, want);
 }
 
-/// P4-47: `--agents` keeps the order the user gave
+/// `--agents` keeps the order the user gave
 /// (`--agents agents claude` prints agents, then claude). The
 /// commit line follows the plan order, Claude Code first.
 #[test]
@@ -2535,7 +2534,7 @@ done \u{b7} wrote 4 files in this repo \u{b7} nothing outside this repo was writ
     assert_eq!(lines, want);
 }
 
-/// P4-47: `--all-agents` lists Claude Code first, then the registry order
+/// `--all-agents` lists Claude Code first, then the registry order
 /// (claude, agents, adal, cursor, ...).
 #[test]
 fn test_p4_47_init_compact_all_agents_lists_claude_first() {
@@ -2555,7 +2554,7 @@ fn test_p4_47_init_compact_all_agents_lists_claude_first() {
     );
 }
 
-/// P4-47: `--verbose` brings back the per-file lines and the banner. The
+/// `--verbose` brings back the per-file lines and the banner. The
 /// compact lines do not appear.
 #[test]
 fn test_p4_47_init_verbose_prints_every_file() {
@@ -2568,7 +2567,7 @@ fn test_p4_47_init_verbose_prints_every_file() {
     assert!(!stderr.contains("restart your agents"), "{stderr}");
 }
 
-/// P4-10: a build that fails shows as one warning in the compact report.
+/// A build that fails shows as one warning in the compact report.
 /// The agent lines and the epilogue still print.
 #[test]
 fn test_p4_10_init_compact_reports_a_failed_build() {
@@ -2588,7 +2587,7 @@ fn test_p4_10_init_compact_reports_a_failed_build() {
     assert!(!stderr.contains("\u{2713} wrote "), "{stderr}");
 }
 
-/// P4-47: the compact report names the product in Sieve mode.
+/// The compact report names the product in Sieve mode.
 #[test]
 fn test_p4_47_init_compact_output_in_sieve_mode() {
     let project = TempDir::new("p4-47-sieve-project");

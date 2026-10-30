@@ -1,6 +1,6 @@
 # CLI argument parity queries for tests/fixtures/basic, run in the built
 # temp copy. Format: <id><TAB><arguments after "sieve">
-# P1-23 (callers DV2): sieve checks the graph, then --in, then the
+# Callers: sieve checks the graph, then --in, then the
 # symbol, then --direction, then --depth (dist graph/traverse-cli.js:116-148).
 callers-dv2-direction	callers zzz_nope --direction sideways
 callers-dv2-depth	callers zzz_nope --depth 0

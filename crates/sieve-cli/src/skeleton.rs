@@ -1,5 +1,5 @@
 //! The `sieve symbols` subcommand: a signatures-only view of one file
-//! (the `query-commands.md` note section 1).
+//!.
 
 use std::path::{Path, PathBuf};
 
@@ -33,7 +33,7 @@ pub struct SkeletonArgs {
 }
 
 /// The `saved` key `--json` appends, key order `files` then
-/// `baselineChars` (section 1.7).
+/// `baselineChars`.
 #[derive(Serialize)]
 struct SavedJson {
     files: usize,
@@ -42,7 +42,7 @@ struct SavedJson {
 }
 
 /// The full JSON payload: [`sieve_query::skeleton::SkeletonResult`]'s own
-/// fields, then `saved` when a baseline is known (section 1.7).
+/// fields, then `saved` when a baseline is known.
 #[derive(Serialize)]
 struct SkeletonResultJson<'a> {
     #[serde(flatten)]
@@ -155,7 +155,7 @@ fn miss_message(file: &str, note: Option<&str>) -> String {
 }
 
 /// Prints the result as pretty JSON, with a `saved` key appended when a
-/// baseline is known (section 1.7).
+/// baseline is known.
 fn print_json(graph: &sieve_core::wiring::Graph, result: &sieve_query::skeleton::SkeletonResult) {
     let saved_paths = skeleton_saved_paths(result);
     let saved = savings_for(graph, &saved_paths).map(|s| SavedJson {

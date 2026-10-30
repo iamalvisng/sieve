@@ -1,4 +1,4 @@
-//! Design S7: does a glob or `require.context` call reach a chain file?
+//! The reach rule: does a glob or `require.context` call reach a chain file?
 //!
 //! The matcher follows Vite glob rules for `*`, `**`, `?`, `{a,b}` and
 //! `[...]` classes. A form it does not handle gives "reaches", so the rename
@@ -9,7 +9,7 @@ use std::collections::HashSet;
 /// The most alternatives that one brace pattern may expand to.
 const MAX_ALTERNATIVES: usize = 1024;
 
-/// What a glob or context call can reach (design S7 and S7d).
+/// What a glob or context call can reach (the reach rule).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Reach {
     /// The call cannot reach a chain file.
@@ -18,7 +18,7 @@ pub(super) enum Reach {
     /// traceable, so the rename refuses.
     Traced,
     /// The scan cannot judge the call, or a `require.context` directory holds
-    /// a chain file. Design S7d refuses only when an old-name form exists. A
+    /// a chain file. The reach rule refuses only when an old-name form exists. A
     /// glob pattern that matches a chain file is `Traced` and always refuses.
     Untraceable,
 }

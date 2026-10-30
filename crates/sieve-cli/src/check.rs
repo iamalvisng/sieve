@@ -1,6 +1,6 @@
 //! The `sieve check` subcommand: is the committed wiring graph (and the
 //! deep-layer manifest) still in sync with the code?
-//! (the `query-commands.md` note section 5)
+//!
 
 use std::path::{Path, PathBuf};
 
@@ -49,7 +49,7 @@ pub struct CheckArgs {
 
 /// The `--json` payload's key order: `context`, then `graph` (`null` when
 /// missing is impossible for `context`, so only `graph` ever goes
-/// `null`) (section 5.5).
+/// `null`).
 #[derive(Serialize)]
 struct CheckJson {
     context: ContextCheck,
@@ -57,7 +57,7 @@ struct CheckJson {
 }
 
 /// Runs `sieve check`: warns on an unknown `-e` extension, then runs both
-/// layers, with no refresh (section 5.1 to 5.5).
+/// layers, with no refresh.
 pub fn run(args: &CheckArgs, dir_override: Option<&Path>) -> Result<(), String> {
     warn_unknown_extensions(&args.extensions);
 
@@ -132,7 +132,7 @@ fn graph_summary(ui: &Ui, g: &GraphCheck, elapsed: &str) -> String {
     out
 }
 
-/// The workspace `check` (P1-59, P1-60): one line per child, `OK`, `STALE (…)`
+/// The workspace `check`: one line per child, `OK`, `STALE (…)`
 /// or `not built`, then the coverage note. `--json` is ignored here. Exits 1
 /// when a built child is stale; an unbuilt child is coverage, not failure.
 fn run_workspace(root: &Path, context_dir: &Path) -> Result<(), String> {
@@ -153,7 +153,7 @@ fn run_workspace(root: &Path, context_dir: &Path) -> Result<(), String> {
 }
 
 /// Warns on stderr for each `-e` value whose extension no parser claims
-/// (section 5.1). The value keeps its leading `.` only when the caller
+///. The value keeps its leading `.` only when the caller
 /// already wrote one; the warning text always shows one, so this adds it
 /// when missing. `build` calls this too.
 pub(crate) fn warn_unknown_extensions(extensions: &[String]) {

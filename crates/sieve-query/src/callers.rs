@@ -1,6 +1,6 @@
 //! `callers`: who calls, references, implements or extends a symbol (or,
 //! with `--direction out`, what it calls), walked over the graph
-//! (the `query-commands.md` note section 2).
+//!.
 //!
 //! Symbol resolution reuses [`crate::ask::structural::resolve_symbol`], the
 //! same three-pass resolution `ask`'s structural mode
@@ -23,7 +23,7 @@ use crate::grep::{compile_pattern, decode_file_bytes, escape_regex, GrepOptions,
 use crate::relations::WALK_RELATIONS;
 
 /// Which way `callers` walks the graph: `In` = who points at the symbol,
-/// `Out` = what the symbol points at (section 2.1).
+/// `Out` = what the symbol points at.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Direction {
     In,
@@ -31,11 +31,11 @@ pub enum Direction {
 }
 
 /// The `--depth` a walk runs to. `None` is the unbounded `all` closure
-/// (section 2.3).
+///.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Depth(pub Option<usize>);
 
-/// Every way `callers` can fail (section 2.2 to 2.4).
+/// Every way `callers` can fail.
 #[derive(Debug, Error)]
 pub enum CallersError {
     #[error("--direction must be in or out, got {raw} \u{2014} try --direction in")]
@@ -58,7 +58,7 @@ fn no_symbol_message(query: &str) -> String {
 }
 
 /// Renders the `PrefixNotIndexed` message, matching `grep`'s wording
-/// (section 0).
+///.
 fn prefix_not_indexed_message(prefix: &str, scopes: &[String]) -> String {
     let clause = if scopes.len() > 1 {
         format!(" (scopes here: {})", scopes.join(" · "))
@@ -112,7 +112,7 @@ fn all_depth_re() -> Option<&'static Regex> {
 /// Parses a raw `--depth` value with JavaScript `Number()` semantics: `all`
 /// (or `full`/`max`, case-insensitively) is unbounded; otherwise a trimmed
 /// decimal or exponent form, floored, rejecting anything non-finite or
-/// below `1` (section 2.3).
+/// below `1`.
 pub fn parse_depth(raw: &str) -> Result<Depth, CallersError> {
     if all_depth_re().is_some_and(|re| re.is_match(raw)) {
         return Ok(Depth(None));
@@ -132,7 +132,7 @@ pub fn parse_depth(raw: &str) -> Result<Depth, CallersError> {
 }
 
 /// Parses a raw `--direction` value: only `in` and `out`, case-sensitively
-/// (section 2.2).
+///.
 pub fn parse_direction(raw: &str) -> Result<Direction, CallersError> {
     match raw {
         "in" => Ok(Direction::In),
@@ -146,7 +146,7 @@ pub fn parse_direction(raw: &str) -> Result<Direction, CallersError> {
 /// Resolves `query` to every matching node, then narrows to `in_prefix`
 /// when given, erroring the way `grep`'s `--in` does when the prefix is
 /// not indexed at all, and when `--in` narrows the result to nothing
-/// (section 2.4).
+///.
 pub fn resolve_symbol<'a>(
     graph: &'a Graph,
     query: &str,
@@ -244,7 +244,7 @@ pub fn resolve_symbol_with<'a>(
 
 /// One traversed edge. `node` is `None` when the other endpoint is not a
 /// real node in the graph, such as an unresolved import module string
-/// (section 2.5).
+///.
 #[derive(Debug, Clone)]
 pub struct Hit<'a> {
     pub id: String,
@@ -257,7 +257,7 @@ pub struct Hit<'a> {
 
 /// Depth-1: a plain scan over `graph.edges` in file order, keeping every
 /// walk-relation edge that touches `symbol`. No dedup: two edges between
-/// the same pair give two hits (section 2.5, spec correction in section 6).
+/// the same pair give two hits (a recorded correction).
 fn depth1_scan<'a>(
     graph: &'a Graph,
     symbol: &Node,
@@ -298,7 +298,7 @@ fn depth1_scan<'a>(
 /// The BFS over walk-relation edges from every seed at once, each node
 /// deduped by id and reported once at the depth it was first reached.
 /// Seeds are pre-marked visited, so a seed is never its own hit
-/// (section 2.5, `impactOfMany`).
+///.
 fn bfs<'a>(
     graph: &'a Graph,
     seeds: &[&Node],
@@ -353,7 +353,7 @@ fn bfs<'a>(
 
 /// Walks the edges of `symbol`: the depth-1 scan for `depth <= 1`, else a
 /// BFS, seeded with every same-path symbol too when `symbol` is a file
-/// (section 2.5, `edgeWalk`/`impactOfFile`).
+///.
 pub fn edge_walk<'a>(
     graph: &'a Graph,
     symbol: &'a Node,
@@ -401,7 +401,7 @@ fn parse_span(span: &str) -> Option<(u32, u32)> {
 
 /// A cached reader of the repo's files, rooted at `repo_root`: a `callers`
 /// run reads each file at most once, no matter how many hits quote it
-/// (section 2.6, `fileReader`).
+///.
 pub struct FileReader<'a> {
     root: &'a Path,
     cache: HashMap<String, Option<Vec<String>>>,
@@ -433,7 +433,7 @@ impl<'a> FileReader<'a> {
 }
 
 /// The call-site line for one hit: only for a resolved hit at depth 1
-/// (section 2.6). Reads `hit`'s file through `reader`, and returns the
+///. Reads `hit`'s file through `reader`, and returns the
 /// first line in its span mentioning `symbol_name` as a whole word — the
 /// queried symbol's name, not the hit's. An unreadable file, or no
 /// matching line, gives `None` rather than an error.
@@ -474,7 +474,7 @@ pub(crate) fn header_of(node: &Node) -> String {
 }
 
 /// The note a zero-hit symbol carries, with the ambiguity clause only when
-/// more than one symbol matched the query (section 2.7, `looseNoteFor`).
+/// more than one symbol matched the query.
 pub(crate) fn loose_note_for(direction: Direction, name: &str, candidate_count: usize) -> String {
     let (label, dir_word) = if direction == Direction::Out {
         ("callees", "outgoing")
@@ -500,7 +500,7 @@ pub(crate) fn loose_note_for(direction: Direction, name: &str, candidate_count: 
 /// same as it was before the new output voice, so `--json` stays byte-identical.
 /// The text report uses [`loose_note_for`]. The note has the
 /// ambiguity clause only when more than one symbol matched the query
-/// (section 2.7, `looseNoteFor`).
+///.
 fn loose_note_json(direction: Direction, name: &str, candidate_count: usize) -> String {
     let label = if direction == Direction::Out {
         "callees"
@@ -609,7 +609,7 @@ pub(crate) fn js_trim(s: &str) -> &str {
 
 /// Renders the plain-text `callers` report, without the savings line; the
 /// CLI adds that last. `reader` is the one cached file reader this whole
-/// render shares, across every matched symbol's hits (section 2.7).
+/// render shares, across every matched symbol's hits.
 pub fn format_callers(
     _query: &str,
     matches: &[(&Node, Vec<Hit>)],
@@ -628,8 +628,7 @@ pub fn format_callers(
 }
 
 /// The paths `callers`' tokens-saved baseline reads: each matched symbol's
-/// path, plus every resolved hit's path, in that order (section 2.8,
-/// `callersSavings`). `savings_for` dedupes.
+/// path, plus every resolved hit's path, in that order. `savings_for` dedupes.
 pub fn callers_saved_paths(matches: &[(&Node, Vec<Hit>)]) -> Vec<String> {
     let mut paths = Vec::new();
     for (symbol, hits) in matches {
@@ -696,7 +695,7 @@ struct FileWords {
     words: HashMap<Box<str>, Rows>,
 }
 
-/// The savings word index (`docs/design/daemon-speed.md`, V3). It holds, per
+/// The savings word index. It holds, per
 /// file, the row size of each line that holds a word, for the words that are
 /// node names made of ASCII letters, digits and `_`. [`WordIndex::chars`] then
 /// gives the figure of [`word_grep_chars`] with no disk read.
@@ -983,7 +982,7 @@ fn word_grep_chars_reference(graph: &Graph, root: &Path, name: &str) -> u64 {
     chars
 }
 
-/// A matched symbol's `--json` shape (section 2.9).
+/// A matched symbol's `--json` shape.
 #[derive(Debug, Clone, Serialize)]
 pub struct CallersSymbolJson {
     pub id: String,
@@ -994,7 +993,7 @@ pub struct CallersSymbolJson {
 }
 
 /// One hit's `--json` shape: resolved fields are present only when the
-/// hit's node resolved (section 2.9).
+/// hit's node resolved.
 #[derive(Debug, Clone, Serialize)]
 pub struct CallersHitJson {
     pub id: String,
@@ -1011,7 +1010,7 @@ pub struct CallersHitJson {
 }
 
 /// One matched symbol's `--json` shape: `note` appears only when `hits` is
-/// empty (section 2.9).
+/// empty.
 #[derive(Debug, Clone, Serialize)]
 pub struct CallersMatchJson {
     pub symbol: CallersSymbolJson,
@@ -1021,7 +1020,7 @@ pub struct CallersMatchJson {
 }
 
 /// The full `--json` payload, minus `saved`, which the CLI attaches
-/// (section 2.9).
+///.
 #[derive(Debug, Clone, Serialize)]
 pub struct CallersJson {
     pub query: String,
