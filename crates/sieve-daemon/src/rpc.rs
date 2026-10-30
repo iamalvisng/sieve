@@ -85,6 +85,8 @@ pub fn serve_with_upkeep<R: BufRead, W1: Write, W2: Write>(
         }
         handle_line(trimmed, &session, &mut stdout);
     }
+    // The writer thread is detached. Wait for it, so the exit cuts no job.
+    crate::warm::flush(root, context_dir);
     0
 }
 
@@ -196,6 +198,10 @@ fn handle_line<W: Write>(line: &str, session: &Session, out: &mut W) {
                 is_error
             );
             write_result_line(out, has_id, id.as_ref(), &result);
+            // The client has its answer. The warm index writes its patch to
+            // disk now, before the next request is read.
+            let _ = out.flush();
+            crate::warm::after_reply(session.root, session.context_dir);
         }
         _ => {
             if has_id {

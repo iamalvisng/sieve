@@ -10,9 +10,7 @@ use sieve_core::askindex::{ask_index_path, read_ask_index};
 use sieve_core::product;
 use sieve_core::wiring::{Graph, Meta, Node};
 use sieve_core::workspace;
-use sieve_parse::refresh::{
-    ensure_fresh_children, ensure_fresh_graph, env_truthy, refresh_note, RefreshOptions,
-};
+use sieve_parse::refresh::{ensure_fresh_children, env_truthy, refresh_note, RefreshOptions};
 use sieve_parse::rename::{apply_plan, plan_rename, ApplyStatus, Status as RenameStatus};
 use sieve_parse::{
     check_context, check_graph, check_graph_lookup, federated_check_text, format_check_report,
@@ -20,8 +18,8 @@ use sieve_parse::{
 };
 use sieve_query::ask::{ask, format_ask, AskOptions};
 use sieve_query::callers::{
-    callers_hit_count, edge_walk, render_block, resolve_symbol, word_grep_chars, CallersError,
-    Depth, Direction, Hit,
+    callers_hit_count, edge_walk_with, render_block, resolve_symbol_with, CallersError, Depth,
+    Direction, Hit,
 };
 use sieve_query::grep::{
     format_grep_result, grep_graph, zero_hit_note, GrepError, GrepOptions, DEFAULT_MAX_HITS,
@@ -127,12 +125,36 @@ fn base_tool(canonical: &str) -> &str {
     canonical.strip_prefix(&prefix).unwrap_or(canonical)
 }
 
+/// Waits for the disk writes of the warm index. If they failed and dropped the
+/// graph, refreshes again, so the call reads one state: the new disk.
+fn reload_if_dropped(
+    root: &Path,
+    context_dir: &Path,
+    opts: &RefreshOptions,
+    outcome: &mut sieve_parse::refresh::RefreshOutcome,
+) {
+    if crate::warm::flush(root, context_dir) {
+        let again = crate::warm::refresh(root, context_dir, opts);
+        if again.refreshed {
+            *outcome = again;
+        }
+    }
+}
+
 /// Runs one `tools/call`: alias mapping, the refresh (skipped only for
 /// `check_freshness`; per child at a workspace parent), the dispatch, then
 /// the refresh-note prefix. Returns the result text and whether it is an
 /// error.
 pub fn call(name: &str, args: &Value, root: &Path, context_dir: &Path) -> (String, bool) {
+    // The warm graph lasts for this call only; `load_graph` reads it.
+    let _clear = crate::warm::ClearOnDrop;
     let canonical = canonical_tool_name(name);
+    // A patch from an earlier call may still owe its disk writes. Only the
+    // freshness check reads the disk without a refresh, so only it waits here.
+    // The other tools wait below, and only when they read the disk.
+    if base_tool(&canonical) == "check" {
+        crate::warm::flush(root, context_dir);
+    }
     // `check_freshness` tries the lookup first, so it checks the cap itself.
     if base_tool(&canonical) != "check" {
         if let Some(text) = capped_text(context_dir) {
@@ -152,13 +174,37 @@ pub fn call(name: &str, args: &Value, root: &Path, context_dir: &Path) -> (Strin
         None
     } else {
         let opts = RefreshOptions {
-            disabled: env_truthy(&product().env_var("NO_REFRESH")),
+            disabled: env_truthy(&product().env_var("NO_REFRESH")) && !refresh_forced(),
             force_hash: std::env::var(product().env_var("REFRESH")).as_deref() == Ok("hash"),
         };
-        let outcome = match &ws {
+        // A workspace root keeps the step 1 path: a parent has no graph of
+        // its own, and each child needs its own watcher. Only a single
+        // root uses the warm index (`docs/design/daemon-speed.md`, 3a).
+        let mut outcome = match &ws {
             Some(ws) => ensure_fresh_children(root, &ws.children, &opts),
-            None => ensure_fresh_graph(root, context_dir, &opts),
+            None => crate::warm::refresh(root, context_dir, &opts),
         };
+        // A rebuild writes the wiring before the cap check of the next call; a
+        // patch writes it after the reply. So a wiring near the cap is
+        // written now and checked in this call.
+        let near = std::fs::metadata(context_dir.join(".graph").join("wiring.json"))
+            .is_ok_and(|m| m.len().saturating_mul(2) > wiring_cap());
+        if near {
+            reload_if_dropped(root, context_dir, &opts, &mut outcome);
+            if let Some(text) = capped_text(context_dir) {
+                return (text, true);
+            }
+        }
+        // These tools read only the graph in memory. That graph matches the
+        // source files, because the watch feeds every edit into it before the
+        // answer, and a queued disk write cannot change it. The others read
+        // the ask-index, the lookup or the cards, so the patch writes first.
+        if !matches!(
+            base_tool(&canonical),
+            "callers" | "find" | "map" | "symbols"
+        ) {
+            reload_if_dropped(root, context_dir, &opts, &mut outcome);
+        }
         refresh_note(&outcome)
     };
 
@@ -173,8 +219,10 @@ pub fn call(name: &str, args: &Value, root: &Path, context_dir: &Path) -> (Strin
         }
         call_workspace(base_tool(&canonical), args, root, context_dir)
     });
+    let mut timer = sieve_parse::timing::Timer::start();
     let (text, is_error) =
         federated.unwrap_or_else(|| dispatch(&canonical, name, args, root, context_dir));
+    timer.lap("tool answer");
 
     let text = match note {
         Some(n) if !thrown => format!("{n}\n{text}"),
@@ -334,8 +382,29 @@ thread_local! {
 
 /// Sets the cap for the current test thread only.
 #[cfg(test)]
-fn set_test_wiring_cap(cap: Option<u64>) {
+pub(crate) fn set_test_wiring_cap(cap: Option<u64>) {
     TEST_WIRING_CAP.with(|c| c.set(cap));
+}
+
+#[cfg(test)]
+thread_local! {
+    /// A test seam: the rpc tests set `NO_REFRESH` for the whole process, so
+    /// a refresh test turns it back on for its own thread.
+    static TEST_REFRESH_FORCED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Forces the refresh on for the current test thread.
+#[cfg(test)]
+pub(crate) fn force_refresh_for_test() {
+    TEST_REFRESH_FORCED.with(|c| c.set(true));
+}
+
+/// True only for a test thread that called [`force_refresh_for_test`].
+fn refresh_forced() -> bool {
+    #[cfg(test)]
+    return TEST_REFRESH_FORCED.with(|c| c.get());
+    #[cfg(not(test))]
+    false
 }
 
 /// Parses a cap value; a bad or missing value gives the default.
@@ -376,10 +445,13 @@ fn capped_text(context_dir: &Path) -> Option<String> {
 }
 
 /// Loads `wiring.json`, or `None` when it is missing or unreadable.
-fn load_graph(context_dir: &Path) -> Option<Graph> {
+fn load_graph(context_dir: &Path) -> Option<std::sync::Arc<Graph>> {
+    if let Some(graph) = crate::warm::current_graph(context_dir) {
+        return Some(graph);
+    }
     let path = context_dir.join(".graph").join("wiring.json");
     let bytes = std::fs::read(path).ok()?;
-    serde_json::from_slice(&bytes).ok()
+    serde_json::from_slice(&bytes).ok().map(std::sync::Arc::new)
 }
 
 /// An empty graph, for `sieve_query`'s no-graph path: `ask` runs over
@@ -496,7 +568,7 @@ fn find_code(args: &Value, root: &Path, context_dir: &Path) -> (String, bool) {
         );
     }
 
-    let graph = load_graph(context_dir).unwrap_or_else(empty_graph);
+    let graph = load_graph(context_dir).unwrap_or_else(|| std::sync::Arc::new(empty_graph()));
     let index = read_ask_index(&ask_index_path(context_dir));
 
     let limit = limit_arg(args);
@@ -535,7 +607,7 @@ fn file_api(args: &Value, context_dir: &Path) -> (String, bool) {
     }
 
     let graph = load_graph(context_dir);
-    let r = skeleton(graph.as_ref(), &file);
+    let r = skeleton(graph.as_deref(), &file);
     // The answer line measures the body without its final newline.
     let rendered = format_skeleton(&r);
     let body = rendered.strip_suffix('\n').unwrap_or(&rendered);
@@ -644,12 +716,15 @@ fn trace_calls(args: &Value, root: &Path, context_dir: &Path) -> (String, bool) 
         return (no_graph_text(), true);
     };
 
+    let mut timer = sieve_parse::timing::Timer::start();
     let in_prefix = str_arg(args, "in");
-    let matches = match resolve_symbol(&graph, &query, in_prefix) {
+    let qindex = crate::warm::query_index(root, context_dir, &graph);
+    let matches = match resolve_symbol_with(&graph, &query, in_prefix, qindex.as_deref()) {
         Ok(m) => m,
         Err(CallersError::NoSymbol { .. }) => return (unknown_symbol_text(&query), true),
         Err(e) => return (e.to_string(), true),
     };
+    timer.lap("resolve symbol");
 
     let direction = if str_arg(args, "direction") == Some("out") {
         Direction::Out
@@ -660,14 +735,22 @@ fn trace_calls(args: &Value, root: &Path, context_dir: &Path) -> (String, bool) 
 
     let pairs: Vec<(&Node, Vec<Hit>)> = matches
         .iter()
-        .map(|&symbol| (symbol, edge_walk(&graph, symbol, direction, depth)))
+        .map(|&symbol| {
+            (
+                symbol,
+                edge_walk_with(&graph, symbol, direction, depth, qindex.as_deref()),
+            )
+        })
         .collect();
 
+    timer.lap("edge walk");
     let body = render_matches(&pairs, direction);
+    timer.lap("render");
     let name = pairs
         .first()
         .map_or(query.as_str(), |(s, _)| s.name.as_str());
-    let baseline = word_grep_chars(&graph, root, name);
+    let baseline = crate::warm::word_chars(root, context_dir, &graph, name);
+    timer.lap("savings baseline");
     let line = callers_line(callers_hit_count(&pairs), baseline, &body);
     (append_line(&body, &line), false)
 }

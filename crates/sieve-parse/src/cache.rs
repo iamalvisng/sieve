@@ -61,10 +61,10 @@ pub fn read_cache(path: &Path, stamp: &str) -> ExtractCache {
         extractor: stamp.to_string(),
         files: BTreeMap::new(),
     };
-    let Ok(file) = fs::File::open(path) else {
+    let Ok(bytes) = fs::read(path) else {
         return empty();
     };
-    let Ok(cache) = serde_json::from_reader::<_, ExtractCache>(io::BufReader::new(file)) else {
+    let Ok(cache) = serde_json::from_slice::<ExtractCache>(&bytes) else {
         return empty();
     };
     if cache.version != CACHE_VERSION || cache.extractor != stamp {

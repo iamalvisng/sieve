@@ -5,6 +5,22 @@ All notable changes to this project are in this file.
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.2] - 2026-10-30
+
+This release keeps the index in memory in the MCP server.
+
+### Changed
+
+- The MCP server keeps the index in memory and watches files. A query with no file change answers without a re-scan. On macOS the watch uses kqueue. On Linux it uses inotify.
+- On macOS, on a clone of the vite repo (about 1,600 files), M1 Pro, release build, median of 15 runs: a `callers` query through the MCP server takes about 1 ms with no file change, and about 77 ms after a one-file edit. `query` is slower and not tuned yet.
+- On Linux the numbers are not measured yet. For about 2 seconds after a new folder appears, Sieve uses a slower full check, because the Linux file watch can miss the first files in a new folder. Answers stay correct on both systems.
+- `callers` reads each file once for its savings figure.
+- `SIEVE_NO_WARM=1` turns the in-memory index off.
+
+### Fixed
+
+- An edit to `package.json`, `go.mod`, `pyproject.toml`, `setup.py`, `Cargo.toml`, `composer.json`, `pom.xml`, `build.gradle`, `go.work`, `pnpm-workspace.yaml` or a `.csproj` file now refreshes the index. Before, only `Cargo.toml` did.
+
 ## [0.2.1] - 2026-10-28
 
 This release adds the 🎯 mark to the status line.

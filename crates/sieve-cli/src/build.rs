@@ -456,15 +456,17 @@ fn build_repo(
     // that walk order and those prints instead of reading the repo again.
     // The progress line shows only on a terminal.
     let live = progress && progress_wanted();
-    let build_opts = BuildOptions {
+    let mut build_opts = BuildOptions {
         only_dirs: only_dirs.clone(),
         no_reuse: args.no_reuse,
         read_only: false,
         progress: live.then_some(show_progress as fn(usize, usize, &str)),
         keep_raw: false,
+        walked: None,
     };
+    let walk_started_ms = sieve_core::fingerprint::walk_start_ms(context_dir);
     let mut report =
-        build_graph_cached_with(root, context_dir, &build_opts).map_err(|e| e.to_string())?;
+        build_graph_cached_with(root, context_dir, &mut build_opts).map_err(|e| e.to_string())?;
 
     // The LSP layer is opt-in (P2-23): `--lsp` only, never on by
     // default. Any failure — no server on `PATH`, a timeout, an early
@@ -514,7 +516,8 @@ fn build_repo(
         errors.push(format!("why-refs: {e}"));
     }
 
-    write_build_fingerprint(context_dir, report.prints, only_dirs).map_err(|e| e.to_string())?;
+    write_build_fingerprint(context_dir, report.prints, only_dirs, walk_started_ms)
+        .map_err(|e| e.to_string())?;
 
     ensure_gitignored(root, context_dir, skip_gitignore).map_err(|e| e.to_string())?;
     ensure_searchable(root, context_dir, skip_ignore).map_err(|e| e.to_string())?;
@@ -685,6 +688,7 @@ pub(crate) fn write_build_fingerprint(
     context_dir: &Path,
     prints: BTreeMap<String, Print>,
     only_dirs: Vec<String>,
+    walk_started_ms: f64,
 ) -> std::io::Result<()> {
     let stamp = sieve_parse::extractor_stamp();
     let fingerprint = Fingerprint {
@@ -692,6 +696,7 @@ pub(crate) fn write_build_fingerprint(
         extractor: stamp.clone(),
         files: prints,
         only_dirs: (!only_dirs.is_empty()).then_some(only_dirs),
+        walked_at_ms: Some(walk_started_ms),
     };
     let path = fingerprint_path(context_dir, &stamp);
     write_fingerprint(&path, &fingerprint)

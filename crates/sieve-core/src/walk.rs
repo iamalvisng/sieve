@@ -32,15 +32,33 @@ pub const MAX_FILE_BYTES: u64 = 1_000_000;
 /// the `git ls-files` order, or the sorted depth-first walk order with no
 /// git. Only the follow path sorts, by UTF-16 code unit, and dedups.
 pub fn walk_repo(root: &Path) -> std::io::Result<Vec<PathBuf>> {
+    Ok(walk_repo_stat(root)?.into_iter().map(|e| e.rel).collect())
+}
+
+/// One walked file: its repo-relative path and the size and mtime the walk's
+/// own `lstat` read. The walk drops a symlink, so these are the file's own
+/// values and match what a later `stat` gives.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WalkEntry {
+    /// The repo-relative path.
+    pub rel: PathBuf,
+    /// The size and mtime in milliseconds, or `None` when the mtime is unreadable.
+    pub stat: Option<(u64, f64)>,
+}
+
+/// Like [`walk_repo`], and keeps the size and mtime of each file, so a drift
+/// probe needs no second `stat`.
+pub fn walk_repo_stat(root: &Path) -> std::io::Result<Vec<WalkEntry>> {
+    walk_repo_stat_with(root, OsStr::new("git"))
+}
+
+/// [`walk_repo_stat`] with the git program named, so a test can run with git missing.
+fn walk_repo_stat_with(root: &Path, git: &OsStr) -> std::io::Result<Vec<WalkEntry>> {
     let includes = read_include_dirs(root);
     let follow_submodules = read_config_flag(root, "followSubmodules");
     let follow_nested = read_config_flag(root, "followNestedRepos");
     let follow = follow_submodules || follow_nested;
-    let mut files = if !is_git_work_tree(root) {
-        let mut out = Vec::new();
-        walk_fs(root, Path::new(""), &includes, &mut out)?;
-        out
-    } else if follow {
+    let mut files = if follow && is_git_work_tree(root) {
         let mut walk = Follow {
             top: root.to_path_buf(),
             includes: &includes,
@@ -50,17 +68,42 @@ pub fn walk_repo(root: &Path) -> std::io::Result<Vec<PathBuf>> {
         };
         walk.git_files(root)?
     } else {
-        git_ls_files(root)?
+        match git_ls_files(git, root) {
+            ListOutcome::Listed(listed) => listed,
+            ListOutcome::Failed => {
+                // An empty list would make the next build write an empty graph.
+                // A dir that is no git tree fails by design, so it stays silent.
+                if inside_git_tree(root) || looks_bare(root) {
+                    eprintln!(
+                        "[sieve] git ls-files failed in {}: walking the files instead",
+                        root.display()
+                    );
+                }
+                let mut out = Vec::new();
+                walk_fs(root, Path::new(""), &includes, &mut out)?;
+                out
+            }
+            // No git program: walk the files.
+            ListOutcome::NoGit => {
+                let mut out = Vec::new();
+                walk_fs(root, Path::new(""), &includes, &mut out)?;
+                out
+            }
+        }
     };
 
-    files.retain(|rel| !has_skipped_component(rel, &includes) && under_size_cap(root, rel));
+    files.retain(|rel| !has_skipped_component(rel, &includes));
+    let mut entries: Vec<WalkEntry> = files
+        .into_iter()
+        .filter_map(|rel| under_size_cap(root, &rel).map(|stat| WalkEntry { rel, stat }))
+        .collect();
     if follow {
         // The follow path ends in a sort and dedup. The
         // shallow git path and the fs walk neither sort nor dedup.
-        files.sort_by_cached_key(|a| to_slash(a).encode_utf16().collect::<Vec<u16>>());
-        files.dedup();
+        entries.sort_by_cached_key(|a| to_slash(&a.rel).encode_utf16().collect::<Vec<u16>>());
+        entries.dedup_by(|a, b| a.rel == b.rel);
     }
-    Ok(files)
+    Ok(entries)
 }
 
 fn is_git_work_tree(root: &Path) -> bool {
@@ -72,8 +115,19 @@ fn is_git_work_tree(root: &Path) -> bool {
         .is_ok_and(|output| output.status.success())
 }
 
-fn git_ls_files(root: &Path) -> std::io::Result<Vec<PathBuf>> {
-    let output = Command::new("git")
+/// What `git ls-files` gave.
+enum ListOutcome {
+    /// The file list.
+    Listed(Vec<PathBuf>),
+    /// Git ran and exited non-zero.
+    Failed,
+    /// Git did not start.
+    NoGit,
+}
+
+/// Runs `git ls-files` and checks its exit status.
+fn git_ls_files(git: &OsStr, root: &Path) -> ListOutcome {
+    let Ok(output) = Command::new(git)
         .args([
             "ls-files",
             "--cached",
@@ -82,14 +136,35 @@ fn git_ls_files(root: &Path) -> std::io::Result<Vec<PathBuf>> {
             "-z",
         ])
         .current_dir(root)
-        .output()?;
+        .output()
+    else {
+        return ListOutcome::NoGit;
+    };
+    if !output.status.success() {
+        return ListOutcome::Failed;
+    }
+    ListOutcome::Listed(
+        output
+            .stdout
+            .split(|byte| *byte == 0)
+            .filter(|chunk| !chunk.is_empty())
+            .map(|chunk| PathBuf::from(String::from_utf8_lossy(chunk).into_owned()))
+            .collect(),
+    )
+}
 
-    Ok(output
-        .stdout
-        .split(|byte| *byte == 0)
-        .filter(|chunk| !chunk.is_empty())
-        .map(|chunk| PathBuf::from(String::from_utf8_lossy(chunk).into_owned()))
-        .collect())
+/// True when `root` or an ancestor holds a `.git` file, or a `.git` dir that
+/// has a `HEAD`. An empty `.git` dir is no repo: git skips it. Spawns nothing.
+fn inside_git_tree(root: &Path) -> bool {
+    root.ancestors().any(|dir| {
+        let dot_git = dir.join(".git");
+        dot_git.is_file() || dot_git.join("HEAD").is_file()
+    })
+}
+
+/// True when `root` has the files of a bare git dir.
+fn looks_bare(root: &Path) -> bool {
+    root.join("HEAD").is_file() && root.join("objects").is_dir() && root.join("refs").is_dir()
 }
 
 /// The boundary-crossing walk: `git ls-files -t --stage` tells a gitlink (mode
@@ -266,7 +341,7 @@ fn walk_fs(
 /// The skip rule for a dir name: a dot name is always
 /// skipped, a name in `includes` is never skipped, and a `SKIP_DIRS` name
 /// is skipped otherwise.
-pub(crate) fn is_skipped_name(name: &OsStr, includes: &[String]) -> bool {
+pub fn is_skipped_name(name: &OsStr, includes: &[String]) -> bool {
     let name = name.to_string_lossy();
     if name.starts_with('.') {
         return true;
@@ -285,11 +360,14 @@ fn has_skipped_component(rel: &Path, includes: &[String]) -> bool {
         .any(|component| is_skipped_name(component.as_os_str(), includes))
 }
 
-fn under_size_cap(root: &Path, rel: &Path) -> bool {
-    match std::fs::symlink_metadata(root.join(rel)) {
-        Ok(metadata) => metadata.is_file() && metadata.len() <= MAX_FILE_BYTES,
-        Err(_) => false,
+/// Reads the file's `lstat` once. Returns `None` for a non-file or a file over
+/// the cap, else the size and the mtime (`None` inside when unreadable).
+fn under_size_cap(root: &Path, rel: &Path) -> Option<Option<(u64, f64)>> {
+    let metadata = std::fs::symlink_metadata(root.join(rel)).ok()?;
+    if !metadata.is_file() || metadata.len() > MAX_FILE_BYTES {
+        return None;
     }
+    Some(crate::fingerprint::metadata_print(&metadata).ok())
 }
 
 fn to_slash(path: &Path) -> String {
@@ -480,6 +558,96 @@ mod tests {
 
         let files = walk_repo(&dir.path).expect("walk_repo should not error");
         assert_eq!(as_slash_strings(&files), vec!["a.ts"]);
+    }
+
+    fn git_ok(dir: &Path, args: &[&str]) -> bool {
+        Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .status()
+            .is_ok_and(|s| s.success())
+    }
+
+    /// Bare repo. Old: `ls-files --others` exits non-zero there and the old
+    /// walk kept an empty list. New: a failed `ls-files` walks the files, so
+    /// the next build never writes an empty graph for a repo that has files.
+    #[test]
+    fn walk_repo_bare_repo_old_gave_empty_new_walks_the_files() {
+        let dir = TempDir::new("bare");
+        if !git_ok(&dir.path, &["init", "-q", "--bare"]) {
+            return;
+        }
+        if git_ok(&dir.path, &["ls-files", "--cached", "--others", "-z"]) {
+            return;
+        }
+        let files = walk_repo(&dir.path).expect("walk");
+        assert!(
+            as_slash_strings(&files).contains(&"HEAD".to_string()),
+            "{files:?}"
+        );
+    }
+
+    /// A failed `ls-files` in a work tree (a corrupt index) walks the files.
+    #[test]
+    fn walk_repo_failed_ls_files_in_a_work_tree_walks_the_files() {
+        let dir = TempDir::new("badindex");
+        if !git_ok(&dir.path, &["init", "-q"]) {
+            return;
+        }
+        write_file(&dir.path.join("a.ts"), 10);
+        fs::write(dir.path.join(".git/index"), b"not an index").expect("corrupt index");
+        if git_ok(&dir.path, &["ls-files"]) {
+            return;
+        }
+        let files = walk_repo(&dir.path).expect("walk");
+        assert_eq!(as_slash_strings(&files), vec!["a.ts"]);
+    }
+
+    /// A git program that exits non-zero (a fake failure) walks the files.
+    #[cfg(unix)]
+    #[test]
+    fn walk_repo_a_git_that_exits_non_zero_walks_the_files() {
+        let dir = TempDir::new("fakefail");
+        write_file(&dir.path.join("a.ts"), 10);
+        let entries = walk_repo_stat_with(&dir.path, OsStr::new("false")).expect("walk");
+        let rels: Vec<PathBuf> = entries.into_iter().map(|e| e.rel).collect();
+        assert_eq!(as_slash_strings(&rels), vec!["a.ts"]);
+    }
+
+    #[test]
+    fn walk_repo_repo_with_no_commits_lists_untracked_files() {
+        let dir = TempDir::new("nocommit");
+        if !git_ok(&dir.path, &["init", "-q"]) {
+            return;
+        }
+        write_file(&dir.path.join("a.ts"), 10);
+        let files = walk_repo(&dir.path).expect("walk");
+        assert_eq!(as_slash_strings(&files), vec!["a.ts"]);
+    }
+
+    #[test]
+    fn walk_repo_subdirectory_root_lists_only_that_subtree() {
+        let dir = TempDir::new("subroot");
+        if !git_ok(&dir.path, &["init", "-q"]) {
+            return;
+        }
+        write_file(&dir.path.join("top.ts"), 10);
+        write_file(&dir.path.join("pkg/b.ts"), 10);
+        let files = walk_repo(&dir.path.join("pkg")).expect("walk");
+        assert_eq!(as_slash_strings(&files), vec!["b.ts"]);
+    }
+
+    #[test]
+    fn walk_repo_with_git_missing_walks_the_file_system() {
+        let dir = TempDir::new("nogit");
+        git_ok(&dir.path, &["init", "-q"]);
+        write_file(&dir.path.join("a.ts"), 10);
+        write_file(&dir.path.join("dist/x.js"), 10);
+        let entries =
+            walk_repo_stat_with(&dir.path, OsStr::new("sieve-no-such-git")).expect("walk");
+        let rels: Vec<PathBuf> = entries.iter().map(|e| e.rel.clone()).collect();
+        assert_eq!(as_slash_strings(&rels), vec!["a.ts"]);
+        assert_eq!(entries[0].stat.map(|(size, _)| size), Some(10));
     }
 }
 

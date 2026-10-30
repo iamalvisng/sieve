@@ -4,19 +4,34 @@
 
 <p align="center"><img src="assets/banner.svg" alt="Six pixel mascots. Sieve, a kitchen sieve, is the default." width="480"></p>
 
+<p align="center">
+  <a href="https://github.com/iamalvisng/sieve/actions"><img src="https://img.shields.io/github/actions/workflow/status/iamalvisng/sieve/ci.yml?label=CI" alt="CI"></a>
+  <a href="https://github.com/iamalvisng/sieve/releases"><img src="https://img.shields.io/github/v/release/iamalvisng/sieve" alt="version"></a>
+  <a href="LICENSE-MIT"><img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue" alt="license"></a>
+</p>
+
+## Why
+
+A coding agent that needs to find code usually greps, opens whole files and guesses at what calls what. That costs tokens and time, and a wrong guess leads to a wrong edit.
+
+Sieve indexes your repo into a symbol graph with call edges. Your agent (Claude Code, Codex or any MCP host) asks Sieve "where is this" or "what calls this", and gets the exact file, the line range and the callers in one answer. The agent reads only the lines it needs.
+
+Real output from the vite repo:
+
 ```
-$ sieve query "how does the dev server handle hot module replacement"
-query  how does the dev server handle hot module replacement · 8 hits
-
-1  [packages/vite/] createServerModuleRunner  fn  packages/vite/src/node/ssr/runtime/serverModuleRunner.ts:143-160
-   function createServerModuleRunner( environment: DevEnvironment, options: ServerModuleRunnerOptions = {}, ): ModuleRunner
-
-2  [packages/vite/] handleHMRUpdate  fn  packages/vite/src/node/server/hmr.ts:411-679
-   async function handleHMRUpdate( type: 'create' | 'delete' | 'update', file: string, server: ViteDevServer, ): Promise<void>
-
-3  [packages/vite/] _createServer  fn  packages/vite/src/node/server/index.ts:513-1148
-...
+$ sieve callers handleHMRUpdate --depth 2
+handleHMRUpdate  fn  packages/vite/src/node/server/hmr.ts:411-679
+2 callers · 5 within 2 hops
+├─ testRestartDuringHotUpdate  fn  packages/vite/src/node/server/__tests__/hmr.spec.ts:6-40
+│  │  34: handleHMRUpdate(
+│  └─ hmr.spec.ts  file  packages/vite/src/node/server/__tests__/hmr.spec.ts:1-56
+└─ onHMRUpdate  fn  packages/vite/src/node/server/index.ts:908-915
+   │  913: await handleHMRUpdate(type, file, server)
+   ├─ onFileAddUnlink  fn  packages/vite/src/node/server/index.ts:917-953
+   └─ onFileChange  fn  packages/vite/src/node/server/index.ts:955-969
 ```
+
+Sieve runs on your machine. It sends no telemetry and makes no network call for a query.
 
 ## Install
 
@@ -36,212 +51,67 @@ cargo install --locked --git https://github.com/iamalvisng/sieve sieve-cli
 
 See [docs/guide/install.md](docs/guide/install.md) for each operating system.
 
-On vite (1,583 files), `sieve query` answers in 158 ms median on an Apple M1 Pro. See [Proof](#proof).
-
-<!-- DEMO: assets/pane-demo.gif, recorded by the owner. The caption names the Claude Code version. -->
-
-Then run two commands in your repo:
+## Quick start
 
 ```sh
-sieve build .
+cd your-repo
+sieve init --dry-run   # lists every file init would write; writes nothing
+sieve init             # builds the index and connects your agents
 sieve query "how does login work"
 ```
 
-The old command names still work: `ask` for `query`, `grep` for `find`, `blast` for `impact` and `skeleton` for `symbols`.
+`init` builds the index and sets up the agents it finds: instruction files, the MCP server, and for Claude Code the hooks and the status line. It also writes the Codex config under `~/.codex/`. Add `--no-global` to keep every write inside the repo. `sieve init --mod` adds the Claude Code pane. `sieve uninstall` removes everything `init` wrote.
 
-To wire Sieve into your agent, run `sieve init --dry-run`. The command lists every file `init` would write. Then run `sieve init`. For the Claude Code pane, run `sieve init --mod`.
+After that, just work. Your agent calls Sieve by itself, and the index refreshes before each query, including edits you have not committed.
 
-`init` writes only inside the repo. Only `--global` writes under your home folder.
+To use Sieve from another MCP host, register `sieve mcp` as a stdio server:
 
-## Find out why code exists
-
-`sieve why <symbol>` shows the decision records that link to a symbol. A record is an ADR file or a `LEDGER.md` entry with a `- **Code:**` line. Your existing ADR files work.
-
-Sieve reads these decision folders: `docs/decisions/`, `docs/adr/`, `adr/`, and `LEDGER.md`. Sieve ships its own records in [docs/adr/](docs/adr/).
-
-This is real output from the public Sieve tree:
-
-```
-$ sieve why savings_line
-why savings_line  crates/sieve-savings/src/lib.rs:96
-decision  docs/adr/adr-0004-savings-header.md:1  ADR 0004: Each query result opens with one savings line
-          link: Code anchor
-test  crates/sieve-savings/src/lib.rs:236  savings_line_names_the_given_product
-test  crates/sieve-savings/src/lib.rs:248  test_savings_sieve_header_has_no_tally_instruction
-...
+```json
+{ "mcpServers": { "sieve": { "command": "sieve", "args": ["mcp"] } } }
 ```
 
-## What you get
+See [docs/guide/mcp.md](docs/guide/mcp.md).
 
-The samples are real output from vite. A `...` line marks cut output.
+## Commands
 
-### Find the code without grep
+| Command | What it does |
+|---|---|
+| `sieve query "<question>"` | Ranked symbols with exact file and line. `--source` inlines the code. |
+| `sieve find <text>` | Every match, grouped under its symbol. |
+| `sieve callers <symbol>` | Who calls a symbol, to the depth you choose. Each edge is exact or inferred. |
+| `sieve impact` | What depends on the lines your diff changed, and whether a test reaches them. |
+| `sieve symbols <file>` | The outline of one file, with line ranges. |
+| `sieve why <symbol>` | The decision records, tests and history that link to a symbol. |
+| `sieve map` | An overview of the repo. |
+| `sieve rename <old> <new>` | Renames a TypeScript or JavaScript top-level function across files. Dry run by default. |
+| `sieve check` | Checks the index. |
 
-`sieve query` returns ranked symbols with exact file and line. The `--source` flag inlines the code. `sieve find` finds every match and groups each hit under its symbol.
+The old names `ask`, `grep`, `blast` and `skeleton` still work. The [command reference](docs/guide/commands.md) lists every flag. See also [rename](docs/guide/rename.md).
 
-### See who calls a symbol
+## Fresh and fast
 
-`sieve callers` lists the callers to a depth you choose. Each row gives the file and the line. `callers` and `blast` mark each edge as exact or inferred.
+The MCP server keeps the index in memory and watches your files, so an answer never comes from an old index.
 
-```
-$ sieve callers handleHMRUpdate --depth 2
-handleHMRUpdate  fn  packages/vite/src/node/server/hmr.ts:411-679
-2 callers · 5 within 2 hops
-├─ testRestartDuringHotUpdate  fn  packages/vite/src/node/server/__tests__/hmr.spec.ts:6-40
-│  │  34: handleHMRUpdate(
-│  └─ hmr.spec.ts  file  packages/vite/src/node/server/__tests__/hmr.spec.ts:1-56
-└─ onHMRUpdate  fn  packages/vite/src/node/server/index.ts:908-915
-   │  913: await handleHMRUpdate(type, file, server)
-   ├─ onFileAddUnlink  fn  packages/vite/src/node/server/index.ts:917-953
-   └─ onFileChange  fn  packages/vite/src/node/server/index.ts:955-969
-[sieve] saved ≈ 20,282 tokens
-```
-
-### See what a diff breaks before CI does
-
-`sieve impact` lists what depends on the lines your diff changed. It also says if a test reaches the code. This sample ran after one edited line in `handleHMRUpdate` (`hmr.ts`).
-
-```
-$ sieve impact
-your diff changes handleHMRUpdate · 1 symbol in 2 files · 1 of 1 reached by a test · working tree vs HEAD
-3 callers affected within 2 hops
-└─ onHMRUpdate  fn  packages/vite/src/node/server/index.ts:908-915
-   ├─ onFileAddUnlink  fn  packages/vite/src/node/server/index.ts:917-953
-   └─ onFileChange  fn  packages/vite/src/node/server/index.ts:955-969
-1 test suite also references this code (not listed)
-tests for handleHMRUpdate were not updated
-ask for review  翠 (80 commits, 11d ago) · btea (4 commits, 28d ago)
-not indexed  1 file: .gitignore
-```
-
-### Read a file as an outline
-
-`sieve symbols` prints the outline of one file with line ranges.
-
-```
-$ sieve symbols packages/vite/src/node/server/index.ts
-packages/vite/src/node/server/hmr.ts · 42 symbols
-    48-56  WsOptions  iface
-    58-88  HmrOptions  iface
-    90-97  HotUpdateOptions  iface
-   99-105  HmrContext  iface
-  107-111  PropagationBoundary  iface
-  113-115  HotChannelClient  iface
-  117-120  HotChannelListener  type  <T extends string = string> = ( data: InferCustomEventPayload<T>, client: HotChannelClient, ) => void
-...
-```
-
-Sieve also has `map`. The [command reference](docs/guide/commands.md) lists all commands.
-
-### Rename a function across files
-
-`sieve rename` renames a TypeScript or JavaScript top-level function in every file that uses it. It is a dry run by default. Sieve proves each edit site first. If it cannot prove one site, it refuses the whole rename and names the line and the reason. After a write, Sieve checks its own result and restores the files on any doubt. See [docs/guide/rename.md](docs/guide/rename.md).
-
-```
-$ sieve rename parseArgs parseCliArgs
-rename plan 3f9a1c2e: src/args.ts#parseArgs (function) -> parseCliArgs
-4 files, 7 edits. Dry run: no file changed.
-Write it: sieve rename parseArgs parseCliArgs --write --expect 3f9a1c2e
-
---- a/src/args.ts
-+++ b/src/args.ts
-@@ -12 +12 @@
--export function parseArgs(argv: string[]): Args {
-+export function parseCliArgs(argv: string[]): Args {
-...
-```
-
-### Graph viewer
-
-`sieve viz` serves a graph viewer in your browser.
-
-<!-- SCREENSHOT: assets/viewer.png, taken by the owner. -->
-
-### Read intercept
-
-Sieve answers a Read of a file from the index. A read with `offset` or `limit` passes unchanged.
-
-### Remembered reads
-
-Sieve remembers each file the agent reads in a session. The second read of an unchanged file gets this note:
-
-```
-[sieve] a.ts is unchanged since your last read. Use that copy. If you no longer hold it, read again.
-```
-
-Sieve denies every second read of an unchanged file. The read after a deny passes. A changed file always passes.
-
-### Pane
-
-`sieve init --mod` adds a pane and a 3-line status line to Claude Code. Run `/sieve-pane` to open the pane. It shows callers, impact, decision records and saved tokens. Run `/sieve-mascot <name>` to pick one of six pixel mascots. Sieve, the kitchen sieve, is the default.
-
-### MCP
-
-`sieve mcp` serves the index to any MCP host over stdio. The server has seven tools: `sieve_query`, `sieve_find`, `sieve_callers`, `sieve_symbols`, `sieve_map`, `sieve_check` and `sieve_why`. The old tool names still work as hidden aliases.
-
-Register it with `{ "mcpServers": { "sieve": { "command": "sieve", "args": ["mcp"] } } }`. See [docs/guide/mcp.md](docs/guide/mcp.md).
-
-## Proof
-
-Sieve 0.1.0 on an Apple M1 Pro with 16 GB of memory, macOS 26.5.2, except the cross-file rename row: Sieve 0.1.9 on Linux. Rename numbers are correctness counts, not timings.
-
-| Claim | Repo and commit | Number | Method |
-|---|---|---|---|
-| Cold build | ripgrep 3fce3b5 (111 files) | 0.73 s | Median of 3 builds, each on a fresh copy. |
-| Cold build | vite 10033218 (1583 files) | 1.83 s | Median of 3 builds, each on a fresh copy. |
-| Warm build | ripgrep 3fce3b5 | 0.31 s | Median of 5 builds with no change. |
-| Warm build | vite 10033218 | 0.80 s | Median of 5 builds with no change. |
-| `query` latency | ripgrep 3fce3b5 | 62 ms median, 101 ms max | Wall time of one `sieve query` process. 30 timings: 10 questions, 3 runs each. |
-| `query` latency | vite 10033218 | 158 ms median, 185 ms max | The same method. |
-| Exact cross-file calls | vite 10033218 | 1,272 of 1,272 match the TypeScript compiler | Name-level match. Inferred calls are not counted. |
-| Cross-file rename | vite 10033218, execa v9.6.0 | 0 wrong edits; 162 of 300 and 283 of 300 renamed, the rest refused | Each plan compared with the TypeScript language service rename. |
-
-[docs/guide/benchmarks.md](docs/guide/benchmarks.md) gives the method and the questions, so you can repeat each run.
+On macOS (vite clone, about 1,600 files, M1 Pro, median of 15 runs), a `callers` call takes about 1 ms when no file changed, and about 77 ms right after a one-file edit. `query` is slower and not tuned yet. Linux is not measured yet; for about 2 seconds after a new folder appears, Linux uses a slower full check. Set `SIEVE_NO_WARM=1` to turn the in-memory index off.
 
 ## Languages
 
-Sieve parses TypeScript, JavaScript, Python, Go, Java, Kotlin, Swift, PHP and R natively. It parses 14 more with a generic parser. It reads script blocks in Vue, Svelte and Astro files. Exact cross-file links cover TypeScript, JavaScript, Rust, Python, Go, Java, C# and Kotlin, each with its own scope. For TypeScript and JavaScript, they cover relative imports and barrel re-exports, not package specifiers, `paths` aliases, CommonJS or `export =`. For the other languages, Sieve marks a call exact only when it proves one target. See [docs/guide/languages.md](docs/guide/languages.md).
+Sieve parses TypeScript, JavaScript, Python, Go, Java, Kotlin, Swift, PHP and R natively. It parses 14 more with a generic parser. It reads script blocks in Vue, Svelte and Astro files. Exact cross-file links cover TypeScript, JavaScript, Rust, Python, Go, Java, C# and Kotlin, each with its own scope. Other links stay inferred: treat them as hints. See [docs/guide/languages.md](docs/guide/languages.md).
 
-## Local only
+## Limits
 
-Sieve runs on your machine. Sieve sends no telemetry and makes no network call for a query. See [ADR 0001](docs/adr/adr-0001-local-only.md), [docs/guide/privacy.md](docs/guide/privacy.md) and [SECURITY.md](SECURITY.md).
-
-## When not to use Sieve
-
-- Sieve links calls as exact only in TypeScript, JavaScript, Rust, Python, Go, Java, C# and Kotlin, and only inside the scope of each language. In TypeScript and JavaScript, package specifiers, `paths` aliases and CommonJS stay Inferred. Other languages stay Inferred. Treat Inferred links as hints. See [docs/guide/languages.md](docs/guide/languages.md) and [ADR 0006](docs/adr/adr-0006-barrel-reexports.md).
-- `sieve rename` handles top-level functions in TypeScript and JavaScript only. It refuses many renames. See [docs/guide/rename.md](docs/guide/rename.md).
 - Sieve has not measured token savings in a real agent session.
-- There is no Windows build in v0.1.0.
+- `sieve rename` handles top-level functions in TypeScript and JavaScript only. It refuses many renames.
+- There is no Windows build.
 
 The [FAQ](docs/guide/faq.md) lists more limits.
 
 ## Docs
 
-- [Install](docs/guide/install.md)
-- [Quickstart](docs/guide/quickstart.md)
-- [Concepts](docs/guide/concepts.md)
-- [Commands](docs/guide/commands.md)
-- [Rename](docs/guide/rename.md)
-- [Claude Code](docs/guide/claude-code.md)
-- [MCP](docs/guide/mcp.md)
-- [Configuration](docs/guide/configuration.md)
-- [Languages](docs/guide/languages.md)
-- [Privacy](docs/guide/privacy.md)
-- [Benchmarks](docs/guide/benchmarks.md)
-- [Troubleshooting](docs/guide/troubleshooting.md)
-- [FAQ](docs/guide/faq.md)
-- [Decision records](docs/adr/)
+[Install](docs/guide/install.md) · [Quickstart](docs/guide/quickstart.md) · [Concepts](docs/guide/concepts.md) · [Commands](docs/guide/commands.md) · [Claude Code](docs/guide/claude-code.md) · [MCP](docs/guide/mcp.md) · [Configuration](docs/guide/configuration.md) · [Privacy](docs/guide/privacy.md) · [Benchmarks](docs/guide/benchmarks.md) · [Troubleshooting](docs/guide/troubleshooting.md) · [FAQ](docs/guide/faq.md) · [Decision records](docs/adr/)
 
-## Contributing
-
-Read [CONTRIBUTING.md](CONTRIBUTING.md) before you open a pull request. Report a security issue as [SECURITY.md](SECURITY.md) describes. The [changelog](CHANGELOG.md) lists each release.
+Also: [CHANGELOG](CHANGELOG.md) · [CONTRIBUTING](CONTRIBUTING.md) · [SECURITY](SECURITY.md)
 
 ## License
 
 Sieve uses the MIT license or the Apache-2.0 license, at your choice. See [LICENSE-MIT](LICENSE-MIT) and [LICENSE-APACHE](LICENSE-APACHE). Third-party notices are in [THIRD_PARTY.md](THIRD_PARTY.md).
-
-<p align="center">
-  <a href="https://github.com/iamalvisng/sieve/actions"><img src="https://img.shields.io/github/actions/workflow/status/iamalvisng/sieve/ci.yml?label=CI" alt="CI"></a>
-  <a href="https://github.com/iamalvisng/sieve/releases"><img src="https://img.shields.io/github/v/release/iamalvisng/sieve" alt="version"></a>
-  <a href="LICENSE-MIT"><img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue" alt="license"></a>
-</p>

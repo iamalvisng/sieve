@@ -79,6 +79,7 @@ fn build_graph_tree(root: &Path, context_dir: &Path) {
         extractor: stamp.clone(),
         files: report.prints,
         only_dirs: None,
+        walked_at_ms: None,
     };
     write_fingerprint(&fingerprint_path(context_dir, &stamp), &fingerprint)
         .expect("write fingerprint");

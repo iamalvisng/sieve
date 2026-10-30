@@ -135,21 +135,22 @@ pub fn resolve_edges_with_context(
     idx.cs = CsIndex::build(raw);
     idx.kt = KtIndex::build(raw);
 
-    let mut out: Vec<Edge> = Vec::new();
-    let mut seen: HashSet<(String, &'static str, String)> = HashSet::new();
-    for raw_edge in raw {
-        let Some(edge) = resolve_one(raw_edge, &idx, go_modules) else {
-            continue;
-        };
-        let key = (
-            edge.source.clone(),
-            edge.relation.as_str(),
-            edge.target.clone(),
-        );
-        if seen.insert(key) {
-            out.push(edge);
-        }
-    }
+    let all: Vec<Edge> = raw
+        .iter()
+        .filter_map(|raw_edge| resolve_one(raw_edge, &idx, go_modules))
+        .collect();
+    // The set borrows the edge text, so no key clones a string. The first
+    // edge of each (source, relation, target) stays, in resolve order.
+    let mut seen: HashSet<(&str, &'static str, &str)> = HashSet::with_capacity(all.len());
+    let keep: Vec<bool> = all
+        .iter()
+        .map(|e| seen.insert((e.source.as_str(), e.relation.as_str(), e.target.as_str())))
+        .collect();
+    let mut keep = keep.into_iter();
+    let out: Vec<Edge> = all
+        .into_iter()
+        .filter(|_| keep.next().unwrap_or(false))
+        .collect();
     out
 }
 
@@ -1236,25 +1237,62 @@ fn reachable(from_path: &str, to_path: &str) -> bool {
 /// too, so a Ruby name and a Lua name never cross-reach, even though
 /// neither is a depth-tier grammar.
 fn family(path: &str) -> Option<&'static str> {
-    let grammar = lang_for_path(Path::new(path))
-        .map(|lang| lang.grammar)
-        .or_else(|| generic_lang_of(path).map(|lang| lang.name))?;
-    Some(match grammar {
-        "typescript" | "tsx" => "typescript",
-        "java" | "kotlin" | "scala" | "clojure" => "java",
-        "c" | "cpp" => "c",
-        other => other,
+    file_info(path).family
+}
+
+/// What the link learns once about one file path.
+#[derive(Clone, Copy)]
+struct FileInfo {
+    /// The depth-tier grammar of `lang_for_path`.
+    grammar: Option<&'static str>,
+    /// The resolution family (see [`family`]).
+    family: Option<&'static str>,
+}
+
+/// The most paths the language memo holds before it starts again.
+const INFO_MEMO_MAX: usize = 200_000;
+
+thread_local! {
+    /// `lang_for_path` and `generic_lang_of` cost a lower-cased copy and a
+    /// table scan. The link asks about the same file for every edge, so the
+    /// answer is kept per path. The answer depends on the path only.
+    static INFO_MEMO: std::cell::RefCell<HashMap<String, FileInfo>> =
+        std::cell::RefCell::new(HashMap::new());
+}
+
+/// The language facts of one path, computed once and reused.
+fn file_info(path: &str) -> FileInfo {
+    INFO_MEMO.with(|memo| {
+        let mut memo = memo.borrow_mut();
+        if let Some(info) = memo.get(path) {
+            return *info;
+        }
+        let grammar = lang_for_path(Path::new(path)).map(|lang| lang.grammar);
+        let family = grammar
+            .or_else(|| generic_lang_of(path).map(|lang| lang.name))
+            .map(|g| match g {
+                "typescript" | "tsx" => "typescript",
+                "java" | "kotlin" | "scala" | "clojure" => "java",
+                "c" | "cpp" => "c",
+                other => other,
+            });
+        if memo.len() >= INFO_MEMO_MAX {
+            memo.clear();
+        }
+        let info = FileInfo { grammar, family };
+        memo.insert(path.to_string(), info);
+        info
     })
 }
 
 /// Reports whether `path`'s grammar is Python.
 fn is_python_file(path: &str) -> bool {
-    lang_for_path(Path::new(path)).is_some_and(|l| l.grammar == "python")
+    file_info(path).grammar == Some("python")
 }
 
 /// Reports whether `path`'s grammar is Go.
 fn is_go_file(path: &str) -> bool {
-    lang_for_path(Path::new(path)).is_some_and(|l| l.grammar == "go")
+    file_info(path).grammar == Some("go")
 }
 
 /// Reports whether `path`'s grammar is C#.
@@ -1266,28 +1304,28 @@ fn is_csharp_file(path: &str) -> bool {
 
 /// Reports whether `path`'s grammar is Java.
 fn is_java_file(path: &str) -> bool {
-    lang_for_path(Path::new(path)).is_some_and(|l| l.grammar == "java")
+    file_info(path).grammar == Some("java")
 }
 
 /// Reports whether `path`'s grammar is Kotlin.
 fn is_kotlin_file(path: &str) -> bool {
-    lang_for_path(Path::new(path)).is_some_and(|l| l.grammar == "kotlin")
+    file_info(path).grammar == Some("kotlin")
 }
 
 /// Reports whether `path`'s grammar is PHP.
 fn is_php_file(path: &str) -> bool {
-    lang_for_path(Path::new(path)).is_some_and(|l| l.grammar == "php")
+    file_info(path).grammar == Some("php")
 }
 
 /// Reports whether `path`'s grammar is Swift.
 fn is_swift_file(path: &str) -> bool {
-    lang_for_path(Path::new(path)).is_some_and(|l| l.grammar == "swift")
+    file_info(path).grammar == Some("swift")
 }
 
 /// Reports whether `path` is Swift, Kotlin or C#. These languages never
 /// pick a same-file candidate when 2 or more candidates remain.
 fn is_no_tiebreak_file(path: &str) -> bool {
-    lang_for_path(Path::new(path)).is_some_and(|l| matches!(l.grammar, "swift" | "kotlin"))
+    matches!(file_info(path).grammar, Some("swift" | "kotlin"))
         || generic_lang_of(path).is_some_and(|l| l.name == "c_sharp")
 }
 

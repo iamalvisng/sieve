@@ -1640,6 +1640,7 @@ fn test_rn2_only_dir_build_refuses_once_for_unindexed_hits() {
         extractor: stamp,
         files: std::collections::BTreeMap::new(),
         only_dirs: Some(vec!["a".to_string()]),
+        walked_at_ms: None,
     };
     sieve_core::fingerprint::write_fingerprint(&print, &fp).expect("fingerprint");
     let plan = repo.plan("f", "g");

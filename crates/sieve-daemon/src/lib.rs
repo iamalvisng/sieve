@@ -5,5 +5,6 @@ pub mod names;
 pub mod rpc;
 mod templates;
 pub mod tools;
+mod warm;
 
 pub use rpc::{serve, serve_with_upkeep};

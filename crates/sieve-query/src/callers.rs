@@ -16,8 +16,10 @@ use serde::Serialize;
 use sieve_core::{Graph, Kind, Node, Relation};
 use thiserror::Error;
 
-use crate::ask::structural::resolve_symbol as resolve_symbol_matches;
-use crate::grep::{escape_regex, grep_graph, GrepOptions};
+use crate::ask::structural::{candidate_id, resolve_symbol_with as resolve_symbol_matches_with};
+#[cfg(test)]
+use crate::grep::grep_graph;
+use crate::grep::{compile_pattern, decode_file_bytes, escape_regex, GrepOptions, MAX_HIT_TEXT};
 use crate::relations::WALK_RELATIONS;
 
 /// Which way `callers` walks the graph: `In` = who points at the symbol,
@@ -150,7 +152,60 @@ pub fn resolve_symbol<'a>(
     query: &str,
     in_prefix: Option<&str>,
 ) -> Result<Vec<&'a Node>, CallersError> {
-    let mut matches = resolve_symbol_matches(graph, query, None);
+    resolve_symbol_with(graph, query, in_prefix, None)
+}
+
+/// The per-graph lookups that `callers` rebuilds on every call: each node's
+/// lowercase name and candidate id, and an id map. A warm process builds one
+/// per graph version and passes it to [`resolve_symbol_with`] and
+/// [`edge_walk_with`]. The answers equal the ones without an index.
+#[derive(Debug)]
+pub struct GraphIndex {
+    pub(crate) lower_name: Vec<Box<str>>,
+    pub(crate) candidate: Vec<Box<str>>,
+    by_id: HashMap<Box<str>, u32>,
+}
+
+impl GraphIndex {
+    /// Builds the lookups for `graph`.
+    pub fn build(graph: &Graph) -> GraphIndex {
+        let lower_name = graph
+            .nodes
+            .iter()
+            .map(|n| n.name.to_lowercase().into())
+            .collect();
+        let candidate = graph
+            .nodes
+            .iter()
+            .map(|n| {
+                if n.kind == Kind::File {
+                    Box::from("")
+                } else {
+                    candidate_id(&n.id).into()
+                }
+            })
+            .collect();
+        let mut by_id = HashMap::with_capacity(graph.nodes.len());
+        for (i, n) in graph.nodes.iter().enumerate() {
+            // The last node of an id wins, as `collect` into a `HashMap` does.
+            by_id.insert(Box::from(n.id.as_str()), i as u32);
+        }
+        GraphIndex {
+            lower_name,
+            candidate,
+            by_id,
+        }
+    }
+}
+
+/// [`resolve_symbol`] with an index built for the same graph.
+pub fn resolve_symbol_with<'a>(
+    graph: &'a Graph,
+    query: &str,
+    in_prefix: Option<&str>,
+    index: Option<&GraphIndex>,
+) -> Result<Vec<&'a Node>, CallersError> {
+    let mut matches = resolve_symbol_matches_with(graph, query, None, index);
 
     if let Some(raw) = in_prefix {
         let normalized = normalize_path_prefix(raw);
@@ -203,8 +258,22 @@ pub struct Hit<'a> {
 /// Depth-1: a plain scan over `graph.edges` in file order, keeping every
 /// walk-relation edge that touches `symbol`. No dedup: two edges between
 /// the same pair give two hits (section 2.5, spec correction in section 6).
-fn depth1_scan<'a>(graph: &'a Graph, symbol: &Node, direction: Direction) -> Vec<Hit<'a>> {
-    let by_id: HashMap<&str, &Node> = graph.nodes.iter().map(|n| (n.id.as_str(), n)).collect();
+fn depth1_scan<'a>(
+    graph: &'a Graph,
+    symbol: &Node,
+    direction: Direction,
+    index: Option<&GraphIndex>,
+) -> Vec<Hit<'a>> {
+    let owned: HashMap<&str, &Node> = match index {
+        Some(_) => HashMap::new(),
+        None => graph.nodes.iter().map(|n| (n.id.as_str(), n)).collect(),
+    };
+    let find = |id: &str| -> Option<&'a Node> {
+        match index {
+            Some(i) => i.by_id.get(id).map(|at| &graph.nodes[*at as usize]),
+            None => owned.get(id).copied(),
+        }
+    };
     let mut hits = Vec::new();
     for edge in &graph.edges {
         if !WALK_RELATIONS.contains(&edge.relation) {
@@ -219,7 +288,7 @@ fn depth1_scan<'a>(graph: &'a Graph, symbol: &Node, direction: Direction) -> Vec
             id: other.clone(),
             relation: edge.relation,
             depth: 1,
-            node: by_id.get(other.as_str()).copied(),
+            node: find(other.as_str()),
             parent: None,
         });
     }
@@ -291,8 +360,19 @@ pub fn edge_walk<'a>(
     direction: Direction,
     depth: Depth,
 ) -> Vec<Hit<'a>> {
+    edge_walk_with(graph, symbol, direction, depth, None)
+}
+
+/// [`edge_walk`] with an index built for the same graph.
+pub fn edge_walk_with<'a>(
+    graph: &'a Graph,
+    symbol: &'a Node,
+    direction: Direction,
+    depth: Depth,
+    index: Option<&GraphIndex>,
+) -> Vec<Hit<'a>> {
     if matches!(depth, Depth(Some(n)) if n <= 1) {
-        return depth1_scan(graph, symbol, direction);
+        return depth1_scan(graph, symbol, direction, index);
     }
     let max_depth = match depth {
         Depth(Some(n)) => n,
@@ -571,8 +651,318 @@ pub fn callers_hit_count(matches: &[(&Node, Vec<Hit>)]) -> usize {
 /// The size, in chars, of the output of `grep -rnw <name>` over the indexed
 /// files under `root`: one `path:line:text` row per whole-word match. This is
 /// the baseline the `callers` answer line measures against. A hit's text is
-/// capped at 160 code units, so the baseline errs low.
+/// capped at 160 code units, so the baseline errs low. A word with a line
+/// break gives 0: `grep` splits on `\n`, so such a word never matches a line.
 pub fn word_grep_chars(graph: &Graph, root: &Path, name: &str) -> u64 {
+    if name.contains(['\n', '\r']) {
+        return 0;
+    }
+    let opts = GrepOptions {
+        ignore_case: false,
+        fixed: false,
+        in_prefix: None,
+        max_hits: 1_000_000,
+    };
+    let pattern = format!(r"\b{}\b", escape_regex(name));
+    let Ok(regex) = compile_pattern(&pattern, &opts) else {
+        return 0;
+    };
+    let paths: Vec<&str> = graph
+        .nodes
+        .iter()
+        .filter(|n| n.kind == Kind::File)
+        .map(|n| n.path.as_str())
+        .collect();
+    if paths.is_empty() {
+        return 0;
+    }
+    let threads = std::thread::available_parallelism().map_or(1, |n| n.get().min(8));
+    word_grep_chars_in(&regex, root, &paths, threads, opts.max_hits as u64)
+}
+
+/// The most hits the baseline counts before the cap applies. A name past it
+/// uses the disk scan, which applies the cap in file order.
+const WORD_CAP: u64 = 1_000_000;
+
+/// The rows of one word in one file: the count, and the chars of each row
+/// without its path (`:`, the line digits, `:`, the text, `\n`).
+type Rows = (u32, u64);
+
+/// One file's indexed words.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+struct FileWords {
+    /// The UTF-16 length of the path.
+    path_units: u64,
+    words: HashMap<Box<str>, Rows>,
+}
+
+/// The savings word index (`docs/design/daemon-speed.md`, V3). It holds, per
+/// file, the row size of each line that holds a word, for the words that are
+/// node names made of ASCII letters, digits and `_`. [`WordIndex::chars`] then
+/// gives the figure of [`word_grep_chars`] with no disk read.
+#[derive(Debug, Default)]
+pub struct WordIndex {
+    vocab: HashSet<Box<str>>,
+    files: HashMap<String, FileWords>,
+}
+
+/// True for a name that the `\b` regex reads as one token of word chars.
+fn is_pure_word(name: &str) -> bool {
+    !name.is_empty() && name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
+}
+
+impl WordIndex {
+    /// Indexes every file node of `graph` under `root`, on scoped threads.
+    pub fn build(graph: &Graph, root: &Path) -> WordIndex {
+        let vocab: HashSet<Box<str>> = graph
+            .nodes
+            .iter()
+            .filter(|n| is_pure_word(&n.name))
+            .map(|n| n.name.as_str().into())
+            .collect();
+        let paths: Vec<&str> = graph
+            .nodes
+            .iter()
+            .filter(|n| n.kind == Kind::File)
+            .map(|n| n.path.as_str())
+            .collect();
+        let threads = std::thread::available_parallelism().map_or(1, |n| n.get().min(8));
+        let size = paths.len().div_ceil(threads).max(1);
+        let vocab_ref = &vocab;
+        let files: HashMap<String, FileWords> = std::thread::scope(|scope| {
+            let handles: Vec<_> = paths
+                .chunks(size)
+                .map(|chunk| {
+                    scope.spawn(move || {
+                        let mut buf = Vec::new();
+                        chunk
+                            .iter()
+                            .map(|path| {
+                                (
+                                    (*path).to_string(),
+                                    file_words(vocab_ref, root, path, &mut buf),
+                                )
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                })
+                .collect();
+            handles
+                .into_iter()
+                .flat_map(|h| h.join().unwrap_or_else(|e| std::panic::resume_unwind(e)))
+                .collect()
+        });
+        WordIndex { vocab, files }
+    }
+
+    /// Reads one file again and replaces its entry.
+    pub fn refresh_file(&mut self, root: &Path, path: &str) {
+        let words = file_words(&self.vocab, root, path, &mut Vec::new());
+        self.files.insert(path.to_string(), words);
+    }
+
+    /// Removes the entry of a file that left the graph.
+    pub fn drop_file(&mut self, path: &str) {
+        self.files.remove(path);
+    }
+
+    /// The figure of [`word_grep_chars`] for `name`, or `None` when the index
+    /// cannot give it: a name that is not an indexed word, or a name past the
+    /// hit cap.
+    pub fn chars(&self, name: &str) -> Option<u64> {
+        if !self.vocab.contains(name) {
+            return None;
+        }
+        let (mut hits, mut chars) = (0u64, 0u64);
+        for file in self.files.values() {
+            if let Some(&(n, rest)) = file.words.get(name) {
+                hits += u64::from(n);
+                chars += u64::from(n) * file.path_units + rest;
+            }
+        }
+        (hits <= WORD_CAP).then_some(chars)
+    }
+
+    /// A rough size in bytes, for the memory gate.
+    pub fn approx_bytes(&self) -> usize {
+        let words: usize = self
+            .files
+            .iter()
+            .map(|(p, f)| p.len() + 48 + f.words.keys().map(|w| w.len() + 40).sum::<usize>())
+            .sum();
+        words + self.vocab.iter().map(|w| w.len() + 24).sum::<usize>()
+    }
+}
+
+/// Reads and indexes one file. An unreadable file gives an empty entry, the
+/// same as `grep` gives no rows.
+fn file_words(vocab: &HashSet<Box<str>>, root: &Path, path: &str, buf: &mut Vec<u8>) -> FileWords {
+    let mut out = FileWords {
+        path_units: path.encode_utf16().count() as u64,
+        words: HashMap::new(),
+    };
+    buf.clear();
+    let read = std::fs::File::open(root.join(path))
+        .and_then(|mut f| std::io::Read::read_to_end(&mut f, buf));
+    if read.is_err() {
+        return out;
+    }
+    let Some(text) = decode_file_bytes(buf) else {
+        return out;
+    };
+    let mut seen: Vec<&str> = Vec::new();
+    for (i, line) in text.split('\n').enumerate() {
+        seen.clear();
+        let bytes = line.as_bytes();
+        let mut at = 0;
+        while at < bytes.len() {
+            if !(bytes[at].is_ascii_alphanumeric() || bytes[at] == b'_') {
+                at += 1;
+                continue;
+            }
+            let start = at;
+            while at < bytes.len() && (bytes[at].is_ascii_alphanumeric() || bytes[at] == b'_') {
+                at += 1;
+            }
+            let token = &line[start..at];
+            if vocab.contains(token) && !seen.contains(&token) {
+                seen.push(token);
+            }
+        }
+        if seen.is_empty() {
+            continue;
+        }
+        let shown = line.trim().encode_utf16().count().min(MAX_HIT_TEXT) as u64;
+        let digits = (i as u64 + 1).ilog10() as u64 + 1;
+        // `:` + line + `:` + text + `\n`
+        let rest = 2 + digits + shown + 1;
+        for token in &seen {
+            let row = out.words.entry((*token).into()).or_insert((0, 0));
+            row.0 += 1;
+            row.1 += rest;
+        }
+    }
+    out
+}
+
+/// [`word_grep_chars`] that reads `index` first and scans the disk when the
+/// index cannot answer.
+pub fn word_grep_chars_indexed(
+    index: Option<&WordIndex>,
+    graph: &Graph,
+    root: &Path,
+    name: &str,
+) -> u64 {
+    index
+        .and_then(|i| i.chars(name))
+        .unwrap_or_else(|| word_grep_chars(graph, root, name))
+}
+
+/// Reads one file into `buf` and counts its rows, at most `limit` of them.
+/// An unreadable file gives `(0, 0)`, the same as in `grep`.
+fn file_rows(
+    regex: &regress::Regex,
+    root: &Path,
+    path: &str,
+    buf: &mut Vec<u8>,
+    limit: u64,
+) -> (u64, u64) {
+    buf.clear();
+    let read = std::fs::File::open(root.join(path))
+        .and_then(|mut f| std::io::Read::read_to_end(&mut f, buf));
+    if read.is_err() {
+        return (0, 0);
+    }
+    decode_file_bytes(buf).map_or((0, 0), |text| file_row_chars(regex, path, &text, limit))
+}
+
+/// Sums the row sizes of `paths` on `threads` scoped threads. Threads count
+/// each file; one ordered pass then applies the `max_hits` cap, so the
+/// result equals the sequential `grep` for any thread count.
+fn word_grep_chars_in(
+    regex: &regress::Regex,
+    root: &Path,
+    paths: &[&str],
+    threads: usize,
+    max_hits: u64,
+) -> u64 {
+    let size = paths.len().div_ceil(threads.max(1));
+    let per_file: Vec<(u64, u64)> = std::thread::scope(|scope| {
+        let handles: Vec<_> = paths
+            .chunks(size)
+            .map(|chunk| {
+                scope.spawn(move || {
+                    let mut buf = Vec::new();
+                    chunk
+                        .iter()
+                        .map(|path| file_rows(regex, root, path, &mut buf, u64::MAX))
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .flat_map(|h| h.join().unwrap_or_else(|e| std::panic::resume_unwind(e)))
+            .collect()
+    });
+    let (mut hits, mut chars) = (0u64, 0u64);
+    for (path, (file_hits, file_chars)) in paths.iter().zip(per_file) {
+        if hits + file_hits <= max_hits {
+            hits += file_hits;
+            chars += file_chars;
+            continue;
+        }
+        // This file crosses the cap: count only its first rows.
+        chars += file_rows(regex, root, path, &mut Vec::new(), max_hits - hits).1;
+        break;
+    }
+    chars
+}
+
+/// The count and UTF-16 size of the `path:line:text\n` rows of one file's
+/// matching lines, at most `limit` rows.
+fn file_row_chars(regex: &regress::Regex, path: &str, text: &str, limit: u64) -> (u64, u64) {
+    let bytes = text.as_bytes();
+    let path_units = path.encode_utf16().count() as u64;
+    let (mut sum, mut line, mut counted, mut line_end) = (0u64, 1u64, 0usize, 0usize);
+    let mut hits = 0u64;
+    for m in regex.find_iter(text) {
+        if hits >= limit {
+            break;
+        }
+        let start = m.start();
+        if start < line_end {
+            continue;
+        }
+        let line_start = bytes[..start]
+            .iter()
+            .rposition(|&b| b == b'\n')
+            .map_or(0, |i| i + 1);
+        line += bytes[counted..line_start]
+            .iter()
+            .filter(|&&b| b == b'\n')
+            .count() as u64;
+        counted = line_start;
+        let end = bytes[start..]
+            .iter()
+            .position(|&b| b == b'\n')
+            .map_or(bytes.len(), |i| start + i);
+        line_end = end + 1;
+        let shown = text[line_start..end]
+            .trim()
+            .encode_utf16()
+            .count()
+            .min(MAX_HIT_TEXT) as u64;
+        // `path` + `:` + line + `:` + text + `\n`
+        sum += path_units + 2 + (line.ilog10() as u64 + 1) + shown + 1;
+        hits += 1;
+    }
+    (hits, sum)
+}
+
+/// The slow reference for `word_grep_chars`, kept to pin its figure.
+#[cfg(test)]
+fn word_grep_chars_reference(graph: &Graph, root: &Path, name: &str) -> u64 {
     let opts = GrepOptions {
         ignore_case: false,
         fixed: false,
@@ -741,6 +1131,231 @@ mod tests {
         let want = ("a.ts:1:run();\n".len() + "a.ts:3:x = run;\n".len()) as u64;
         assert_eq!(word_grep_chars(&g, &dir, "run"), want);
         assert_eq!(word_grep_chars(&g, &dir, "absent"), 0);
+    }
+
+    /// Writes the differential fixture and returns its graph.
+    fn word_fixture(dir: &Path) -> Graph {
+        let long: String = format!("run {}\u{1D4BB}{}", "a".repeat(155), "b".repeat(30));
+        let cut_bmp = format!("run {}{}", "x".repeat(150), "\u{00E9}".repeat(40));
+        let files: Vec<(&str, Vec<u8>)> = vec![
+            (
+                "crlf.ts",
+                b"run();\r\nrunner();\r\n  x = run;  \r\n".to_vec(),
+            ),
+            ("bom.ts", b"\xEF\xBB\xBFrun();\nrun;\n".to_vec()),
+            ("u16.ts", {
+                let mut v = vec![0xFF, 0xFE];
+                for u in "run();\nx = run\n".encode_utf16() {
+                    v.extend_from_slice(&u.to_le_bytes());
+                }
+                v
+            }),
+            ("u16be.ts", vec![0xFE, 0xFF, 0, b'r', 0, b'u', 0, b'n']),
+            ("nonl.ts", b"a\nrun".to_vec()),
+            ("two.ts", b"run(run) + run\nrun\n\nrun\n".to_vec()),
+            ("longer.ts", b"runner running _run run_ $run\n".to_vec()),
+            ("pair.ts", long.into_bytes()),
+            ("bmp.ts", cut_bmp.into_bytes()),
+            ("empty.ts", Vec::new()),
+            ("none.ts", b"nothing here\n".to_vec()),
+            ("bad.ts", b"run \xFF\xFE bad\nrun\n".to_vec()),
+            ("cr.ts", b"run\rrun\rx".to_vec()),
+            ("many.ts", {
+                let mut v = String::new();
+                for i in 1..=120 {
+                    match i {
+                        9 | 10 | 99 | 100 | 101 => v.push_str("run\n"),
+                        20 => v.push_str("run x\n"),
+                        _ => v.push('\n'),
+                    }
+                }
+                v.push_str(&"\n".repeat(300));
+                v.push_str("  run  \n");
+                v.into_bytes()
+            }),
+            ("café run.ts", "run caf\u{e9}\n".as_bytes().to_vec()),
+        ];
+        let mut nodes = Vec::new();
+        for (name, bytes) in &files {
+            std::fs::write(dir.join(name), bytes).expect("write");
+            nodes.push(node(name, name, Kind::File, name, "L1-L1"));
+        }
+        std::fs::create_dir(dir.join("adir")).expect("dir");
+        nodes.push(node("adir", "adir", Kind::File, "adir", "L1-L1"));
+        nodes.push(node("gone", "gone.ts", Kind::File, "gone.ts", "L1-L1"));
+        graph(nodes, Vec::new())
+    }
+
+    #[test]
+    fn word_grep_chars_matches_the_reference() {
+        let dir = crate::test_support::TempDir::new("word-grep-diff");
+        let g = word_fixture(&dir);
+        for word in [
+            "run",
+            "runner",
+            "absent",
+            "a",
+            "x",
+            "caf\u{e9}",
+            "\u{1D4BB}",
+        ] {
+            assert_eq!(
+                word_grep_chars(&g, &dir, word),
+                word_grep_chars_reference(&g, &dir, word),
+                "word {word}"
+            );
+        }
+        assert!(word_grep_chars(&g, &dir, "run") > 0);
+    }
+
+    #[test]
+    fn the_word_index_matches_the_disk_scan() {
+        let dir = crate::test_support::TempDir::new("word-index-diff");
+        let mut g = word_fixture(&dir);
+        // Names: a pure word, a longer word, a non-ASCII name, a dotted name.
+        for (i, name) in ["run", "runner", "caf\u{e9}", "a.b", "x", "gone"]
+            .iter()
+            .enumerate()
+        {
+            let mut n = node(&format!("s{i}"), "a.ts", Kind::Function, name, "L1-L1");
+            n.name = (*name).to_string();
+            g.nodes.push(n);
+        }
+        std::fs::write(
+            dir.join("adj.ts"),
+            "\u{e9}run run\u{e9} \u{e9}run\u{e9} a.b a.b.c\n",
+        )
+        .expect("write");
+        g.nodes
+            .push(node("adj", "adj.ts", Kind::File, "adj.ts", "L1-L1"));
+        let index = WordIndex::build(&g, &dir);
+        for word in ["run", "runner", "x", "caf\u{e9}", "a.b", "absent", "gone"] {
+            assert_eq!(
+                word_grep_chars_indexed(Some(&index), &g, &dir, word),
+                word_grep_chars(&g, &dir, word),
+                "word {word}"
+            );
+        }
+        // A pure word is answered by the index; the others use the disk.
+        assert!(index.chars("run").is_some_and(|c| c > 0));
+        assert_eq!(index.chars("caf\u{e9}"), None);
+        assert_eq!(index.chars("a.b"), None);
+        assert_eq!(index.chars("absent"), None);
+        // The UTF-16LE file counts in the figure.
+        assert!(index.files["u16.ts"].words.contains_key("run"));
+        // An edit replaces the entry of one file.
+        std::fs::write(dir.join("two.ts"), "run\nrun run\n").expect("write");
+        let mut index = index;
+        index.refresh_file(&dir, "two.ts");
+        assert_eq!(index.chars("run"), Some(word_grep_chars(&g, &dir, "run")));
+        index.drop_file("two.ts");
+        assert_ne!(index.chars("run"), Some(word_grep_chars(&g, &dir, "run")));
+    }
+
+    #[test]
+    fn an_index_changes_no_answer_of_resolve_or_walk() {
+        let nodes = vec![
+            node("a.ts", "a.ts", Kind::File, "a.ts", "L1-L9"),
+            node("a.ts#Run", "Run", Kind::Function, "a.ts", "L1-L2"),
+            node("a.ts#Run~2", "Run", Kind::Function, "a.ts", "L3-L4"),
+            node("b.ts#Cls.go", "go", Kind::Method, "b.ts", "L1-L2"),
+            node("b.ts#caller", "caller", Kind::Function, "b.ts", "L3-L4"),
+        ];
+        let edges = vec![
+            edge("b.ts#caller", "a.ts#Run", Relation::Calls),
+            edge("b.ts#caller", "b.ts#Cls.go", Relation::Calls),
+            edge("b.ts#caller", "ghost.ts#x", Relation::Calls),
+        ];
+        let g = graph(nodes, edges);
+        let index = GraphIndex::build(&g);
+        for query in [
+            "run", "RUN", "go", "Cls.go", "a.ts", "caller", "nope", "x.go",
+        ] {
+            let plain = resolve_symbol(&g, query, None);
+            let fast = resolve_symbol_with(&g, query, None, Some(&index));
+            let ids = |r: &Result<Vec<&Node>, CallersError>| {
+                r.as_ref()
+                    .map(|v| v.iter().map(|n| n.id.clone()).collect::<Vec<_>>())
+                    .ok()
+            };
+            assert_eq!(ids(&plain), ids(&fast), "query {query}");
+            for symbol in plain.iter().flatten() {
+                for dir in [Direction::In, Direction::Out] {
+                    for depth in [Depth(Some(1)), Depth(None)] {
+                        let a = edge_walk(&g, symbol, dir, depth);
+                        let b = edge_walk_with(&g, symbol, dir, depth, Some(&index));
+                        let key = |h: &Vec<Hit>| {
+                            h.iter()
+                                .map(|x| (x.id.clone(), x.node.map(|n| n.id.clone()), x.depth))
+                                .collect::<Vec<_>>()
+                        };
+                        assert_eq!(key(&a), key(&b), "query {query}");
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn word_grep_chars_is_the_same_on_1_and_8_threads() {
+        let dir = crate::test_support::TempDir::new("word-grep-threads");
+        let g = word_fixture(&dir);
+        let opts = GrepOptions {
+            ignore_case: false,
+            fixed: false,
+            in_prefix: None,
+            max_hits: 1_000_000,
+        };
+        let regex = compile_pattern(r"\brun\b", &opts).expect("regex");
+        let paths: Vec<&str> = g.nodes.iter().map(|n| n.path.as_str()).collect();
+        let one = word_grep_chars_in(&regex, &dir, &paths, 1, 1_000_000);
+        assert_eq!(one, word_grep_chars_in(&regex, &dir, &paths, 8, 1_000_000));
+        assert_eq!(one, word_grep_chars_reference(&g, &dir, "run"));
+    }
+
+    #[test]
+    fn word_grep_chars_cap_matches_the_reference() {
+        let dir = crate::test_support::TempDir::new("word-grep-cap");
+        let g = word_fixture(&dir);
+        let opts = GrepOptions {
+            ignore_case: false,
+            fixed: false,
+            in_prefix: None,
+            max_hits: 0,
+        };
+        let regex = compile_pattern(r"\brun\b", &opts).expect("regex");
+        let paths: Vec<&str> = g
+            .nodes
+            .iter()
+            .filter(|n| n.kind == Kind::File)
+            .map(|n| n.path.as_str())
+            .collect();
+        for cap in [0u64, 1, 2, 5, 9, 14, 100] {
+            let want = {
+                let o = GrepOptions {
+                    max_hits: cap as usize,
+                    ..opts.clone()
+                };
+                let r = grep_graph(&g, &dir, r"\brun\b", &o).expect("grep");
+                r.groups
+                    .iter()
+                    .flat_map(|gr| gr.hits.iter().map(move |h| (gr, h)))
+                    .map(|(gr, h)| {
+                        format!("{}:{}:{}\n", gr.path, h.line, h.text)
+                            .encode_utf16()
+                            .count() as u64
+                    })
+                    .sum::<u64>()
+            };
+            for threads in [1, 3, 8] {
+                assert_eq!(
+                    word_grep_chars_in(&regex, &dir, &paths, threads, cap),
+                    want,
+                    "cap {cap}"
+                );
+            }
+        }
+        assert_eq!(word_grep_chars(&g, &dir, "a\nb"), 0);
     }
 
     #[test]

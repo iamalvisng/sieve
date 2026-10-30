@@ -11,15 +11,17 @@ use std::env;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use sieve_core::askindex::{ask_index_path, build_ask_index, write_ask_index};
 use sieve_core::fingerprint::{
-    fingerprint_path, probe_drift, read_fingerprint, write_fingerprint, Drift, Fingerprint, Print,
+    clear_racy_state, fingerprint_mtime_ms, fingerprint_path, probe_drift_racy, probe_drift_walk,
+    read_fingerprint, write_fingerprint, Drift, Fingerprint, Print,
 };
 use sieve_core::lock::{self, LockGuard};
 use sieve_core::lookup::{self, wiring_stamp, Lookup, DEFAULT_WIRING_CAP_BYTES};
 use sieve_core::wiring::Graph;
-use sieve_core::write_graph_stamped;
+use sieve_core::write_graph_kept;
 
 use crate::build::{build_graph_cached_with, BuildOptions};
 
@@ -43,6 +45,35 @@ impl Drop for RefreshLock {
         }
         // The `Immediate` case releases itself: `LockGuard` has its own
         // `Drop`, which fires right after this one.
+    }
+}
+
+/// Writes a fingerprint with a new walk start, after a probe hashed the racy
+/// files and found no drift. It takes the build lock without a wait, and
+/// writes only if no rebuild changed the record meanwhile. A failure is
+/// harmless: the next query hashes again.
+fn clear_racy_under_lock(
+    context_dir: &Path,
+    fp_path: &Path,
+    stamp: &str,
+    fp: &Fingerprint,
+    latest_racy_mtime_ms: f64,
+) {
+    let Ok(Some(_guard)) = LockGuard::acquire(context_dir) else {
+        return;
+    };
+    if read_fingerprint(fp_path, stamp).as_ref() == Some(fp) {
+        let _ = clear_racy_state(fp_path, fp, latest_racy_mtime_ms);
+    }
+}
+
+/// Keeps the walk list of a probe only when the lock was taken on the first
+/// try. After a wait, another process may have changed the tree, so the
+/// rebuild walks again.
+fn walk_to_reuse(lock: &RefreshLock, walked: Option<Vec<PathBuf>>) -> Option<Vec<PathBuf>> {
+    match lock {
+        RefreshLock::Immediate(_) => walked,
+        RefreshLock::Waited(_) => None,
     }
 }
 
@@ -110,13 +141,87 @@ pub fn lookup_path(context_dir: &Path) -> PathBuf {
 /// in task T3. A failed lookup write deletes any old lookup and still
 /// returns `Ok`, so the readers fall back to the wiring.
 pub fn write_wiring_and_lookup(graph: &Graph, context_dir: &Path) -> io::Result<()> {
+    write_wiring_and_lookup_kept(graph, context_dir).map(|_| ())
+}
+
+/// Like [`write_wiring_and_lookup`], and also returns the graph as written
+/// with the stamp of its `wiring.json`.
+fn write_wiring_and_lookup_kept(
+    graph: &Graph,
+    context_dir: &Path,
+) -> io::Result<((u64, u64), Graph)> {
     let wiring_path = context_dir.join(".graph").join("wiring.json");
-    let stamp = write_graph_stamped(graph, &wiring_path)?;
+    let mut timer = crate::timing::Timer::start();
+    let (stamp, written) = write_graph_kept(graph, &wiring_path)?;
+    timer.lap("write wiring");
     let path = lookup_path(context_dir);
     if lookup::write(graph, &path, stamp).is_err() {
         let _ = fs::remove_file(&path);
     }
-    Ok(())
+    timer.lap("write lookup");
+    Ok((stamp, written))
+}
+
+/// A graph this process wrote, with its root and the fingerprint written
+/// with it. It lives in memory only.
+type Rebuilt = (PathBuf, Fingerprint, Graph);
+
+/// The roots with a live [`KeepRebuilt`] guard. A rebuild keeps its graph only
+/// for a root in this list.
+static KEEPING: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
+static REBUILT: Mutex<Vec<Rebuilt>> = Mutex::new(Vec::new());
+
+/// While it lives, a refresh rebuild in this process keeps the graph it
+/// writes for its root, for [`KeepRebuilt::take_graph`]. A one-shot command
+/// holds it from the refresh to the read. A daemon does not, so it keeps no
+/// copy. Dropping the guard clears the kept graph.
+pub struct KeepRebuilt {
+    root: PathBuf,
+}
+
+/// Starts keeping the rebuilt graph for `root`. It drops any older graph kept
+/// for that root.
+pub fn keep_rebuilt_graph(root: &Path) -> KeepRebuilt {
+    clear_rebuilt(root);
+    if let Ok(mut keeping) = KEEPING.lock() {
+        keeping.push(root.to_path_buf());
+    }
+    KeepRebuilt {
+        root: root.to_path_buf(),
+    }
+}
+
+/// Removes the graph kept for `root`.
+fn clear_rebuilt(root: &Path) {
+    if let Ok(mut kept) = REBUILT.lock() {
+        kept.retain(|(kept_root, _, _)| kept_root != root);
+    }
+}
+
+impl Drop for KeepRebuilt {
+    fn drop(&mut self) {
+        clear_rebuilt(&self.root);
+        if let Ok(mut keeping) = KEEPING.lock() {
+            if let Some(at) = keeping.iter().position(|root| *root == self.root) {
+                keeping.swap_remove(at);
+            }
+        }
+    }
+}
+
+impl KeepRebuilt {
+    /// Takes the graph this process wrote in its last rebuild of this root.
+    /// It gives `None` unless the fingerprint on disk is the one written with
+    /// that graph, so the graph in memory is the build on disk. The caller
+    /// decodes the file when it gets `None`.
+    pub fn take_graph(&self, context_dir: &Path) -> Option<Graph> {
+        let stamp = crate::extractor_stamp();
+        let on_disk = read_fingerprint(&fingerprint_path(context_dir, &stamp), &stamp)?;
+        let mut kept = REBUILT.lock().ok()?;
+        let at = kept.iter().position(|(root, _, _)| *root == self.root)?;
+        let (_, written, graph) = kept.swap_remove(at);
+        (written == on_disk).then_some(graph)
+    }
 }
 
 /// Rewrites the lookup from `wiring.json` alone when the lookup is missing
@@ -161,7 +266,7 @@ fn regenerate_lookup(context_dir: &Path, wiring_path: &Path) {
 /// Rebuilds the graph and the fingerprint only: no cards, no `INDEX.md`,
 /// no `.gitignore` edit.
 pub fn rebuild_graph_only(root: &Path, context_dir: &Path) -> std::io::Result<RebuildReport> {
-    rebuild_inner(root, context_dir, false).map(|(report, _)| report)
+    rebuild_inner(root, context_dir, false, None).map(|(report, _)| report)
 }
 
 /// What a rebuild keeps for the rename plan: the graph, the raw edges and
@@ -175,7 +280,7 @@ pub(crate) struct Kept {
 /// Rebuilds like [`rebuild_graph_only`] and keeps the build data. The caller
 /// holds the build lock.
 pub(crate) fn rebuild_keeping(root: &Path, context_dir: &Path) -> io::Result<Kept> {
-    match rebuild_inner(root, context_dir, true)? {
+    match rebuild_inner(root, context_dir, true, None)? {
         (_, Some(kept)) => Ok(kept),
         (_, None) => Err(io::Error::other("the rebuild kept no data")),
     }
@@ -185,6 +290,7 @@ fn rebuild_inner(
     root: &Path,
     context_dir: &Path,
     keep: bool,
+    walked: Option<Vec<PathBuf>>,
 ) -> io::Result<(RebuildReport, Option<Kept>)> {
     // The last build's `--only-dir` whitelist rides in the fingerprint, so
     // a refresh walks the same set (P1-70).
@@ -197,15 +303,18 @@ fn rebuild_inner(
         crate::guard::check(fp.files.len(), true)?;
     }
     let only_dirs = fp.and_then(|fp| fp.only_dirs).unwrap_or_default();
-    let opts = BuildOptions {
+    let mut opts = BuildOptions {
         only_dirs: only_dirs.clone(),
         no_reuse: false,
         read_only: false,
         progress: None,
         keep_raw: keep,
+        walked,
     };
     let mut timer = crate::timing::Timer::start();
-    let report = build_graph_cached_with(root, context_dir, &opts)?;
+    // The racy rule of the next probe measures from here, before any stat.
+    let walk_started_ms = sieve_core::fingerprint::walk_start_ms(context_dir);
+    let report = build_graph_cached_with(root, context_dir, &mut opts)?;
     timer.lap("build (total)");
     // The ask-index builds while the wiring writes. The ask-index file
     // writes only after the wiring write succeeded, so the pair comes from
@@ -213,22 +322,35 @@ fn rebuild_inner(
     // the next query rebuilds. A failed ask-index write is not fatal.
     let (wiring, ask_index) = std::thread::scope(|scope| {
         let ask = scope.spawn(|| build_ask_index(&report.graph));
-        let wiring = write_wiring_and_lookup(&report.graph, context_dir);
+        let wiring = write_wiring_and_lookup_kept(&report.graph, context_dir);
         (wiring, ask.join())
     });
-    wiring?;
+    let (_, written) = wiring?;
     let ask_index = ask_index.map_err(|_| io::Error::other("the ask-index thread failed"))?;
-    let _ = write_ask_index(&ask_index_path(context_dir), &ask_index);
-    timer.lap("write wiring, lookup and ask-index");
+    timer.lap("wiring, lookup and ask-index done");
+    let ask_written = write_ask_index(&ask_index_path(context_dir), &ask_index).is_ok();
+    timer.lap("write ask-index");
 
     let fingerprint = Fingerprint {
         version: 1,
         extractor: stamp.clone(),
         files: report.prints.clone(),
         only_dirs: (!only_dirs.is_empty()).then_some(only_dirs),
+        walked_at_ms: Some(walk_started_ms),
     };
     write_fingerprint(&path, &fingerprint)?;
     timer.lap("write fingerprint");
+    // Keep the graph only when the whole write succeeded, with the record it
+    // was written under.
+    let keeping = KEEPING
+        .lock()
+        .is_ok_and(|keeping| keeping.iter().any(|r| r == root));
+    if keeping && ask_written {
+        if let Ok(mut slot) = REBUILT.lock() {
+            slot.retain(|(kept_root, _, _)| kept_root != root);
+            slot.push((root.to_path_buf(), fingerprint.clone(), written));
+        }
+    }
 
     let summary = RebuildReport {
         files: report.files,
@@ -269,24 +391,37 @@ pub fn ensure_fresh_graph(
     let mut timer = crate::timing::Timer::start();
     regenerate_lookup(context_dir, &wiring_path);
     timer.lap("regenerate lookup");
+    let fp_ms = fingerprint_mtime_ms(&fp_path);
+    let mut walked: Option<Vec<PathBuf>> = None;
+    let mut racy = sieve_core::fingerprint::RacyInfo::default();
     let first_count = match &fp {
         None => None,
-        Some(fp) => match probe_drift(root, fp, opts.force_hash, crate::build::is_claimed) {
-            Ok(drift) => Some(drift_count(&drift)),
-            Err(err) => {
-                return RefreshOutcome {
-                    refreshed: false,
-                    changed_files: 0,
-                    note: Some(format!(
-                        "{} graph refresh skipped: {err}",
-                        sieve_core::product().prefix()
-                    )),
-                };
+        Some(fp) => {
+            match probe_drift_racy(root, fp, opts.force_hash, fp_ms, crate::build::is_claimed) {
+                Ok((drift, files, info)) => {
+                    walked = Some(files);
+                    racy = info;
+                    Some(drift_count(&drift))
+                }
+                Err(err) => {
+                    return RefreshOutcome {
+                        refreshed: false,
+                        changed_files: 0,
+                        note: Some(format!(
+                            "{} graph refresh skipped: {err}",
+                            sieve_core::product().prefix()
+                        )),
+                    };
+                }
             }
-        },
+        }
     };
     timer.lap("first drift probe");
     if first_count == Some(0) {
+        if let Some(fp) = fp.as_ref().filter(|_| racy.hashed > 0 && !racy.unverified) {
+            clear_racy_under_lock(context_dir, &fp_path, &stamp, fp, racy.latest_mtime_ms);
+            timer.lap("clear racy state");
+        }
         return RefreshOutcome::default();
     }
 
@@ -322,8 +457,15 @@ pub fn ensure_fresh_graph(
     let count = match &fp {
         None => None,
         Some(_) if unchanged => first_count,
-        Some(fp) => match probe_drift(root, fp, opts.force_hash, crate::build::is_claimed) {
-            Ok(drift) => {
+        Some(fp) => match probe_drift_walk(
+            root,
+            fp,
+            opts.force_hash,
+            fingerprint_mtime_ms(&fp_path),
+            crate::build::is_claimed,
+        ) {
+            Ok((drift, files)) => {
+                walked = Some(files);
                 let n = drift_count(&drift);
                 if n == 0 {
                     drop(guard);
@@ -346,7 +488,8 @@ pub fn ensure_fresh_graph(
     };
 
     timer.lap("lock and second probe");
-    let result = rebuild_graph_only(root, context_dir);
+    let walked = walk_to_reuse(&guard, walked);
+    let result = rebuild_inner(root, context_dir, false, walked).map(|(report, _)| report);
     timer.lap("rebuild (total)");
     drop(guard);
     match result {
@@ -533,6 +676,44 @@ mod tests {
         assert!(ask_index_path(&context_dir).is_file());
     }
 
+    fn read_wiring(context_dir: &Path) -> Graph {
+        serde_json::from_slice(&fs::read(wiring_path(context_dir)).expect("read wiring"))
+            .expect("decode wiring")
+    }
+
+    /// An edit, add or delete of a file the link reads is drift. The refresh
+    /// rebuilds and the graph equals a full build of the same tree.
+    #[test]
+    fn a_link_input_edit_add_or_delete_rebuilds_to_the_full_graph() {
+        let dir = TempDir::new("link-inputs");
+        let root = &dir.path;
+        write_repo_file(root, "a.ts", "export function a() {}\n");
+        write_repo_file(root, "go.mod", "module example.com/a\n");
+        write_repo_file(root, "package.json", "{\"name\":\"a\"}\n");
+        write_repo_file(root, "app/App.csproj", "<Project></Project>\n");
+        let context_dir = root.join("sieve");
+        rebuild_graph_only(root, &context_dir).expect("build graph");
+
+        let steps: [(&str, Option<&str>); 4] = [
+            ("go.mod", Some("module example.com/renamed/longer\n")),
+            ("package.json", Some("{\"name\":\"renamed-package\"}\n")),
+            ("svc/pyproject.toml", Some("[project]\nname = \"svc\"\n")),
+            ("app/App.csproj", None),
+        ];
+        for (n, (rel, body)) in steps.into_iter().enumerate() {
+            match body {
+                Some(body) => write_repo_file(root, rel, body),
+                None => fs::remove_file(root.join(rel)).expect("delete file"),
+            }
+            let outcome = ensure_fresh_graph(root, &context_dir, &RefreshOptions::default());
+            assert!(outcome.refreshed, "{rel} must cause a rebuild");
+            let full_dir = root.join(format!("full{n}"));
+            rebuild_graph_only(root, &full_dir).expect("full build");
+            assert_eq!(read_wiring(&context_dir), read_wiring(&full_dir), "{rel}");
+            fs::remove_dir_all(&full_dir).expect("remove full dir");
+        }
+    }
+
     #[test]
     fn a_clean_tree_gives_no_note_and_writes_nothing() {
         let dir = TempDir::new("clean");
@@ -713,5 +894,169 @@ mod tests {
 
         let stamp = wiring_stamp(&wiring_path(&context_dir)).expect("wiring stamp");
         assert!(Lookup::open(&lookup_path(&context_dir), stamp).is_none());
+    }
+
+    /// The graph a rebuild hands over equals the graph decoded from the
+    /// `wiring.json` on disk, so a query answers the same with the hand-off.
+    /// A second take gives nothing, and a drop of the guard clears the slot.
+    #[test]
+    fn the_rebuilt_graph_handed_over_equals_the_graph_on_disk() {
+        let dir = TempDir::new("handoff");
+        write_repo_file(&dir.path, "a.ts", "export function a() { return b(); }\n");
+        write_repo_file(&dir.path, "b.ts", "export function b() { return 1; }\n");
+        let context_dir = dir.path.join("sieve");
+        rebuild_graph_only(&dir.path, &context_dir).expect("build graph");
+        let wiring = wiring_path(&context_dir);
+        let keeper = keep_rebuilt_graph(&dir.path);
+        write_repo_file(
+            &dir.path,
+            "a.ts",
+            "export function a() { return b() + 2; }\n",
+        );
+        write_repo_file(&dir.path, "c.ts", "export function c() { return a(); }\n");
+
+        let outcome = ensure_fresh_graph(&dir.path, &context_dir, &RefreshOptions::default());
+        assert!(outcome.refreshed);
+
+        let on_disk: Graph =
+            serde_json::from_slice(&fs::read(&wiring).expect("read wiring")).expect("decode");
+        let handed = keeper
+            .take_graph(&context_dir)
+            .expect("a handed-over graph");
+        assert_eq!(handed, on_disk);
+        assert!(keeper.take_graph(&context_dir).is_none());
+
+        // A drop clears a graph that nobody took.
+        write_repo_file(&dir.path, "a.ts", "export function a() { return 7; }\n");
+        ensure_fresh_graph(&dir.path, &context_dir, &RefreshOptions::default());
+        assert!(REBUILT
+            .lock()
+            .expect("lock")
+            .iter()
+            .any(|(r, _, _)| *r == dir.path));
+        drop(keeper);
+        assert!(!REBUILT
+            .lock()
+            .expect("lock")
+            .iter()
+            .any(|(r, _, _)| *r == dir.path));
+        assert!(!KEEPING.lock().expect("lock").contains(&dir.path));
+
+        // With no guard live for this root, a rebuild keeps nothing.
+        write_repo_file(&dir.path, "a.ts", "export function a() { return 8; }\n");
+        ensure_fresh_graph(&dir.path, &context_dir, &RefreshOptions::default());
+        assert!(!REBUILT
+            .lock()
+            .expect("lock")
+            .iter()
+            .any(|(r, _, _)| *r == dir.path));
+    }
+
+    /// A process that did not rebuild has no graph to hand over.
+    #[test]
+    fn no_rebuild_gives_no_handed_over_graph() {
+        let dir = TempDir::new("handoff-none");
+        write_repo_file(&dir.path, "a.ts", "export function a() {}\n");
+        let context_dir = dir.path.join("sieve");
+        rebuild_graph_only(&dir.path, &context_dir).expect("build graph");
+        let keeper = keep_rebuilt_graph(&dir.path);
+        let outcome = ensure_fresh_graph(&dir.path, &context_dir, &RefreshOptions::default());
+        assert!(!outcome.refreshed);
+        assert!(keeper.take_graph(&context_dir).is_none());
+    }
+
+    /// Another process that rewrites the fingerprint after this rebuild leaves
+    /// the kept graph without a match, so the caller decodes the file.
+    #[test]
+    fn a_fingerprint_written_by_another_build_gives_no_handed_over_graph() {
+        let dir = TempDir::new("handoff-other");
+        write_repo_file(&dir.path, "a.ts", "export function a() {}\n");
+        let context_dir = dir.path.join("sieve");
+        rebuild_graph_only(&dir.path, &context_dir).expect("build graph");
+        let keeper = keep_rebuilt_graph(&dir.path);
+        write_repo_file(&dir.path, "a.ts", "export function a() { return 1; }\n");
+        ensure_fresh_graph(&dir.path, &context_dir, &RefreshOptions::default());
+        // Another process writes the record again, with a new walk start.
+        let stamp = crate::extractor_stamp();
+        let fp_path = fingerprint_path(&context_dir, &stamp);
+        let mut other = read_fingerprint(&fp_path, &stamp).expect("fingerprint");
+        other.walked_at_ms = other.walked_at_ms.map(|ms| ms + 1.0);
+        write_fingerprint(&fp_path, &other).expect("write fingerprint");
+        assert!(keeper.take_graph(&context_dir).is_none());
+    }
+
+    /// A keep for one root holds nothing for another root.
+    #[test]
+    fn a_kept_graph_belongs_to_its_root() {
+        let dir = TempDir::new("handoff-root");
+        write_repo_file(&dir.path, "a.ts", "export function a() {}\n");
+        let context_dir = dir.path.join("sieve");
+        rebuild_graph_only(&dir.path, &context_dir).expect("build graph");
+        let keeper = keep_rebuilt_graph(&dir.path);
+        write_repo_file(&dir.path, "a.ts", "export function a() { return 1; }\n");
+        ensure_fresh_graph(&dir.path, &context_dir, &RefreshOptions::default());
+        let other = keep_rebuilt_graph(&dir.path.join("elsewhere"));
+        assert!(other.take_graph(&context_dir).is_none());
+        assert!(keeper.take_graph(&context_dir).is_some());
+    }
+
+    /// After a wait for the lock, the rebuild walks again.
+    #[test]
+    fn a_waited_lock_drops_the_first_probe_walk_list() {
+        let list = Some(vec![PathBuf::from("a.ts")]);
+        let waited = RefreshLock::Waited(PathBuf::from("/nowhere"));
+        // `Waited` releases a lock on drop; release of a missing lock is harmless.
+        assert_eq!(walk_to_reuse(&waited, list.clone()), None);
+        let dir = TempDir::new("immediate-lock");
+        let held = LockGuard::acquire(&dir.path.join("sieve"))
+            .expect("acquire")
+            .expect("free");
+        let immediate = RefreshLock::Immediate(held);
+        assert_eq!(walk_to_reuse(&immediate, list.clone()), list);
+    }
+
+    /// After a fresh checkout every file is racy. A probe that hashes them and
+    /// finds no drift, once the files are 2 s old, clears the state. The next
+    /// probe then hashes none.
+    #[test]
+    fn a_clean_probe_clears_the_racy_state_so_the_next_probe_hashes_nothing() {
+        let dir = TempDir::new("clear-racy");
+        for name in ["a", "b", "c"] {
+            write_repo_file(
+                &dir.path,
+                &format!("{name}.ts"),
+                &format!("export const {name} = 1;\n"),
+            );
+        }
+        let context_dir = dir.path.join("sieve");
+        rebuild_graph_only(&dir.path, &context_dir).expect("build graph");
+        let stamp = crate::extractor_stamp();
+        let fp_path = fingerprint_path(&context_dir, &stamp);
+        let probe = || {
+            let fp = read_fingerprint(&fp_path, &stamp).expect("fingerprint");
+            let fp_ms = fingerprint_mtime_ms(&fp_path);
+            let (drift, _, info) =
+                probe_drift_racy(&dir.path, &fp, false, fp_ms, crate::build::is_claimed)
+                    .expect("probe");
+            assert_eq!(drift, Drift::default());
+            info
+        };
+
+        // Fresh files: all racy, and too new to clear.
+        assert_eq!(probe().hashed, 3);
+        ensure_fresh_graph(&dir.path, &context_dir, &RefreshOptions::default());
+        assert_eq!(probe().hashed, 3);
+
+        // 2 s later the query hashes them once and clears the state.
+        std::thread::sleep(Duration::from_millis(2300));
+        assert_eq!(probe().hashed, 3);
+        let outcome = ensure_fresh_graph(&dir.path, &context_dir, &RefreshOptions::default());
+        assert!(!outcome.refreshed);
+        assert_eq!(probe().hashed, 0);
+
+        // A later edit is still found.
+        write_repo_file(&dir.path, "a.ts", "export const a = 2;\n");
+        let outcome = ensure_fresh_graph(&dir.path, &context_dir, &RefreshOptions::default());
+        assert!(outcome.refreshed);
     }
 }

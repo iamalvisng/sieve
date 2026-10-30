@@ -843,7 +843,7 @@ impl<'a> Run<'a> {
     // ---- the scan ----
 
     fn scan(&mut self, context_dir: &Path) -> Result<(), RenameError> {
-        let files: Vec<String> = crate::build::collect_files(self.root, context_dir)?
+        let files: Vec<String> = crate::build::collect_files(self.root, context_dir, None)?
             .iter()
             .map(|p| to_slash(p))
             .collect();

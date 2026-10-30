@@ -38,8 +38,10 @@ pub fn run(args: &McpArgs, dir_override: Option<&Path>) -> Result<(), String> {
         dir_override.is_some(),
         crate::version::current_version(),
         stdin,
-        stdout.lock(),
-        stderr.lock(),
+        // No `.lock()`: a held lock blocks the writer thread of the warm index
+        // when it prints a timing line. Only the main thread writes stdout.
+        stdout,
+        stderr,
         note.as_deref(),
         &[],
     );

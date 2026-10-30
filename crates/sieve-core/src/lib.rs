@@ -27,4 +27,7 @@ pub use wiring::{
     span, start_line, Confidence, Crux, Edge, Graph, Kind, Meta, Node, Origin, Relation, Scope,
     SummaryState, WALK_RELATIONS,
 };
-pub use write::{edge_cmp, node_cmp, write_graph, write_graph_stamped};
+pub use write::{
+    edge_cmp, into_written, into_written_keeping, into_written_keeping_hinted, node_cmp,
+    write_graph, write_graph_kept, write_graph_stamped,
+};

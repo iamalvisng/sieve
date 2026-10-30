@@ -10,7 +10,7 @@ use std::time::SystemTime;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use sha2::{Digest, Sha256};
 
-use crate::walk::walk_repo;
+use crate::walk::{walk_repo_stat, WalkEntry};
 
 /// The version this build writes and expects to read back.
 const FINGERPRINT_VERSION: u32 = 1;
@@ -59,6 +59,21 @@ pub struct Fingerprint {
     pub files: BTreeMap<String, Print>,
     #[serde(rename = "onlyDirs", skip_serializing_if = "Option::is_none", default)]
     pub only_dirs: Option<Vec<String>>,
+    /// When the build that wrote this record started its walk, in
+    /// milliseconds since the epoch. The racy rule measures from here.
+    #[serde(
+        rename = "walkedAtMs",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
+    pub walked_at_ms: Option<f64>,
+}
+
+/// The wall-clock time now, in milliseconds since the epoch.
+pub fn now_ms() -> f64 {
+    SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map_or(0.0, |d| d.as_secs_f64() * 1000.0)
 }
 
 /// Builds the fingerprint path for one context directory and stamp.
@@ -128,9 +143,88 @@ pub fn read_fingerprint(path: &Path, stamp: &str) -> Option<Fingerprint> {
     Some(fp)
 }
 
+/// Moves a fingerprint's walk start to now, after a probe hashed every racy
+/// file and found no drift (git's way to clear the racy state). The prints stay.
+///
+/// A racy file is safe to trust again once the clock is more than 2 s past its
+/// mtime, because its content matches the record now, and any later edit gets
+/// a later mtime. The check uses the system clock and the file system clock,
+/// the mtime of the new file. It writes nothing and gives `false` when either
+/// clock is too near the latest racy mtime.
+pub fn clear_racy_state(
+    path: &Path,
+    fp: &Fingerprint,
+    latest_racy_mtime_ms: f64,
+) -> io::Result<bool> {
+    let dir = path.parent().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "fingerprint path has no parent",
+        )
+    })?;
+    clear_racy_state_at(path, fp, latest_racy_mtime_ms, now_ms(), fs_clock_ms(dir))
+}
+
+/// [`clear_racy_state`] with both clocks given, so a test can skew them.
+fn clear_racy_state_at(
+    path: &Path,
+    fp: &Fingerprint,
+    latest_racy_mtime_ms: f64,
+    system_ms: f64,
+    fs_ms: f64,
+) -> io::Result<bool> {
+    // File mtimes come from the file system clock, so that clock decides.
+    // The system clock must agree, or the clocks are too far apart to trust.
+    if latest_racy_mtime_ms >= system_ms - RACY_WINDOW_MS
+        || latest_racy_mtime_ms >= fs_ms - RACY_WINDOW_MS
+    {
+        return Ok(false);
+    }
+    let dir = path.parent().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "fingerprint path has no parent",
+        )
+    })?;
+    let mut updated = fp.clone();
+    updated.walked_at_ms = Some(fs_ms);
+    let body = serde_json::to_vec(&updated)
+        .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
+    let tmp_path = dir.join(format!(".fingerprint-tmp-{}", std::process::id()));
+    fs::write(&tmp_path, &body)?;
+    fs::rename(&tmp_path, path)?;
+    Ok(true)
+}
+
+/// The walk start a build records in its fingerprint, from the file system
+/// clock of the build's cache dir. Both build paths call this before they walk.
+pub fn walk_start_ms(context_dir: &Path) -> f64 {
+    let dir = context_dir.join(".cache");
+    let _ = fs::create_dir_all(&dir);
+    fs_clock_ms(&dir)
+}
+
+/// Reads the file system clock, in milliseconds, as the mtime of a file made
+/// now in `dir`. File mtimes come from this clock, and the racy rule compares
+/// them with the walk start, so a build must take the walk start from here.
+/// A file system clock that runs behind the system clock would hide an edit
+/// otherwise. It falls back to the system clock when the dir takes no file.
+pub fn fs_clock_ms(dir: &Path) -> f64 {
+    let probe = dir.join(format!(".clock-{}", std::process::id()));
+    let mtime = fs::write(&probe, b"")
+        .ok()
+        .and_then(|()| fingerprint_mtime_ms(&probe));
+    let _ = fs::remove_file(&probe);
+    mtime.unwrap_or_else(now_ms)
+}
+
 /// Reads one file's size and modified time, in milliseconds, from disk.
 pub fn stat_print(root: &Path, rel: &str) -> io::Result<(u64, f64)> {
-    let metadata = fs::metadata(root.join(rel))?;
+    metadata_print(&fs::metadata(root.join(rel))?)
+}
+
+/// Reads the size and mtime, in milliseconds, from one file's metadata.
+pub(crate) fn metadata_print(metadata: &fs::Metadata) -> io::Result<(u64, f64)> {
     let size = metadata.len();
     let modified = metadata.modified()?;
     let duration = modified
@@ -195,6 +289,19 @@ pub struct Drift {
     pub removed: Vec<String>,
 }
 
+/// How close, in milliseconds, a file's recorded mtime may sit to the write of
+/// the fingerprint before the probe hashes the file in place of trusting its
+/// stat. This is git's racy rule: an edit after the build's stat can keep the
+/// same size and the same mtime tick.
+const RACY_WINDOW_MS: f64 = 2000.0;
+
+/// Reads a fingerprint file's own mtime in milliseconds, for the racy rule.
+pub fn fingerprint_mtime_ms(path: &Path) -> Option<f64> {
+    metadata_print(&fs::metadata(path).ok()?)
+        .ok()
+        .map(|(_, ms)| ms)
+}
+
 /// What stat-ing one recorded file against its print gives back.
 enum StatOutcome {
     /// The current size and mtime, to compare against the record.
@@ -249,12 +356,54 @@ pub fn probe_drift(
     force_hash: bool,
     claims: impl Fn(&Path) -> bool,
 ) -> io::Result<Drift> {
-    let files = walk_repo(root)?;
+    probe_drift_walk(root, fp, force_hash, None, claims).map(|(drift, _)| drift)
+}
+
+/// Like [`probe_drift`], and also returns the full walk list, so a rebuild
+/// does not walk again. The probe takes each file's size and mtime from the
+/// walk's own `lstat`. The racy rule measures from the walk start that the
+/// fingerprint records. An old record has none, so `fp_written_ms`, the mtime
+/// of the fingerprint file, stands in.
+/// A file whose recorded mtime sits within 2 s of it, or after it, is hashed,
+/// not trusted by its stat. `None` turns this racy rule off.
+pub fn probe_drift_walk(
+    root: &Path,
+    fp: &Fingerprint,
+    force_hash: bool,
+    fp_written_ms: Option<f64>,
+    claims: impl Fn(&Path) -> bool,
+) -> io::Result<(Drift, Vec<PathBuf>)> {
+    probe_drift_racy(root, fp, force_hash, fp_written_ms, claims)
+        .map(|(drift, files, _)| (drift, files))
+}
+
+/// What the racy rule did in one probe.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct RacyInfo {
+    /// The files the probe hashed only because of the racy rule.
+    pub hashed: usize,
+    /// The latest recorded mtime among those files.
+    pub latest_mtime_ms: f64,
+    /// True when a racy file could not be read or decoded.
+    pub unverified: bool,
+}
+
+/// Like [`probe_drift_walk`], and also reports the racy rule's work.
+pub fn probe_drift_racy(
+    root: &Path,
+    fp: &Fingerprint,
+    force_hash: bool,
+    fp_written_ms: Option<f64>,
+    claims: impl Fn(&Path) -> bool,
+) -> io::Result<(Drift, Vec<PathBuf>, RacyInfo)> {
+    let mut info = RacyInfo::default();
+    let files = walk_repo_stat(root)?;
+    let reference_ms = fp.walked_at_ms.or(fp_written_ms);
     let only_dirs = fp.only_dirs.as_deref().unwrap_or(&[]);
     let mut seen = std::collections::BTreeSet::new();
     let mut drift = Drift::default();
 
-    for rel in &files {
+    for WalkEntry { rel, stat } in &files {
         if !under_only_dirs(&rel.to_string_lossy().replace('\\', "/"), only_dirs) {
             continue;
         }
@@ -269,30 +418,47 @@ pub fn probe_drift(
             continue;
         };
 
-        let (size, mtime_ms) = match stat_or_classify(root, &rel_str, record) {
-            StatOutcome::Stat(size, mtime_ms) => (size, mtime_ms),
-            StatOutcome::Changed => {
-                drift.changed.push(rel_str);
-                continue;
-            }
-            StatOutcome::Skip => continue,
-        };
+        let walked_stat = stat.map(|(size, mtime_ms)| StatOutcome::Stat(size, mtime_ms));
+        let (size, mtime_ms) =
+            match walked_stat.unwrap_or_else(|| stat_or_classify(root, &rel_str, record)) {
+                StatOutcome::Stat(size, mtime_ms) => (size, mtime_ms),
+                StatOutcome::Changed => {
+                    drift.changed.push(rel_str);
+                    continue;
+                }
+                StatOutcome::Skip => continue,
+            };
 
+        let racy = reference_ms.is_some_and(|at| record.mtime_ms > at - RACY_WINDOW_MS);
         let stat_unchanged = !force_hash
+            && !racy
             && !record.hash.is_empty()
             && record.size == size
             && record.mtime_ms == mtime_ms;
         if stat_unchanged {
             continue;
         }
+        let racy_only = racy
+            && !force_hash
+            && !record.hash.is_empty()
+            && record.size == size
+            && record.mtime_ms == mtime_ms;
+        if racy_only {
+            info.hashed += 1;
+            info.latest_mtime_ms = info.latest_mtime_ms.max(record.mtime_ms);
+        }
 
         let bytes = match fs::read(root.join(&rel_str)) {
             Ok(bytes) => bytes,
-            Err(_) => continue,
+            Err(_) => {
+                info.unverified |= racy_only;
+                continue;
+            }
         };
         // Hash the decoded text, and a file that stops decoding is drift only
         // when the last build read it (a non-empty hash).
         let Some(text) = decode_source(&bytes) else {
+            info.unverified |= racy_only;
             if !record.hash.is_empty() {
                 drift.changed.push(rel_str);
             }
@@ -313,7 +479,7 @@ pub fn probe_drift(
     drift.added.sort();
     drift.changed.sort();
     drift.removed.sort();
-    Ok(drift)
+    Ok((drift, files.into_iter().map(|e| e.rel).collect(), info))
 }
 
 #[cfg(test)]
@@ -366,6 +532,7 @@ mod tests {
             extractor: "stamp1".to_string(),
             files,
             only_dirs: None,
+            walked_at_ms: None,
         }
     }
 
@@ -444,6 +611,7 @@ mod tests {
             extractor: "stamp1".to_string(),
             files,
             only_dirs: None,
+            walked_at_ms: None,
         };
         write_fingerprint(&path, &fp).expect("write fingerprint");
         let back = read_fingerprint(&path, "stamp1").expect("read fingerprint");
@@ -459,6 +627,7 @@ mod tests {
             extractor: "stamp1".to_string(),
             files: BTreeMap::new(),
             only_dirs: None,
+            walked_at_ms: None,
         };
         write_fingerprint(&path, &fp).expect("write fingerprint");
 
@@ -479,6 +648,7 @@ mod tests {
             extractor: "s".to_string(),
             files: BTreeMap::new(),
             only_dirs: None,
+            walked_at_ms: None,
         };
         for label in ["a", "b", "c"] {
             let path = cache_dir.join(format!("fingerprint.{label}.json"));
@@ -591,5 +761,120 @@ mod tests {
 
         let forced = probe_drift(&dir.path, &fp, true, |_: &Path| true).expect("probe drift");
         assert_eq!(forced.changed, vec!["a.ts".to_string()]);
+    }
+
+    /// A same-size rewrite that keeps the mtime hides from the stat. The racy
+    /// rule hashes a file whose record sits within 2 s of the fingerprint write.
+    #[test]
+    fn probe_drift_walk_hashes_a_racy_file_and_finds_the_rewrite() {
+        let dir = TempDir::new("racy");
+        let a = dir.path.join("a.ts");
+        fs::write(&a, b"const a = 1;").expect("write a.ts");
+        let fp = fp_for(&dir.path, "a.ts");
+        let fp_file = dir.path.join("fp.json");
+        write_fingerprint(&fp_file, &fp).expect("write fingerprint");
+        let original = fs::metadata(&a).expect("stat").modified().expect("mtime");
+        fs::write(&a, b"const a = 9;").expect("rewrite a.ts");
+        let file = fs::OpenOptions::new()
+            .write(true)
+            .open(&a)
+            .expect("open a.ts");
+        file.set_times(fs::FileTimes::new().set_modified(original))
+            .expect("restore mtime");
+
+        let written = fingerprint_mtime_ms(&fp_file);
+        assert!(written.is_some());
+        let (racy, _) =
+            probe_drift_walk(&dir.path, &fp, false, written, |_: &Path| true).expect("probe");
+        assert_eq!(racy.changed, vec!["a.ts".to_string()]);
+        // With the rule off, the stat matches and the rewrite hides.
+        let (blind, _) =
+            probe_drift_walk(&dir.path, &fp, false, None, |_: &Path| true).expect("probe");
+        assert!(blind.changed.is_empty());
+    }
+
+    /// The probe returns the full walk list, in walk order.
+    #[test]
+    fn probe_drift_walk_returns_the_walk_list() {
+        let dir = TempDir::new("list");
+        fs::write(dir.path.join("a.ts"), b"x").expect("write a.ts");
+        fs::write(dir.path.join("b.ts"), b"y").expect("write b.ts");
+        let fp = fp_for(&dir.path, "a.ts");
+        let (_, files) =
+            probe_drift_walk(&dir.path, &fp, false, None, |_: &Path| true).expect("probe");
+        assert_eq!(files, vec![PathBuf::from("a.ts"), PathBuf::from("b.ts")]);
+    }
+
+    /// A build that takes longer than 2 s writes the fingerprint file late. The
+    /// racy rule measures from the walk start, so a same-size rewrite after the
+    /// stat still shows. The fingerprint file mtime alone would miss it.
+    #[test]
+    fn probe_drift_walk_racy_rule_uses_the_walk_start_not_the_fingerprint_write() {
+        let dir = TempDir::new("racy-slow-build");
+        let a = dir.path.join("a.ts");
+        fs::write(&a, b"const a = 1;").expect("write a.ts");
+        let mut fp = fp_for(&dir.path, "a.ts");
+        let record_ms = fp.files["a.ts"].mtime_ms;
+        let original = fs::metadata(&a).expect("stat").modified().expect("mtime");
+        fs::write(&a, b"const a = 9;").expect("rewrite a.ts");
+        let file = fs::OpenOptions::new()
+            .write(true)
+            .open(&a)
+            .expect("open a.ts");
+        file.set_times(fs::FileTimes::new().set_modified(original))
+            .expect("restore mtime");
+
+        // The walk started 100 ms after the file's mtime. The build took 10 s.
+        let late_write = Some(record_ms + 10_000.0);
+        fp.walked_at_ms = Some(record_ms + 100.0);
+        let (found, _) =
+            probe_drift_walk(&dir.path, &fp, false, late_write, |_: &Path| true).expect("probe");
+        assert_eq!(found.changed, vec!["a.ts".to_string()]);
+
+        // An old record has no walk start, so the late write stands in, and misses.
+        fp.walked_at_ms = None;
+        let (missed, _) =
+            probe_drift_walk(&dir.path, &fp, false, late_write, |_: &Path| true).expect("probe");
+        assert!(missed.changed.is_empty());
+    }
+
+    /// The file system clock reads near the system clock, and leaves no file.
+    #[test]
+    fn fs_clock_ms_reads_the_mtime_of_a_new_file_and_leaves_nothing() {
+        let dir = TempDir::new("fs-clock");
+        let before = now_ms();
+        let fs_ms = fs_clock_ms(&dir.path);
+        assert!((fs_ms - before).abs() < 2000.0, "{fs_ms} vs {before}");
+        assert_eq!(fs::read_dir(&dir.path).expect("list").count(), 0);
+        // A dir that takes no file falls back to the system clock.
+        let missing = dir.path.join("no-such-dir");
+        assert!((fs_clock_ms(&missing) - now_ms()).abs() < 2000.0);
+    }
+
+    /// A file system clock 10 s behind the system clock decides. The record
+    /// takes the file system time, and a racy file near it is not cleared.
+    #[test]
+    fn clear_racy_state_follows_the_file_system_clock_when_it_runs_behind() {
+        let dir = TempDir::new("skew");
+        let path = dir.path.join("fingerprint.s.json");
+        let fp = Fingerprint {
+            version: FINGERPRINT_VERSION,
+            extractor: "s".to_string(),
+            files: BTreeMap::new(),
+            only_dirs: None,
+            walked_at_ms: None,
+        };
+        let system = 1_000_000.0;
+        let fs_behind = system - 10_000.0;
+        // The file mtime sits 1 s before the file system clock: still racy.
+        let near = fs_behind - 1000.0;
+        assert!(!clear_racy_state_at(&path, &fp, near, system, fs_behind).expect("clear"));
+        assert!(!path.exists());
+        // 3 s before the file system clock: clear, stamped with that clock.
+        let old = fs_behind - 3000.0;
+        assert!(clear_racy_state_at(&path, &fp, old, system, fs_behind).expect("clear"));
+        let back: Fingerprint =
+            serde_json::from_slice(&fs::read(&path).expect("read")).expect("decode");
+        assert_eq!(back.walked_at_ms, Some(fs_behind));
     }
 }

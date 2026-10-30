@@ -496,6 +496,7 @@ fn test_p2_33_build_writes_a_fingerprint_with_one_print_per_claimed_file() {
 
     let claimed_files: std::collections::BTreeSet<&str> = [
         "packages/shared/index.ts",
+        "packages/shared/package.json",
         "py/helpers.py",
         "py/main.py",
         "src/app.ts",
@@ -600,6 +601,7 @@ fn build_excludes_the_context_dir_and_a_prefix_sibling() {
         fingerprint.files.keys().map(|k| k.as_str()).collect();
     let claimed_files: std::collections::BTreeSet<&str> = [
         "packages/shared/index.ts",
+        "packages/shared/package.json",
         "py/helpers.py",
         "py/main.py",
         "src/app.ts",

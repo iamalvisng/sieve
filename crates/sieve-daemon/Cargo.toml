@@ -12,3 +12,8 @@ sieve-core = { path = "../sieve-core" }
 sieve-parse = { path = "../sieve-parse" }
 sieve-query = { path = "../sieve-query" }
 sieve-savings = { path = "../sieve-savings" }
+notify = "8.2.1"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# kqueue sync on macOS (ledger 2026-10-30). Already in Cargo.lock under notify.
+libc = "0.2"

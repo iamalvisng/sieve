@@ -10,6 +10,7 @@ use sieve_core::{Edge, Graph, Kind, Node, Relation};
 
 use super::{path_under_prefix, snippet_of, AskHit};
 use crate::blast::JS_WS;
+use crate::callers::GraphIndex;
 
 /// The relations an incoming-edge (caller) query walks (section 6.3).
 const INCOMING_RELS: [Relation; 4] = [
@@ -109,19 +110,47 @@ fn symbol_matches<'a>(nodes: &'a [Node], lower_query: &str) -> Vec<&'a Node> {
             if n.kind == Kind::File {
                 return false;
             }
-            if n.name.to_lowercase() == lower_query {
-                return true;
-            }
-            let lower_id = n.id.to_lowercase();
-            let candidate_id = match lower_id.find('#') {
-                None => lower_id.clone(),
-                Some(hash_idx) => {
-                    let (head, tail) = lower_id.split_at(hash_idx + 1);
-                    format!("{head}{}", strip_ordinals(tail))
-                }
-            };
-            candidate_id.ends_with(&suffix_hash) || candidate_id.ends_with(&suffix_dot)
+            n.name.to_lowercase() == lower_query
+                || id_ends_with(&candidate_id(&n.id), &suffix_hash, &suffix_dot)
         })
+        .collect()
+}
+
+/// The lowercase id of a node with the ordinals stripped from the part after
+/// the first `#`.
+pub(crate) fn candidate_id(id: &str) -> String {
+    let lower_id = id.to_lowercase();
+    match lower_id.find('#') {
+        None => lower_id,
+        Some(hash_idx) => {
+            let (head, tail) = lower_id.split_at(hash_idx + 1);
+            format!("{head}{}", strip_ordinals(tail))
+        }
+    }
+}
+
+fn id_ends_with(candidate: &str, suffix_hash: &str, suffix_dot: &str) -> bool {
+    candidate.ends_with(suffix_hash) || candidate.ends_with(suffix_dot)
+}
+
+/// [`symbol_matches`] over a prebuilt [`GraphIndex`]: the same nodes, with no
+/// lowercase copy per node.
+fn symbol_matches_indexed<'a>(
+    nodes: &'a [Node],
+    lower_query: &str,
+    index: &GraphIndex,
+) -> Vec<&'a Node> {
+    let suffix_hash = format!("#{lower_query}");
+    let suffix_dot = format!(".{lower_query}");
+    nodes
+        .iter()
+        .enumerate()
+        .filter(|(i, n)| {
+            n.kind != Kind::File
+                && (*index.lower_name[*i] == *lower_query
+                    || id_ends_with(&index.candidate[*i], &suffix_hash, &suffix_dot))
+        })
+        .map(|(_, n)| n)
         .collect()
 }
 
@@ -134,10 +163,23 @@ pub(crate) fn resolve_symbol<'a>(
     query: &str,
     in_prefix: Option<&str>,
 ) -> Vec<&'a Node> {
+    resolve_symbol_with(graph, query, in_prefix, None)
+}
+
+/// [`resolve_symbol`] with an optional index built for this graph.
+pub(crate) fn resolve_symbol_with<'a>(
+    graph: &'a Graph,
+    query: &str,
+    in_prefix: Option<&str>,
+    index: Option<&GraphIndex>,
+) -> Vec<&'a Node> {
     let lower_query = query.to_lowercase();
     let looks_like_filename = query.contains('.') && !query.contains('#');
 
-    let mut matches = symbol_matches(&graph.nodes, &lower_query);
+    let mut matches = match index {
+        Some(index) => symbol_matches_indexed(&graph.nodes, &lower_query, index),
+        None => symbol_matches(&graph.nodes, &lower_query),
+    };
 
     if matches.is_empty() && query.contains('.') {
         if let Some(idx) = query.rfind('.') {

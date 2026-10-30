@@ -3,6 +3,7 @@
 
 use std::env;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use sieve_core::product::product;
 use sieve_core::wiring::Graph;
@@ -130,9 +131,23 @@ pub fn run_prelude(
             ));
         }
     }
+    // A rebuild in this process hands over the graph it wrote, so the query
+    // does not decode the file again. The guard lives until the read below,
+    // and its drop clears any graph left unread. An older guard drops first,
+    // so its drop cannot clear the new one.
+    if let Ok(mut slot) = KEEP.lock() {
+        *slot = None;
+    }
+    let keep = sieve_parse::refresh::keep_rebuilt_graph(&root);
     refresh_before(&root, &context_dir, no_refresh_flag);
+    if let Ok(mut slot) = KEEP.lock() {
+        *slot = Some(keep);
+    }
     Ok((root, context_dir))
 }
+
+/// The guard of the last `run_prelude`, until `read_wiring_named` takes it.
+static KEEP: Mutex<Option<sieve_parse::refresh::KeepRebuilt>> = Mutex::new(None);
 
 /// The one line every query command prints when no index exists.
 pub const NO_INDEX: &str = "no index here yet \u{2014} run sieve build .";
@@ -165,6 +180,11 @@ pub fn read_wiring_named(context_dir: &Path) -> Result<Graph, String> {
             NO_INDEX
         };
         return Err(line.to_string());
+    }
+    // The guard drops at the end of this function and clears the slot.
+    let keep = KEEP.lock().ok().and_then(|mut slot| slot.take());
+    if let Some(graph) = keep.as_ref().and_then(|keep| keep.take_graph(context_dir)) {
+        return Ok(graph);
     }
     let bytes = std::fs::read(&wiring_path).map_err(|e| e.to_string())?;
     serde_json::from_slice(&bytes).map_err(|e| e.to_string())

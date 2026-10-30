@@ -396,21 +396,31 @@ fn test_p2_35_a_warm_build_replays_the_cache_and_matches_the_cold_graph() {
     assert_eq!(cold.reused, 0);
     assert_eq!(cold.parsed, 7);
     assert_eq!(cold.claimed.len(), 7);
-    assert_eq!(cold.prints.len(), 7);
+    assert_eq!(cold.prints.len(), 8);
 
     let warm = build_graph_cached(&dir.path, &context_dir).expect("warm build succeeds");
     assert_eq!(warm.reused, 7);
     assert_eq!(warm.parsed, 0);
     assert_eq!(warm.claimed.len(), 7);
-    assert_eq!(warm.prints.len(), 7);
+    assert_eq!(warm.prints.len(), 8);
 
     let cold_claimed: BTreeSet<String> = cold.claimed.iter().cloned().collect();
     let warm_claimed: BTreeSet<String> = warm.claimed.iter().cloned().collect();
-    let cold_print_keys: BTreeSet<String> = cold.prints.keys().cloned().collect();
-    let warm_print_keys: BTreeSet<String> = warm.prints.keys().cloned().collect();
+    let cold_print_keys: BTreeSet<String> = cold
+        .prints
+        .keys()
+        .filter(|id| !sieve_parse::read_at_link(std::path::Path::new(id)))
+        .cloned()
+        .collect();
+    let warm_print_keys: BTreeSet<String> = warm
+        .prints
+        .keys()
+        .filter(|id| !sieve_parse::read_at_link(std::path::Path::new(id)))
+        .cloned()
+        .collect();
     assert_eq!(
         cold_print_keys, cold_claimed,
-        "cold prints key set matches claimed"
+        "cold prints key set matches claimed, less link inputs"
     );
     assert_eq!(
         warm_print_keys, warm_claimed,

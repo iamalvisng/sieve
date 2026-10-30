@@ -38,8 +38,9 @@ pub mod stamp;
 pub mod timing;
 mod ts_scope;
 pub use build::{
-    build_graph, build_graph_cached, build_graph_cached_with, build_graph_with_raw, BuildOptions,
-    BuildReport,
+    build_graph, build_graph_cached, build_graph_cached_with, build_graph_with_raw, claims,
+    fresh_entry, link_entries, link_entries_moving, read_at_link, walk_files, BuildOptions,
+    BuildReport, Extractors, Moved, ScopeMemo,
 };
 pub use cache::{CacheEntry, ExtractCache};
 pub use check::{

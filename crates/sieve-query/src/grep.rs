@@ -217,7 +217,10 @@ pub fn v8_error_message(pattern: &str, err: &regress::Error) -> String {
 /// Compiles the user pattern like JS: `new RegExp(source,
 /// "i" | "")`, with no `u` flag, through the `regress` crate (ledger
 /// 2026-09-30, "the regress crate runs the grep user pattern").
-fn compile_pattern(pattern: &str, opts: &GrepOptions) -> Result<regress::Regex, GrepError> {
+pub(crate) fn compile_pattern(
+    pattern: &str,
+    opts: &GrepOptions,
+) -> Result<regress::Regex, GrepError> {
     let source = if opts.fixed {
         escape_regex(pattern)
     } else {
@@ -293,17 +296,24 @@ fn enclosing_symbol<'a>(symbols: &[(&'a Node, u32, u32)], line: u32) -> Option<&
     best
 }
 
-fn read_file_text(path: &Path) -> Option<String> {
-    let bytes = std::fs::read(path).ok()?;
+/// Decodes file bytes the way `grep` reads a file: valid UTF-8 is borrowed,
+/// a UTF-16LE BOM or invalid UTF-8 is decoded, and a UTF-16BE BOM gives
+/// `None`.
+pub(crate) fn decode_file_bytes(bytes: &[u8]) -> Option<std::borrow::Cow<'_, str>> {
     if bytes.starts_with(&[0xFE, 0xFF]) {
         return None;
     }
     if bytes.starts_with(&[0xFF, 0xFE]) {
         let (chunks, _) = bytes[2..].as_chunks::<2>();
         let units: Vec<u16> = chunks.iter().map(|c| u16::from_le_bytes(*c)).collect();
-        return Some(String::from_utf16_lossy(&units));
+        return Some(std::borrow::Cow::Owned(String::from_utf16_lossy(&units)));
     }
-    Some(String::from_utf8_lossy(&bytes).into_owned())
+    Some(String::from_utf8_lossy(bytes))
+}
+
+fn read_file_text(path: &Path) -> Option<String> {
+    let bytes = std::fs::read(path).ok()?;
+    decode_file_bytes(&bytes).map(std::borrow::Cow::into_owned)
 }
 
 /// Runs a `grep` search over `graph`'s indexed files, on disk under

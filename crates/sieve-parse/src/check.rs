@@ -12,7 +12,8 @@ use serde::Serialize;
 
 use sieve_core::concept::{read_nodes, Manifest};
 use sieve_core::fingerprint::{
-    decode_source, fingerprint_path, hash_source, probe_drift, read_fingerprint,
+    decode_source, fingerprint_mtime_ms, fingerprint_path, hash_source, probe_drift_walk,
+    read_fingerprint,
 };
 use sieve_core::lookup::{wiring_stamp, Lookup};
 use sieve_core::walk::walk_repo;
@@ -110,7 +111,7 @@ pub fn check_graph(root: &Path, context_dir: &Path) -> io::Result<GraphCheck> {
         Some(fp) => fp.files.len(),
         // A walk error is not the guard's to report: the later read or build
         // names it.
-        None => crate::build::collect_files(root, context_dir)
+        None => crate::build::collect_files(root, context_dir, None)
             .map_or(0, |f| crate::build::claimed_count(&f)),
     };
     crate::guard::check(file_count, true)?;
@@ -131,15 +132,16 @@ pub fn check_graph(root: &Path, context_dir: &Path) -> io::Result<GraphCheck> {
     };
     let committed: Graph = serde_json::from_slice(&bytes).map_err(io::Error::other)?;
 
-    let opts = BuildOptions {
+    let mut opts = BuildOptions {
         only_dirs: fp.and_then(|fp| fp.only_dirs).unwrap_or_default(),
         no_reuse: false,
         // Nothing writes a file at all (P1-35).
         read_only: true,
         progress: None,
         keep_raw: false,
+        walked: None,
     };
-    let report = build_graph_cached_with(root, context_dir, &opts)?;
+    let report = build_graph_cached_with(root, context_dir, &mut opts)?;
     let current: HashMap<&str, &str> = report
         .graph
         .nodes
@@ -256,7 +258,8 @@ pub fn check_graph_lookup(root: &Path, context_dir: &Path) -> io::Result<LookupC
     let Some(fp) = read_fingerprint(&fp_path, &ext_stamp) else {
         return Ok(LookupCheck::NoLookup);
     };
-    let drift = probe_drift(root, &fp, false, crate::build::is_claimed)?;
+    let fp_ms = fingerprint_mtime_ms(&fp_path);
+    let (drift, _) = probe_drift_walk(root, &fp, false, fp_ms, crate::build::is_claimed)?;
     let drift_files = drift.added.len() + drift.changed.len() + drift.removed.len();
     if drift_files > LOOKUP_DRIFT_CAP {
         return Ok(LookupCheck::OverCap(drift_files));

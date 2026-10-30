@@ -27,6 +27,11 @@ fn collator() -> Option<&'static CollatorBorrowed<'static>> {
 /// Falls back to byte order when the collator data fails to load, which
 /// does not happen with the compiled-data feature this crate uses.
 pub fn collate(a: &str, b: &str) -> Ordering {
+    // The same bytes collate equal. A sorted list repeats a source often, and
+    // this check costs far less than the collator walk.
+    if a == b {
+        return Ordering::Equal;
+    }
     match collator() {
         Some(collator) => collator.compare(a, b),
         None => a.cmp(b),

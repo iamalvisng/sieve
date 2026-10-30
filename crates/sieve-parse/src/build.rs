@@ -134,7 +134,7 @@ fn carry_meaning_layer(nodes: &mut [Node], prior: &HashMap<String, PriorNode>) {
 /// walk (see the `build-cards-freshness.md` note section 10), so a dir named
 /// e.g. `sieve-tools/` is excluded on purpose when `context_dir` is `sieve`.
 pub fn build_graph(root: &Path, context_dir: &Path) -> std::io::Result<Graph> {
-    let files = collect_files(root, context_dir)?;
+    let files = collect_files(root, context_dir, None)?;
     let go_modules = discover_go_modules(root, &files)?;
     let rust_packages = discover_rust_packages(root, &files);
     let (mut graph, mut raw_edges) = build_graph_with_raw(root, context_dir)?;
@@ -393,7 +393,7 @@ pub fn build_graph_with_raw(
     root: &Path,
     context_dir: &Path,
 ) -> std::io::Result<(Graph, Vec<RawEdge>)> {
-    let files = collect_files(root, context_dir)?;
+    let files = collect_files(root, context_dir, None)?;
     let mut extractor = Extractor::new().map_err(std::io::Error::other)?;
     let mut generic_extractor = GenericExtractor::new().map_err(std::io::Error::other)?;
     let mut nodes = Vec::new();
@@ -412,7 +412,7 @@ pub fn build_graph_with_raw(
         languages.insert(label);
     }
 
-    let mut graph = assemble(root, &files, nodes, &raw_edges, languages);
+    let mut graph = assemble(root, &files, nodes, &raw_edges, languages, None);
     carry_meaning_layer(&mut graph.nodes, &read_prior_nodes(context_dir));
     Ok((graph, raw_edges))
 }
@@ -487,6 +487,24 @@ pub(crate) fn claim_label(rel: &Path, id: &str) -> Option<String> {
     None
 }
 
+/// Whether a build extracts `rel`: true for every tier [`claim_label`] claims,
+/// false for a manifest. The warm index uses it to sort an event path.
+pub fn claims(rel: &Path) -> bool {
+    claim_label(rel, &to_slash(rel)).is_some()
+}
+
+/// Whether the link or the walk reads `rel` from disk: a scope marker, a Go
+/// module file, a pnpm workspace file, a Cargo manifest or a C# project file.
+/// An edit to such a file can change the links of other files.
+pub fn read_at_link(rel: &Path) -> bool {
+    let name = rel.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    SCOPE_MARKERS.contains(&name)
+        || matches!(name, "go.work" | "pnpm-workspace.yaml")
+        || [".csproj", ".props", ".targets"]
+            .iter()
+            .any(|ext| name.ends_with(ext))
+}
+
 /// Whether a build would fingerprint `rel`: true for every tier
 /// [`claim_label`] claims (native, container, breadth).
 ///
@@ -499,11 +517,12 @@ pub(crate) fn is_claimed(rel: &Path) -> bool {
     claim_label(rel, &to_slash(rel)).is_some() || is_manifest(rel)
 }
 
-/// True for a `Cargo.toml`. A build fingerprints it with no node, because an
-/// edit to the edition, a target path or the package list changes the Rust
-/// call links.
+/// True for a file the link reads from disk ([`read_at_link`]). A build
+/// fingerprints it with no node, because an edit, an add or a delete changes
+/// the scopes or the module links. One list serves the build, the probe and
+/// the warm index.
 fn is_manifest(rel: &Path) -> bool {
-    rel.file_name().and_then(|n| n.to_str()) == Some("Cargo.toml")
+    read_at_link(rel)
 }
 
 /// Counts the files in `files` that a build parses. The memory guard uses
@@ -577,7 +596,7 @@ pub struct BuildReport {
 /// Covers every tier [`extract_one`] does: native (depth), container
 /// (`.vue`), and breadth.
 pub fn build_graph_cached(root: &Path, context_dir: &Path) -> std::io::Result<BuildReport> {
-    build_graph_cached_with(root, context_dir, &BuildOptions::default())
+    build_graph_cached_with(root, context_dir, &mut BuildOptions::default())
 }
 
 /// The build flags that shape one [`build_graph_cached_with`] call
@@ -598,6 +617,10 @@ pub struct BuildOptions {
     pub progress: Option<fn(usize, usize, &str)>,
     /// Keep the raw edges in [`BuildReport::raw`]. The rename plan sets this.
     pub keep_raw: bool,
+    /// The file list from a drift probe's walk in this process. The build uses
+    /// it in place of its own walk, and takes it out of the options. It must
+    /// never come from a stored record.
+    pub walked: Option<Vec<PathBuf>>,
 }
 
 /// A file's stat, taken before its read, and the hash of its decoded text.
@@ -671,12 +694,12 @@ fn replay(
 pub fn build_graph_cached_with(
     root: &Path,
     context_dir: &Path,
-    opts: &BuildOptions,
+    opts: &mut BuildOptions,
 ) -> std::io::Result<BuildReport> {
     let mut timer = crate::timing::Timer::start();
     let stamp = extractor_stamp();
     let cache_file = cache_path(context_dir, &stamp);
-    let mut files = collect_files(root, context_dir)?;
+    let mut files = collect_files(root, context_dir, opts.walked.take())?;
     files.retain(|rel| under_only_dirs(&to_slash(rel), &opts.only_dirs));
     timer.lap("walk");
     // The memory guard runs before the cache read (S0, B3).
@@ -887,19 +910,20 @@ pub fn build_graph_cached_with(
     drop(new_cache);
     timer.lap("prints and nodes");
 
-    let go_modules = discover_go_modules(root, &files)?;
-    let rust_packages = discover_rust_packages(root, &files);
-    stamp_cs_projects(root, &files, &mut raw_edges);
-    let mut graph = assemble(root, &files, nodes, &raw_edges, languages);
-    timer.lap("modules and assemble");
-    graph.edges = resolve_edges_with_context(&graph.nodes, &raw_edges, &go_modules, &rust_packages);
-    graph.meta.edge_count = graph.edges.len();
-    timer.lap("link");
-    let prior = prior
-        .join()
-        .map_err(|_| std::io::Error::other("the prior wiring thread failed"))?;
-    carry_meaning_layer(&mut graph.nodes, &prior);
-    timer.lap("carry meaning layer");
+    let (graph, raw_edges) = link_core(
+        root,
+        &files,
+        nodes,
+        raw_edges,
+        languages,
+        &mut timer,
+        None,
+        || {
+            prior
+                .join()
+                .map_err(|_| std::io::Error::other("the prior wiring thread failed"))
+        },
+    )?;
 
     Ok(BuildReport {
         graph,
@@ -913,11 +937,279 @@ pub fn build_graph_cached_with(
     })
 }
 
-/// Walks `root`, and drops every file under `context_dir` (or a sibling
-/// dir whose name shares its string prefix). See [`build_graph`] for why.
-pub(crate) fn collect_files(root: &Path, context_dir: &Path) -> std::io::Result<Vec<PathBuf>> {
+/// The link pass shared by the build and the warm patch: module tables,
+/// scopes, raw edge resolution and the meaning carry. `prior` runs after the
+/// link, so a build can read the prior wiring on a thread beside it.
+#[allow(clippy::too_many_arguments)]
+fn link_core(
+    root: &Path,
+    files: &[PathBuf],
+    nodes: Vec<Node>,
+    mut raw_edges: Vec<RawEdge>,
+    languages: BTreeSet<String>,
+    timer: &mut crate::timing::Timer,
+    scopes: Option<&mut ScopeMemo>,
+    prior: impl FnOnce() -> std::io::Result<HashMap<String, PriorNode>>,
+) -> std::io::Result<(Graph, Vec<RawEdge>)> {
+    let go_modules = discover_go_modules(root, files)?;
+    timer.lap("go modules");
+    let rust_packages = discover_rust_packages(root, files);
+    timer.lap("rust packages");
+    stamp_cs_projects(root, files, &mut raw_edges);
+    timer.lap("cs projects");
+    let mut graph = assemble(root, files, nodes, &raw_edges, languages, scopes);
+    timer.lap("modules and assemble");
+    graph.edges = resolve_edges_with_context(&graph.nodes, &raw_edges, &go_modules, &rust_packages);
+    graph.meta.edge_count = graph.edges.len();
+    timer.lap("link");
+    carry_meaning_layer(&mut graph.nodes, &prior()?);
+    timer.lap("carry meaning layer");
+    Ok((graph, raw_edges))
+}
+
+/// The walk a build uses: the repo files without the context dir, limited to
+/// the `--only-dir` whitelist. The warm index calls it to learn the file list.
+pub fn walk_files(
+    root: &Path,
+    context_dir: &Path,
+    only_dirs: &[String],
+) -> std::io::Result<Vec<PathBuf>> {
+    let mut files = collect_files(root, context_dir, None)?;
+    files.retain(|rel| under_only_dirs(&to_slash(rel), only_dirs));
+    Ok(files)
+}
+
+/// The parsers one warm index reuses between edits. Their queries compile on
+/// first use, so a new pair per edit would pay that cost every time.
+pub struct Extractors(Extractor, GenericExtractor);
+
+impl Extractors {
+    /// Makes a pair of parsers.
+    pub fn new() -> std::io::Result<Self> {
+        Ok(Extractors(
+            Extractor::new().map_err(std::io::Error::other)?,
+            GenericExtractor::new().map_err(std::io::Error::other)?,
+        ))
+    }
+}
+
+/// Extracts one file into a cache entry the way the build loop does, with no
+/// cache replay. It gives `None` for a file that left the set (a failed stat,
+/// or no extraction). A manifest gets an entry with no nodes. The warm index
+/// calls it to swap one dirty file.
+pub fn fresh_entry(
+    root: &Path,
+    id: &str,
+    extractors: &mut Extractors,
+) -> std::io::Result<Option<CacheEntry>> {
+    let rel = Path::new(id);
+    if claim_label(rel, id).is_none() {
+        if !is_manifest(rel) {
+            return Ok(None);
+        }
+        let (Some((size, mtime_ms)), Ok(bytes)) =
+            (stat_print(root, id).ok(), fs::read(root.join(rel)))
+        else {
+            return Ok(None);
+        };
+        return Ok(Some(CacheEntry {
+            size,
+            mtime_ms,
+            hash: hex_sha256(&bytes),
+            nodes: Vec::new(),
+            raw_edges: Vec::new(),
+            error: None,
+        }));
+    }
+    let Some((size, mtime_ms)) = stat_print(root, id).ok() else {
+        return Ok(None);
+    };
+    let abs = root.join(rel);
+    let empty_entry = |error: Option<String>| CacheEntry {
+        size,
+        mtime_ms,
+        hash: String::new(),
+        nodes: Vec::new(),
+        raw_edges: Vec::new(),
+        error,
+    };
+    let bytes = match fs::read(&abs) {
+        Ok(bytes) => bytes,
+        Err(err) => {
+            let message = format!("{id}: {}", node_io_error(err, "open", &abs));
+            return Ok(Some(empty_entry(Some(message))));
+        }
+    };
+    let Some(text) = decode_source(&bytes) else {
+        return Ok(Some(empty_entry(None)));
+    };
+    let hash = hex_sha256(text.as_bytes());
+    let Some((file_node, symbols, edges, _)) =
+        extract_text(rel, &text, &mut extractors.0, &mut extractors.1)
+    else {
+        return Ok(None);
+    };
+    let mut nodes = vec![file_node];
+    nodes.extend(symbols);
+    Ok(Some(CacheEntry {
+        size,
+        mtime_ms,
+        hash,
+        nodes,
+        raw_edges: edges,
+        error: None,
+    }))
+}
+
+/// Links the whole in-memory set into a graph, as the build does: the entries
+/// of the claimed files in walk order, then the shared link pass, then the
+/// meaning carry from `prior`. A warm graph equals a full build of the same
+/// tree, byte for byte after serialization.
+pub fn link_entries(
+    root: &Path,
+    files: &[PathBuf],
+    cache: &ExtractCache,
+    prior: &Graph,
+) -> std::io::Result<Graph> {
+    let mut nodes = Vec::new();
+    let mut raw_edges = Vec::new();
+    let mut languages: BTreeSet<String> = BTreeSet::new();
+    for rel in files {
+        let id = to_slash(rel);
+        let Some(label) = claim_label(rel, &id) else {
+            continue;
+        };
+        let Some(entry) = cache.files.get(&id) else {
+            continue;
+        };
+        nodes.extend(entry.nodes.iter().cloned());
+        raw_edges.extend(entry.raw_edges.iter().cloned());
+        if entry.error.is_none() && !entry.hash.is_empty() {
+            languages.insert(label);
+        }
+    }
+    let prior_nodes = prior_of(prior);
+    let mut timer = crate::timing::Timer::start();
+    let (graph, _) = link_core(
+        root,
+        files,
+        nodes,
+        raw_edges,
+        languages,
+        &mut timer,
+        None,
+        || Ok(prior_nodes),
+    )?;
+    Ok(graph)
+}
+
+/// What [`link_entries_moving`] took out of the cache entries.
+pub struct Moved {
+    /// The files in link order, each with its node count and raw edge count.
+    pub files: Vec<(String, usize, usize)>,
+    /// Every raw edge, in link order. A C# repo never gets this form.
+    pub raw: Vec<RawEdge>,
+}
+
+impl Moved {
+    /// Gives the raw edges back to their entries, in place of a copy.
+    pub fn restore_raw(&mut self, cache: &mut ExtractCache) {
+        let mut raw = std::mem::take(&mut self.raw).into_iter();
+        for (id, _, count) in &self.files {
+            if let Some(entry) = cache.files.get_mut(id) {
+                entry.raw_edges = raw.by_ref().take(*count).collect();
+            }
+        }
+    }
+}
+
+/// Like [`link_entries`], but moves the nodes and raw edges out of `cache`
+/// in place of a copy. The nodes stay in the graph, so the caller copies
+/// them back later; the raw edges come back through [`Moved::restore_raw`].
+/// A C# repo stamps its raw edges, so it keeps the copy and gives `None`.
+pub fn link_entries_moving(
+    root: &Path,
+    files: &[PathBuf],
+    cache: &mut ExtractCache,
+    prior: &Graph,
+    scopes: &mut ScopeMemo,
+) -> std::io::Result<(Graph, Option<Moved>)> {
+    if files
+        .iter()
+        .any(|f| f.extension().is_some_and(|e| e == "cs"))
+    {
+        return Ok((link_entries(root, files, cache, prior)?, None));
+    }
+    let mut timer = crate::timing::Timer::start();
+    let mut nodes = Vec::new();
+    let mut raw_edges = Vec::new();
+    let mut languages: BTreeSet<String> = BTreeSet::new();
+    let mut moved = Vec::new();
+    for rel in files {
+        let id = to_slash(rel);
+        let Some(label) = claim_label(rel, &id) else {
+            continue;
+        };
+        let Some(entry) = cache.files.get_mut(&id) else {
+            continue;
+        };
+        let (n, r) = (entry.nodes.len(), entry.raw_edges.len());
+        nodes.append(&mut entry.nodes);
+        raw_edges.append(&mut entry.raw_edges);
+        if entry.error.is_none() && !entry.hash.is_empty() {
+            languages.insert(label);
+        }
+        moved.push((id, n, r));
+    }
+    timer.lap("move entries");
+    let prior_nodes = prior_of(prior);
+    timer.lap("prior nodes");
+    let (graph, raw) = link_core(
+        root,
+        files,
+        nodes,
+        raw_edges,
+        languages,
+        &mut timer,
+        Some(scopes),
+        || Ok(prior_nodes),
+    )?;
+    Ok((graph, Some(Moved { files: moved, raw })))
+}
+
+/// The prior nodes the meaning carry reads, taken from a graph.
+fn prior_of(prior: &Graph) -> HashMap<String, PriorNode> {
+    prior
+        .nodes
+        .iter()
+        .filter(|n| n.summary.is_some())
+        .map(|n| {
+            let kept = PriorNode {
+                id: n.id.clone(),
+                body_hash: n.body_hash.clone(),
+                summary_state: n.summary_state,
+                summary: n.summary.clone(),
+                crux: n.crux.clone(),
+            };
+            (n.id.clone(), kept)
+        })
+        .collect()
+}
+
+/// Walks `root`, or takes `walked` when it is `Some`, and drops every file under
+/// `context_dir` (or a sibling dir whose name shares its string prefix). See
+/// [`build_graph`] for why. `walked` is a list from `walk_repo`, moved in.
+pub(crate) fn collect_files(
+    root: &Path,
+    context_dir: &Path,
+    walked: Option<Vec<PathBuf>>,
+) -> std::io::Result<Vec<PathBuf>> {
     let context_prefix = resolved_slash_path(context_dir)?;
-    let files: Vec<PathBuf> = walk_repo(root)?
+    let listed = match walked {
+        Some(list) => list,
+        None => walk_repo(root)?,
+    };
+    let files: Vec<PathBuf> = listed
         .into_iter()
         .filter(|rel| {
             let abs = format!("{}/{}", to_slash(root), to_slash(rel));
@@ -982,8 +1274,9 @@ fn assemble(
     nodes: Vec<Node>,
     raw_edges: &[RawEdge],
     languages: BTreeSet<String>,
+    memo: Option<&mut ScopeMemo>,
 ) -> Graph {
-    let scopes = find_scopes(root, files, &nodes);
+    let scopes = find_scopes(root, files, &nodes, memo);
     let node_count = nodes.len();
     let contains_edges: Vec<Edge> = raw_edges
         .iter()
@@ -1036,6 +1329,27 @@ fn resolved_slash_path(path: &Path) -> std::io::Result<String> {
     Ok(to_slash(&cwd.join(path)))
 }
 
+/// The scope markers found in each dir, kept between warm links. A dir holds
+/// a marker when the file exists on disk, so the listing is a disk fact. The
+/// warm index forgets a dir when an event touches it, and forgets all on a
+/// probe, so a kept answer never outlives a change.
+#[derive(Debug, Default)]
+pub struct ScopeMemo {
+    found: HashMap<String, Vec<String>>,
+}
+
+impl ScopeMemo {
+    /// Forgets the dir `dir` (repo-relative, `""` for the root).
+    pub fn forget(&mut self, dir: &str) {
+        self.found.remove(dir);
+    }
+
+    /// Forgets every dir.
+    pub fn clear(&mut self) {
+        self.found.clear();
+    }
+}
+
 /// Minimum non-file node count a discovered sub-scope needs to stand on its
 /// own. A scope below this count folds into the root scope.
 const MIN_SCOPE_NODES: usize = 5;
@@ -1053,8 +1367,13 @@ const MIN_SCOPE_NODES: usize = 5;
 /// root (rule 5); root-only survival collapses to the canonical form (rule
 /// 6); the kept scopes are ordered prefix-length descending, then
 /// lexicographic, with `label` equal to `prefix` (rule 7).
-fn find_scopes(root: &Path, files: &[PathBuf], nodes: &[Node]) -> Vec<Scope> {
-    let candidates = candidate_scopes(root, files);
+fn find_scopes(
+    root: &Path,
+    files: &[PathBuf],
+    nodes: &[Node],
+    memo: Option<&mut ScopeMemo>,
+) -> Vec<Scope> {
+    let candidates = candidate_scopes(root, files, memo);
     apply_min_substance_guard(candidates, nodes)
 }
 
@@ -1071,18 +1390,48 @@ struct Candidate {
 /// and the canonical-root and ordering rules (rules 6 and 7).
 /// Root-level counting (rule 5) needs node counts, so it runs separately
 /// in [`apply_min_substance_guard`].
-fn candidate_scopes(root: &Path, files: &[PathBuf]) -> Vec<Scope> {
+fn candidate_scopes(
+    root: &Path,
+    files: &[PathBuf],
+    mut memo: Option<&mut ScopeMemo>,
+) -> Vec<Scope> {
     // A marker counts when the file exists on disk, even if the walk
     // dropped it (an ignored marker): the check runs per
     // visible dir, in `SCOPE_MARKERS` order.
     let dirs = collect_dirs(files);
     let mut markers_by_prefix: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for dir in &dirs {
+        if let Some(found) = memo.as_ref().and_then(|m| m.found.get(dir)) {
+            if !found.is_empty() {
+                markers_by_prefix.insert(dir.clone(), found.clone());
+            }
+            continue;
+        }
+        // One listing per dir, then `exists` only for a name that may match
+        // (any case, as on a case-insensitive disk). 9 stats per dir cost more.
+        // A dir that does not list (or a failed entry) gets the 9 stats, as before.
+        let names: Option<Vec<String>> =
+            std::fs::read_dir(root.join(dir)).ok().and_then(|listing| {
+                listing
+                    .map(|e| {
+                        e.ok()
+                            .map(|e| e.file_name().to_string_lossy().to_ascii_lowercase())
+                    })
+                    .collect()
+            });
         let found: Vec<String> = SCOPE_MARKERS
             .iter()
+            .filter(|m| {
+                names
+                    .as_ref()
+                    .is_none_or(|names| names.iter().any(|n| n.eq_ignore_ascii_case(m)))
+            })
             .filter(|m| root.join(dir).join(m).exists())
             .map(|m| m.to_string())
             .collect();
+        if let Some(m) = memo.as_mut() {
+            m.found.insert(dir.clone(), found.clone());
+        }
         if !found.is_empty() {
             markers_by_prefix.insert(dir.clone(), found);
         }
@@ -1356,22 +1705,27 @@ fn apply_min_substance_guard(scopes: Vec<Scope>, nodes: &[Node]) -> Vec<Scope> {
     if scopes.len() <= 1 {
         return scopes;
     }
-    let mut counts: BTreeMap<String, usize> =
-        scopes.iter().map(|s| (s.prefix.clone(), 0)).collect();
+    let mut counts: BTreeMap<&str, usize> = scopes.iter().map(|s| (s.prefix.as_str(), 0)).collect();
     for node in nodes {
         if node.kind == Kind::File {
             continue;
         }
         let owner = scope_of(&node.path, &scopes);
-        if let Some(count) = counts.get_mut(&owner) {
+        if let Some(count) = counts.get_mut(owner) {
             *count += 1;
         }
     }
+    let enough: Vec<bool> = scopes
+        .iter()
+        .map(|s| {
+            s.prefix.is_empty()
+                || counts.get(s.prefix.as_str()).copied().unwrap_or(0) >= MIN_SCOPE_NODES
+        })
+        .collect();
+    let mut keep = enough.into_iter();
     let kept: Vec<Scope> = scopes
         .into_iter()
-        .filter(|s| {
-            s.prefix.is_empty() || counts.get(&s.prefix).copied().unwrap_or(0) >= MIN_SCOPE_NODES
-        })
+        .filter(|_| keep.next().unwrap_or(false))
         .collect();
     if kept.is_empty() {
         return vec![canonical_root(Vec::new())];
@@ -1395,20 +1749,23 @@ fn canonical_root(markers: Vec<String>) -> Scope {
 /// Nearest-prefix owner of `path` among `scopes`. `scopes` must already be
 /// ordered prefix-length descending, so the first prefix match is the
 /// longest. Falls back to `""` when no scope prefix matches.
-fn scope_of(path: &str, scopes: &[Scope]) -> String {
+fn scope_of<'a>(path: &str, scopes: &'a [Scope]) -> &'a str {
     for scope in scopes {
         if scope.prefix.is_empty() {
             continue; // root is the fallback, checked last
         }
-        if path == scope.prefix || path.starts_with(&format!("{}/", scope.prefix)) {
-            return scope.prefix.clone();
+        // No `format!` here: this runs once per node and per scope.
+        let under = path
+            .strip_prefix(scope.prefix.as_str())
+            .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'));
+        if under {
+            return scope.prefix.as_str();
         }
     }
     scopes
         .iter()
         .find(|s| s.prefix.is_empty())
-        .map(|s| s.prefix.clone())
-        .unwrap_or_default()
+        .map_or("", |s| s.prefix.as_str())
 }
 
 /// Number of `/`-separated segments in `dir`; `""` (root) is depth 0.
@@ -1968,7 +2325,7 @@ mod tests {
             write_functions(&dir.path, &format!("src/f{i}.ts"), 1);
             write_file(&dir.path, &format!("src/d{i}.json"), "{}");
         }
-        let files = collect_files(&dir.path, &dir.path.join("sieve")).expect("walk");
+        let files = collect_files(&dir.path, &dir.path.join("sieve"), None).expect("walk");
         assert_eq!(files.len(), 20);
         let count = claimed_count(&files);
         assert_eq!(count, 10);
@@ -1995,29 +2352,142 @@ mod tests {
         fs::write(dir.path.join("py/b.py"), "b = 1\n").expect("write b");
         let context_dir = dir.path.join("sieve");
 
-        let only = BuildOptions {
+        let mut only = BuildOptions {
             only_dirs: vec!["src".to_string()],
             no_reuse: false,
             read_only: false,
             progress: None,
             keep_raw: false,
+            walked: None,
         };
-        let report = build_graph_cached_with(&dir.path, &context_dir, &only).expect("build");
+        let report = build_graph_cached_with(&dir.path, &context_dir, &mut only).expect("build");
         assert_eq!(report.claimed, vec!["src/a.ts".to_string()]);
         assert_eq!((report.parsed, report.reused), (1, 0));
 
-        let warm = build_graph_cached_with(&dir.path, &context_dir, &only).expect("build");
+        let warm = build_graph_cached_with(&dir.path, &context_dir, &mut only).expect("build");
         assert_eq!((warm.parsed, warm.reused), (0, 1));
 
-        let cold = BuildOptions {
+        let mut cold = BuildOptions {
             only_dirs: Vec::new(),
             no_reuse: true,
             read_only: false,
             progress: None,
             keep_raw: false,
+            walked: None,
         };
-        let report = build_graph_cached_with(&dir.path, &context_dir, &cold).expect("build");
+        let report = build_graph_cached_with(&dir.path, &context_dir, &mut cold).expect("build");
         assert_eq!(report.claimed.len(), 2);
         assert_eq!((report.parsed, report.reused), (2, 0));
+    }
+
+    /// 2a: a build that takes the probe's walk list gives the same graph bytes
+    /// as a build that walks, and the walk list leaves the options.
+    #[test]
+    fn walked_some_and_walked_none_give_the_same_wiring_bytes() {
+        let dir = TempDir::new("walked");
+        fs::create_dir_all(dir.path.join("src")).expect("mkdir src");
+        fs::write(dir.path.join("src/a.ts"), "export const a = 1;\n").expect("write a");
+        fs::write(
+            dir.path.join("src/b.ts"),
+            "import { a } from './a';\nexport const b = a;\n",
+        )
+        .expect("write b");
+        fs::write(dir.path.join("c.py"), "c = 1\n").expect("write c");
+        let context_dir = dir.path.join("sieve");
+        fs::create_dir_all(context_dir.join("x")).expect("mkdir context");
+        fs::write(context_dir.join("x/skip.ts"), "export const s = 1;\n").expect("write skip");
+
+        let mut plain = BuildOptions {
+            only_dirs: vec!["src".to_string()],
+            no_reuse: true,
+            ..BuildOptions::default()
+        };
+        let none = build_graph_cached_with(&dir.path, &context_dir, &mut plain).expect("build");
+        // The list holds a context-dir file and a file outside `only_dirs`.
+        let mut list = sieve_core::walk::walk_repo(&dir.path).expect("walk");
+        list.push(PathBuf::from("sieve/x/skip.ts"));
+        let mut fed = BuildOptions {
+            walked: Some(list),
+            ..plain.clone()
+        };
+        let some = build_graph_cached_with(&dir.path, &context_dir, &mut fed).expect("build");
+        assert!(fed.walked.is_none());
+        assert_eq!(
+            serde_json::to_vec(&none.graph).expect("json"),
+            serde_json::to_vec(&some.graph).expect("json")
+        );
+        assert_eq!(none.claimed, some.claimed);
+        assert_eq!(
+            some.claimed,
+            vec!["src/a.ts".to_string(), "src/b.ts".to_string()]
+        );
+    }
+
+    /// V2: entries made by `fresh_entry` and linked by `link_entries` give the
+    /// graph of a full build, after one file changes.
+    #[test]
+    fn fresh_entries_link_to_the_graph_of_a_full_build() {
+        let dir = TempDir::new("link-entries");
+        write_file(
+            &dir.path,
+            "a.ts",
+            "export function f(a: number) { return a; }\n",
+        );
+        write_file(
+            &dir.path,
+            "b.ts",
+            "import { f } from './a';\nexport function g() { return f(1); }\n",
+        );
+        write_file(&dir.path, "c.py", "def h():\n    return 1\n");
+        let context_dir = dir.path.join("sieve");
+        let built = build_graph_cached(&dir.path, &context_dir).expect("build");
+        let files = walk_files(&dir.path, &context_dir, &[]).expect("walk");
+        let mut parsers = Extractors::new().expect("parsers");
+        let mut cache = ExtractCache {
+            version: CACHE_VERSION,
+            extractor: extractor_stamp(),
+            files: BTreeMap::new(),
+        };
+        for rel in &files {
+            let id = to_slash(rel);
+            let entry = fresh_entry(&dir.path, &id, &mut parsers)
+                .expect("entry")
+                .expect("claimed");
+            cache.files.insert(id, entry);
+        }
+        let linked = link_entries(&dir.path, &files, &cache, &built.graph).expect("link");
+        assert_eq!(
+            serde_json::to_vec(&built.graph).expect("json"),
+            serde_json::to_vec(&linked).expect("json")
+        );
+        // Change one file: the swapped entry and the full build agree again.
+        write_file(
+            &dir.path,
+            "a.ts",
+            "export function f(a: number, b: number) { return a + b; }\n",
+        );
+        let entry = fresh_entry(&dir.path, "a.ts", &mut parsers)
+            .expect("entry")
+            .expect("claimed");
+        cache.files.insert("a.ts".to_string(), entry);
+        let linked = link_entries(&dir.path, &files, &cache, &linked).expect("link");
+        let rebuilt = build_graph_cached_with(
+            &dir.path,
+            &context_dir,
+            &mut BuildOptions {
+                no_reuse: true,
+                ..BuildOptions::default()
+            },
+        )
+        .expect("build");
+        assert_eq!(
+            serde_json::to_vec(&rebuilt.graph).expect("json"),
+            serde_json::to_vec(&linked).expect("json")
+        );
+        // A gone file gives no entry.
+        fs::remove_file(dir.path.join("c.py")).expect("rm");
+        assert!(fresh_entry(&dir.path, "c.py", &mut parsers)
+            .expect("entry")
+            .is_none());
     }
 }
