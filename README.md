@@ -92,7 +92,9 @@ The old names `ask`, `grep`, `blast` and `skeleton` still work. The [command ref
 
 The MCP server keeps the index in memory and watches your files, so an answer never comes from an old index.
 
-Warm MCP calls on a clone of the vite repo (commit 90bc034a, about 1,600 files). The test ran in a Linux arm64 Docker container with release builds. Each cell is the median of 5 calls after one warm-up. The range shows two runs.
+Warm MCP calls on a clone of the vite repo (commit 90bc034a, about 1,600 files). The test ran in a Linux arm64 Docker container with release builds. Each cell is the median of 5 calls after one warm-up. The range shows two runs. No file changed between the calls.
+
+After a file edit, the first `query` rebuilds its cache, so it does not get this speed. That case is not in the table. After an edit, `find` reads again only the edited file.
 
 | Call | 0.2.0 | 0.2.1 | 0.2.2 | 0.2.3 |
 |---|---|---|---|---|

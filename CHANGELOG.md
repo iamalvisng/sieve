@@ -11,8 +11,8 @@ This release makes warm MCP `query` and `find` calls faster.
 
 ### Changed
 
-- A warm MCP `query` reuses the link graph shape, the word counts, the corpus and the ask index between calls. On the vite repo on Linux: 93–104 ms in 0.2.2 to 31–40 ms.
-- A warm MCP `find` reuses file text between calls and reads only lines that can match. On the vite repo on Linux: 18–23 ms to 7–8 ms.
+- A warm MCP `query` reuses the link graph shape, the word counts, the corpus and the ask index between calls. On the vite repo on Linux, with no file change since the last call: 93–104 ms in 0.2.2 to 31–40 ms. After a file edit, the first `query` rebuilds the cache and does not get this speed. That case is not measured here.
+- A warm MCP `find` reuses file text between calls and reads only lines that can match. On the vite repo on Linux: 18–23 ms to 7–8 ms. After an edit, only the edited file is read again.
 - Each cache checks the file's time, size and inode (and change time on Unix) before use, so an edited file is always read again.
 - `query` ranks a file under `scripts/` lower, like a test file, unless the query says "script" or names the file.
 - `scripts/bench-mcp.sh` measures warm MCP calls on any repo.
