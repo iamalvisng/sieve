@@ -5,6 +5,18 @@ All notable changes to this project are in this file.
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.3] - 2026-10-31
+
+This release makes warm MCP `query` and `find` calls faster.
+
+### Changed
+
+- A warm MCP `query` reuses the link graph shape, the word counts, the corpus and the ask index between calls. On the vite repo on Linux: 93–104 ms in 0.2.2 to 31–40 ms.
+- A warm MCP `find` reuses file text between calls and reads only lines that can match. On the vite repo on Linux: 18–23 ms to 7–8 ms.
+- Each cache checks the file's time, size and inode (and change time on Unix) before use, so an edited file is always read again.
+- `query` ranks a file under `scripts/` lower, like a test file, unless the query says "script" or names the file.
+- `scripts/bench-mcp.sh` measures warm MCP calls on any repo.
+
 ## [0.2.2] - 2026-10-30
 
 This release keeps the index in memory in the MCP server.

@@ -1236,7 +1236,7 @@ fn expected_codex_hooks() -> serde_json::Value {
 fn run_init_agents_global(home: &Path) -> String {
     assert_not_real_home(home);
     let fixture = support::manifest_dir().join("../../tests/fixtures/basic");
-    let copy = TempDir::new("p4-05-copy");
+    let copy = TempDir::new("init-agents-global-copy");
     copy_dir(&fixture, &copy.path);
     let output = support::sieve_command()
         .args(["init", "-y", "--agents", "agents", "--global", "--no-build"])
@@ -1260,7 +1260,7 @@ fn run_init_agents_global(home: &Path) -> String {
 /// command form. Without `~/.codex/`, the gate holds and no file appears.
 #[test]
 fn test_p4_05_init_global_writes_the_codex_hooks_exactly() {
-    let home = TempDir::new("p4-05-home");
+    let home = TempDir::new("init-codex-hooks-home");
     fs::create_dir_all(home.path.join(".codex")).expect("mkdir ~/.codex");
     run_init_agents_global(&home.path);
 
@@ -1268,11 +1268,11 @@ fn test_p4_05_init_global_writes_the_codex_hooks_exactly() {
     assert_eq!(
         read_json(&hooks_path),
         expected_codex_hooks(),
-        "~/.codex/hooks.json differs from the P4-05 spec row"
+        "~/.codex/hooks.json differs from the expected Codex hook entry"
     );
 
     // The gate: no `~/.codex/` directory, no write.
-    let bare_home = TempDir::new("p4-05-bare-home");
+    let bare_home = TempDir::new("init-codex-hooks-bare-home");
     run_init_agents_global(&bare_home.path);
     assert!(
         !bare_home.path.join(".codex").exists(),
@@ -1285,9 +1285,9 @@ fn test_p4_05_init_global_writes_the_codex_hooks_exactly() {
 /// Returns the parsed repo-local `.claude/settings.json`.
 fn init_claude_settings(env: &[(&str, &str)], extra_args: &[&str]) -> serde_json::Value {
     let fixture = support::manifest_dir().join("../../tests/fixtures/basic");
-    let home = TempDir::new("p4-11-home");
+    let home = TempDir::new("init-claude-settings-home");
     assert_not_real_home(&home.path);
-    let copy = TempDir::new("p4-11-copy");
+    let copy = TempDir::new("init-claude-settings-copy");
     copy_dir(&fixture, &copy.path);
     let mut cmd = support::sieve_command();
     cmd.args(["init", "-y", "--agents", "claude", "--no-build"])
@@ -1388,8 +1388,8 @@ fn run_init_in(project: &Path, home: &Path, args: &[&str]) -> String {
 /// with the same flags lists only those two files.
 #[test]
 fn test_p4_02_agents_flag_outranks_all_agents() {
-    let project = TempDir::new("p4-02-precedence-project");
-    let home = TempDir::new("p4-02-precedence-home");
+    let project = TempDir::new("init-precedence-project");
+    let home = TempDir::new("init-precedence-home");
     let stderr = run_init_in(
         &project.path,
         &home.path,
@@ -1418,8 +1418,8 @@ fn test_p4_02_agents_flag_outranks_all_agents() {
 /// test does not restate the instruction body.
 #[test]
 fn test_p4_03_owned_replaces_on_diff_and_section_keeps_user_text() {
-    let home = TempDir::new("p4-03-home");
-    let fresh = TempDir::new("p4-03-fresh-project");
+    let home = TempDir::new("init-owned-home");
+    let fresh = TempDir::new("init-owned-fresh-project");
     run_init_in(&fresh.path, &home.path, &["--agents", "kiro", "agents"]);
     let kiro_rel = Path::new(".kiro/steering/sieve.md");
     let fresh_kiro = fs::read(fresh.path.join(kiro_rel)).expect("read the fresh kiro file");
@@ -1429,7 +1429,7 @@ fn test_p4_03_owned_replaces_on_diff_and_section_keeps_user_text() {
         "a fresh AGENTS.md must be the block alone, got:\n{fresh_agents}"
     );
 
-    let seeded = TempDir::new("p4-03-seeded-project");
+    let seeded = TempDir::new("init-owned-seeded-project");
     // `init` prints the canonical cwd, so the report lines match only a
     // canonical path (`/private/var/...`, not the `/var/...` symlink).
     let seeded_root = fs::canonicalize(&seeded.path).expect("canonicalize the project");
@@ -1619,8 +1619,8 @@ fn test_p4_09_foreign_node_dist_entry_survives_init_and_uninstall() {
 /// line. The Claude files stay.
 #[test]
 fn test_p4_49_init_retracts_the_unselected_agent() {
-    let project = TempDir::new("p4-49-seq-project");
-    let home = TempDir::new("p4-49-seq-home");
+    let project = TempDir::new("init-seq-project");
+    let home = TempDir::new("init-seq-home");
     let root = fs::canonicalize(&project.path).expect("canonicalize the project");
     run_init_in(&project.path, &home.path, &["--agents", "claude", "cursor"]);
     assert!(root.join(".cursor/rules/sieve.mdc").is_file());
@@ -1650,8 +1650,8 @@ fn test_p4_49_init_retracts_the_unselected_agent() {
 /// Sieve key, so they stay byte for byte and print no `removed` line.
 #[test]
 fn test_p4_49_retract_keeps_user_owned_content() {
-    let project = TempDir::new("p4-49-user-project");
-    let home = TempDir::new("p4-49-user-home");
+    let project = TempDir::new("init-user-project");
+    let home = TempDir::new("init-user-home");
     let root = fs::canonicalize(&project.path).expect("canonicalize the project");
     fs::write(root.join("AGENTS.md"), "# Notes\n").expect("seed AGENTS.md");
     run_init_in(
@@ -1700,8 +1700,8 @@ fn test_p4_49_retract_keeps_user_owned_content() {
 /// files in place.
 #[test]
 fn test_p4_49_dry_run_removes_nothing_and_plans_no_removal() {
-    let project = TempDir::new("p4-49-dry-project");
-    let home = TempDir::new("p4-49-dry-home");
+    let project = TempDir::new("init-dry-project");
+    let home = TempDir::new("init-dry-home");
     run_init_in(&project.path, &home.path, &["--agents", "claude", "cursor"]);
     let before = snapshot_tree(&project.path);
 
@@ -1746,8 +1746,8 @@ fn run_sieve_product(project: &Path, home: &Path, args: &[&str]) -> String {
 /// retract step (`init --agents agents`) and `uninstall -y`. Asserts every
 /// seed stays byte for byte after each command.
 fn assert_user_files_survive(label: &str, files: &[(&str, &str)], uninstall_too: bool) {
-    let project = TempDir::new(&format!("p4-49-{label}-project"));
-    let home = TempDir::new(&format!("p4-49-{label}-home"));
+    let project = TempDir::new(&format!("init-{label}-project"));
+    let home = TempDir::new(&format!("init-{label}-home"));
     for (rel, text) in files {
         let path = project.path.join(rel);
         fs::create_dir_all(path.parent().expect("parent")).expect("mkdir");
@@ -1820,8 +1820,8 @@ fn test_p4_49_quoted_headers_and_markers_survive() {
 /// that holds another file stays, and the repo root stays.
 #[test]
 fn test_p4_49_retract_prunes_empty_dirs_only() {
-    let project = TempDir::new("p4-49-f7-project");
-    let home = TempDir::new("p4-49-f7-home");
+    let project = TempDir::new("init-f7-project");
+    let home = TempDir::new("init-f7-home");
     run_sieve_product(
         &project.path,
         &home.path,
@@ -1854,8 +1854,8 @@ fn assert_strip_keeps_order(label: &str, rel: &str, seed: &str, expected: &str) 
         ),
         ("uninstall", ["uninstall", "-y"].as_slice()),
     ] {
-        let project = TempDir::new(&format!("p4-49-{label}-{mode}-project"));
-        let home = TempDir::new(&format!("p4-49-{label}-{mode}-home"));
+        let project = TempDir::new(&format!("init-{label}-{mode}-project"));
+        let home = TempDir::new(&format!("init-{label}-{mode}-home"));
         let path = project.path.join(rel);
         fs::create_dir_all(path.parent().expect("parent")).expect("mkdir");
         fs::write(&path, seed).expect("seed");
@@ -1914,8 +1914,8 @@ fn assert_merge_keeps_user_values(
     args: &[&str],
     keys: &[&str],
 ) {
-    let project = TempDir::new(&format!("p4-49-{label}-project"));
-    let home = TempDir::new(&format!("p4-49-{label}-home"));
+    let project = TempDir::new(&format!("init-{label}-project"));
+    let home = TempDir::new(&format!("init-{label}-home"));
     let path = if in_home { &home.path } else { &project.path }.join(rel);
     fs::create_dir_all(path.parent().expect("parent")).expect("mkdir");
     fs::write(&path, seed).expect("seed");
@@ -2006,8 +2006,8 @@ fn test_p4_49_mcp_merge_skips_a_non_object_bucket() {
         ("arr", "{\"mcpServers\":[1,2]}"),
         ("str", "{\"mcpServers\":\"keep me\"}"),
     ] {
-        let project = TempDir::new(&format!("p4-49-bucket-{label}-project"));
-        let home = TempDir::new(&format!("p4-49-bucket-{label}-home"));
+        let project = TempDir::new(&format!("init-bucket-{label}-project"));
+        let home = TempDir::new(&format!("init-bucket-{label}-home"));
         fs::write(project.path.join(".mcp.json"), seed).expect("seed");
         let stderr = run_sieve_product(
             &project.path,
@@ -2032,8 +2032,8 @@ fn test_p4_49_mcp_merge_skips_a_non_object_bucket() {
 /// or replace the value, which loses it).
 #[test]
 fn test_p4_49_settings_merges_skip_wrong_shapes() {
-    let project = TempDir::new("p4-49-shape-project");
-    let home = TempDir::new("p4-49-shape-home");
+    let project = TempDir::new("init-shape-project");
+    let home = TempDir::new("init-shape-home");
     let files = [
         (
             &project.path,
@@ -2077,8 +2077,8 @@ fn test_p4_49_settings_merges_skip_wrong_shapes() {
 /// Sieve's. A sieve merge and a sieve uninstall keep them.
 #[test]
 fn test_p4_50_sieve_codex_merge_and_strip_keep_foreign_entries() {
-    let project = TempDir::new("p4-50-foreign-project");
-    let home = TempDir::new("p4-50-foreign-home");
+    let project = TempDir::new("init-foreign-project");
+    let home = TempDir::new("init-foreign-home");
     let seed = serde_json::to_string_pretty(&serde_json::json!({
         "hooks": { "Stop": [{ "hooks": [{
             "type": "command",
@@ -2113,8 +2113,8 @@ fn test_p4_50_sieve_codex_merge_and_strip_keep_foreign_entries() {
 /// bare string.
 #[test]
 fn test_p4_49_foreign_string_statusline_stays() {
-    let project = TempDir::new("p4-49-sl-project");
-    let home = TempDir::new("p4-49-sl-home");
+    let project = TempDir::new("init-sl-project");
+    let home = TempDir::new("init-sl-home");
     let path = project.path.join(".claude/settings.json");
     fs::create_dir_all(path.parent().expect("parent")).expect("mkdir");
     fs::write(&path, "{\"statusLine\":\"mine\"}").expect("seed");
@@ -2132,8 +2132,8 @@ fn test_p4_49_foreign_string_statusline_stays() {
 /// another file stays.
 #[test]
 fn test_p4_49_global_removal_prunes_empty_home_dirs() {
-    let project = TempDir::new("p4-49-prune-project");
-    let home = TempDir::new("p4-49-prune-home");
+    let project = TempDir::new("init-prune-project");
+    let home = TempDir::new("init-prune-home");
     fs::create_dir_all(home.path.join(".codex")).expect("mkdir .codex");
     let init = ["init", "--no-build", "--global", "--agents"];
     let mut both = init.to_vec();
@@ -2174,8 +2174,8 @@ fn home_with_codex_and_opencode(label: &str) -> TempDir {
 /// `opencode.json`. Leaving `agents` out of a later `init` retracts both.
 #[test]
 fn test_p4_51_agents_write_the_codex_config_and_opencode_json() {
-    let project = TempDir::new("p4-51-project");
-    let home = home_with_codex_and_opencode("p4-51-home");
+    let project = TempDir::new("init-agents-project");
+    let home = home_with_codex_and_opencode("init-agents-home");
     let global = ["--agents", "agents", "--global"];
     let stderr = run_init_in(&project.path, &home.path, &global);
 
@@ -2234,15 +2234,15 @@ fn test_p4_51_agents_write_the_codex_config_and_opencode_json() {
     assert!(!toml.exists() && !json.exists());
 
     // No `--global`: opencode.json only, and the hint line.
-    let local = TempDir::new("p4-51-local-project");
+    let local = TempDir::new("init-local-project");
     let stderr = run_init_in(&local.path, &home.path, &["--agents", "agents"]);
     assert!(!toml.exists(), "HOME file written without --global");
     assert!(local.path.join("opencode.json").is_file());
     assert!(stderr.contains("skipped global hooks under ~ \u{b7} pass --global to write them"));
 
     // No opencode dir: no opencode.json.
-    let bare = TempDir::new("p4-51-bare-home");
-    let bare_project = TempDir::new("p4-51-bare-project");
+    let bare = TempDir::new("init-bare-home");
+    let bare_project = TempDir::new("init-bare-project");
     run_init_in(&bare_project.path, &bare.path, &global);
     assert!(!bare_project.path.join("opencode.json").exists());
 }
@@ -2251,8 +2251,8 @@ fn test_p4_51_agents_write_the_codex_config_and_opencode_json() {
 /// order. A later `init` that drops `agents` gives the user's bytes back.
 #[test]
 fn test_p4_51_codex_and_opencode_merges_keep_user_content() {
-    let project = TempDir::new("p4-51-keep-project");
-    let home = home_with_codex_and_opencode("p4-51-keep-home");
+    let project = TempDir::new("init-keep-project");
+    let home = home_with_codex_and_opencode("init-agents-keep-home");
     let user_toml = "[mcp_servers.mine]\ncommand = \"foo\"\n\n[other]\nx = 1\n";
     let user_json = r#"{"theme":"dark","mcp":{"mine":{"type":"local","command":["foo"]}}}"#;
     fs::write(home.path.join(".codex/config.toml"), user_toml).expect("seed toml");
@@ -2283,8 +2283,8 @@ fn test_p4_51_codex_and_opencode_merges_keep_user_content() {
 /// `updated`. The Codex hooks file prints a `hook codex-hooks` line.
 #[test]
 fn test_p4_52_report_words_follow_golden() {
-    let project = TempDir::new("p4-52-project");
-    let home = home_with_codex_and_opencode("p4-52-home");
+    let project = TempDir::new("init-report-project");
+    let home = home_with_codex_and_opencode("init-report-home");
     fs::write(project.path.join("AGENTS.md"), "# My rules\n\nkeep me\n").expect("seed");
     let mine = r#"{"mcpServers":{"mine":{"command":"foo"}}}"#;
     fs::write(project.path.join(".mcp.json"), mine).expect("seed");
@@ -2383,8 +2383,8 @@ claude:
 /// line. Both equal the expected text. The dry run removes nothing.
 #[test]
 fn test_p1_72_uninstall_report_matches_golden() {
-    let project = TempDir::new("p1-72-project");
-    let home = home_with_codex_and_opencode("p1-72-home");
+    let project = TempDir::new("init-uninstall-project");
+    let home = home_with_codex_and_opencode("init-uninstall-home");
     fs::create_dir_all(home.path.join(".claude")).expect("mkdir ~/.claude");
     fs::write(project.path.join("AGENTS.md"), "# My rules\n\nkeep me\n").expect("seed");
     let mine = r#"{"mcpServers":{"mine":{"command":"foo"}}}"#;
@@ -2420,8 +2420,8 @@ fn test_p1_72_uninstall_report_matches_golden() {
     assert_eq!(kept, toml);
 
     // A repo with nothing of ours: the one line.
-    let empty = TempDir::new("p1-72-empty-project");
-    let quiet = TempDir::new("p1-72-empty-home");
+    let empty = TempDir::new("init-empty-project");
+    let quiet = TempDir::new("init-empty-home");
     let dry = run_uninstall_in(&empty.path, &quiet.path, &["--no-global"]);
     let want = "nothing to remove \u{2014} no sieve files found here\n\ndry run \u{b7} nothing removed \u{b7} run sieve uninstall -y to remove";
     assert_eq!(dry, want);
@@ -2432,8 +2432,8 @@ fn test_p1_72_uninstall_report_matches_golden() {
 /// keeps every user line. The dry run lists both files.
 #[test]
 fn test_p1_72_uninstall_strips_the_sieve_ignore_blocks_and_keeps_user_lines() {
-    let project = TempDir::new("p1-72-ignore-project");
-    let home = TempDir::new("p1-72-ignore-home");
+    let project = TempDir::new("init-ignore-project");
+    let home = TempDir::new("init-ignore-home");
     let fixture = support::manifest_dir().join("../../tests/fixtures/basic");
     copy_dir(&fixture, &project.path);
     let user = "node_modules/\nx# sieve's local graph cache\n";
@@ -2481,8 +2481,8 @@ fn run_init_compact(project: &Path, home: &Path, args: &[&str]) -> String {
 /// No per-file line and no banner appear.
 #[test]
 fn test_p4_47_init_compact_output() {
-    let project = TempDir::new("p4-47-compact-project");
-    let home = TempDir::new("p4-47-compact-home");
+    let project = TempDir::new("init-compact-project");
+    let home = TempDir::new("init-compact-home");
     let stderr = run_init_compact(
         &project.path,
         &home.path,
@@ -2510,8 +2510,8 @@ done \u{b7} wrote 6 files in this repo \u{b7} nothing outside this repo was writ
 /// commit line follows the plan order, Claude Code first.
 #[test]
 fn test_p4_47_init_compact_keeps_the_agents_order() {
-    let project = TempDir::new("p4-47-order-project");
-    let home = TempDir::new("p4-47-order-home");
+    let project = TempDir::new("init-order-project");
+    let home = TempDir::new("init-order-home");
     let stderr = run_init_compact(
         &project.path,
         &home.path,
@@ -2538,8 +2538,8 @@ done \u{b7} wrote 4 files in this repo \u{b7} nothing outside this repo was writ
 /// (claude, agents, adal, cursor, ...).
 #[test]
 fn test_p4_47_init_compact_all_agents_lists_claude_first() {
-    let project = TempDir::new("p4-47-all-project");
-    let home = TempDir::new("p4-47-all-home");
+    let project = TempDir::new("init-all-project");
+    let home = TempDir::new("init-all-home");
     let stderr = run_init_compact(&project.path, &home.path, &["--no-build", "--all-agents"]);
     let hosts: Vec<&str> = stderr
         .lines()
@@ -2558,8 +2558,8 @@ fn test_p4_47_init_compact_all_agents_lists_claude_first() {
 /// compact lines do not appear.
 #[test]
 fn test_p4_47_init_verbose_prints_every_file() {
-    let project = TempDir::new("p4-47-verbose-project");
-    let home = TempDir::new("p4-47-verbose-home");
+    let project = TempDir::new("init-verbose-project");
+    let home = TempDir::new("init-verbose-home");
     let stderr = run_init_in(&project.path, &home.path, &["--agents", "claude"]);
     assert!(stderr.contains("\u{2713} wrote "), "{stderr}");
     assert!(stderr.contains("\u{b7} skipped graph build"), "{stderr}");
@@ -2571,8 +2571,8 @@ fn test_p4_47_init_verbose_prints_every_file() {
 /// The agent lines and the epilogue still print.
 #[test]
 fn test_p4_10_init_compact_reports_a_failed_build() {
-    let project = TempDir::new("p4-10-compact-project");
-    let home = TempDir::new("p4-10-compact-home");
+    let project = TempDir::new("init-failed-build-project");
+    let home = TempDir::new("init-failed-build-home");
     fs::write(project.path.join("sieve"), b"").expect("write a plain `sieve` file");
     let stderr = run_init_compact(&project.path, &home.path, &["--agents", "claude"]);
     assert!(
@@ -2590,8 +2590,8 @@ fn test_p4_10_init_compact_reports_a_failed_build() {
 /// The compact report names the product in Sieve mode.
 #[test]
 fn test_p4_47_init_compact_output_in_sieve_mode() {
-    let project = TempDir::new("p4-47-sieve-project");
-    let home = TempDir::new("p4-47-sieve-home");
+    let project = TempDir::new("init-sieve-project");
+    let home = TempDir::new("init-sieve-home");
     let stderr = run_sieve_product(
         &project.path,
         &home.path,
@@ -2622,8 +2622,8 @@ fn test_p4_47_init_compact_output_in_sieve_mode() {
 /// `sieve/` dir, with its cache files, goes.
 #[test]
 fn test_p1_72_uninstall_keeps_the_user_lines_of_the_ignore_files() {
-    let project = TempDir::new("p1-72-ignore-project");
-    let home = TempDir::new("p1-72-ignore-home");
+    let project = TempDir::new("init-ignore-keep-project");
+    let home = TempDir::new("init-ignore-keep-home");
     let src = support::manifest_dir().join("../../tests/fixtures/basic");
     copy_dir(&src, &project.path);
     fs::write(project.path.join(".ignore"), "my-own-entry\n").expect("seed .ignore");

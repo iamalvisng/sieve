@@ -293,7 +293,7 @@ mod tests {
         let active_nodes = vec![&node];
         let mut docs = std::collections::HashMap::new();
         docs.insert(
-            "a.ts#run",
+            "a.ts#run".to_string(),
             DocBag {
                 name: bag(&tokenize("run")),
                 path: bag(&tokenize("a.ts")),

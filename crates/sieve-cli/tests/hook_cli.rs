@@ -304,7 +304,7 @@ fn assert_state_matches_golden(copy: &Path, rel_state: &str, golden: &str) {
 // counts units.
 #[test]
 fn test_p4_13_session_start_cuts_a_long_index_at_the_budget() {
-    let tmp = TempDir::new("hooks-p4-13");
+    let tmp = TempDir::new("hooks-index-long");
     let copy = built_copy(&tmp, "copy", &fixture_src());
     fs::copy(
         hook_inputs_dir().join("index-long.md"),
@@ -323,7 +323,7 @@ fn test_p4_13_session_start_cuts_a_long_index_at_the_budget() {
 
 #[test]
 fn test_p4_14_post_edit_reads_the_apply_patch_header() {
-    let tmp = TempDir::new("hooks-p4-14a");
+    let tmp = TempDir::new("hooks-apply-patch");
     let copy = built_copy(&tmp, "copy", &fixture_src());
     let json = envelope(
         "p4-14-apply-patch",
@@ -342,7 +342,7 @@ fn test_p4_14_post_edit_reads_the_apply_patch_header() {
 
 #[test]
 fn test_p4_14_post_edit_counts_the_stale_file() {
-    let tmp = TempDir::new("hooks-p4-14b");
+    let tmp = TempDir::new("hooks-stale");
     let copy = built_copy(&tmp, "copy", &fixture_src());
     let util = copy.join("src/util.ts");
     let mut source = fs::read_to_string(&util).expect("read src/util.ts");
@@ -356,7 +356,7 @@ fn test_p4_14_post_edit_counts_the_stale_file() {
 
 #[test]
 fn test_p4_15_tool_savings_reclassifies_a_footer_bash_as_golden() {
-    let tmp = TempDir::new("hooks-p4-15");
+    let tmp = TempDir::new("hooks-read-echo");
     let copy = built_copy(&tmp, "copy", &fixture_src());
     let transcript = transcript_path(&copy);
     let read = read_event_json(&copy, "p4-15-session", &transcript);
@@ -379,7 +379,7 @@ fn test_p4_15_tool_savings_reclassifies_a_footer_bash_as_golden() {
 
 #[test]
 fn test_p4_16_stop_counts_the_tally_turn() {
-    let tmp = TempDir::new("hooks-p4-16");
+    let tmp = TempDir::new("hooks-session-flow");
     let copy = built_copy(&tmp, "copy", &fixture_src());
     let transcript = copy.join("tally.jsonl");
     fs::copy(hook_inputs_dir().join("tally.jsonl"), &transcript).expect("copy tally.jsonl");
@@ -412,7 +412,7 @@ fn test_p4_16_stop_counts_the_tally_turn() {
 
 #[test]
 fn test_p4_17_prompt_records_the_agent_query() {
-    let tmp = TempDir::new("hooks-p4-17");
+    let tmp = TempDir::new("hooks-agent");
     let copy = built_copy(&tmp, "copy", &fixture_src());
     let json = prompt_event_json(&copy, "p4-17-session", r#","agent":{"name":"scout"}"#);
     let output = run_hook(&copy, "prompt", &json);
@@ -426,7 +426,7 @@ fn test_p4_17_prompt_records_the_agent_query() {
 
 #[test]
 fn test_p4_20_blast_radius_caps_at_8_and_counts_the_rest() {
-    let tmp = TempDir::new("hooks-p4-20");
+    let tmp = TempDir::new("hooks-wide");
     let wide = support::manifest_dir().join("../../tests/fixtures/wide");
     let copy = built_copy(&tmp, "wide", &wide);
     let json = edit_event_json(&copy, "p4-20-session", "d01/a.ts");
@@ -436,7 +436,7 @@ fn test_p4_20_blast_radius_caps_at_8_and_counts_the_rest() {
 
 #[test]
 fn test_p4_22_novelty_gate_drops_a_repeated_prompt() {
-    let tmp = TempDir::new("hooks-p4-22");
+    let tmp = TempDir::new("hooks-prompt-gate");
     let copy = built_copy(&tmp, "copy", &fixture_src());
     let json = prompt_event_json(&copy, "p4-22-session", "");
     let output = run_hook(&copy, "prompt", &json);
@@ -459,7 +459,7 @@ fn test_p4_22_novelty_gate_drops_a_repeated_prompt() {
 /// hook prints the weak-match nudge, not the pack.
 #[test]
 fn test_p4_22_strength_gate_reads_a_concept_top_coverage() {
-    let tmp = TempDir::new("hooks-p4-22c");
+    let tmp = TempDir::new("hooks-concept");
     let copy = built_copy(&tmp, "copy", &fixture_src());
     fs::copy(
         hook_inputs_dir().join("notes-concept.md"),
@@ -483,7 +483,7 @@ fn test_p4_22_strength_gate_reads_a_concept_top_coverage() {
 // ---------------------------------------------------------------------------
 
 /// A built copy, the Stop tally transcript, and a `Read` and a `Bash sieve`
-/// tool use already recorded for `session`: the `p4-16` setup.
+/// tool use already recorded for `session`: the stop tally setup.
 fn tally_session(tmp: &Path, session: &str) -> (PathBuf, String) {
     let copy = built_copy(tmp, "copy", &fixture_src());
     let transcript = copy.join("tally.jsonl");
@@ -503,7 +503,7 @@ fn tally_session(tmp: &Path, session: &str) -> (PathBuf, String) {
 
 #[test]
 fn test_p4_53_post_edit_sync_prints_the_blast_radius_and_runs_the_stop_tally() {
-    let tmp = TempDir::new("hooks-p4-53");
+    let tmp = TempDir::new("hooks-tally");
     let (copy, transcript) = tally_session(&tmp, "p4-53-session");
     let cwd = copy.to_string_lossy();
     let edit = envelope(
@@ -523,7 +523,7 @@ fn test_p4_53_post_edit_sync_prints_the_blast_radius_and_runs_the_stop_tally() {
     .expect("parse stats.json");
     assert_eq!(stats["lastFile"], "util.ts");
     assert_eq!(stats["staleCount"], 0);
-    // The Stop half: the tally count, as for `stop` (the p4-16 golden).
+    // The Stop half: the tally count, as for `stop` (the stop golden).
     assert_state_matches_golden(
         &copy,
         "sieve/.cache/session/p4-53-session.json",
@@ -572,7 +572,7 @@ fn cursor_session(sieve: u64, source: u64, saved: u64, used_sieve: bool) -> serd
 
 #[test]
 fn test_p4_54_cursor_post_tool_scores_each_tool_use() {
-    let tmp = TempDir::new("hooks-p4-54a");
+    let tmp = TempDir::new("hooks-cursor-post");
     let copy = bare_copy(&tmp);
     let cases = [
         // A Shell command that runs sieve, with a footer in `tool_output`.
@@ -640,7 +640,7 @@ fn test_p4_54_cursor_post_tool_scores_each_tool_use() {
 
 #[test]
 fn test_p4_54_cursor_mcp_counts_a_sieve_tool_call() {
-    let tmp = TempDir::new("hooks-p4-54b");
+    let tmp = TempDir::new("hooks-cursor-mcp");
     let copy = bare_copy(&tmp);
     let cases = [
         // The savings sit in `result_json`.
@@ -678,7 +678,7 @@ fn test_p4_54_cursor_mcp_counts_a_sieve_tool_call() {
 
 #[test]
 fn test_p4_54_cursor_session_end_prints_and_writes_nothing() {
-    let tmp = TempDir::new("hooks-p4-54c");
+    let tmp = TempDir::new("hooks-cursor-end");
     let copy = bare_copy(&tmp);
     let output = run_hook(&copy, "cursor-session-end", r#"{"conversation_id":"c1"}"#);
     assert!(output.status.success());
@@ -700,7 +700,7 @@ fn read_hook_stdin(copy: &Path) -> String {
 
 #[test]
 fn test_p4_56_sieve_name_pre_read_still_remembers_the_read() {
-    let tmp = TempDir::new("hooks-p4-56b");
+    let tmp = TempDir::new("hooks-sieve-name-read");
     let copy = bare_copy(&tmp);
     let stdin = read_hook_stdin(&copy);
     let output = support::sieve_command()
@@ -722,7 +722,7 @@ fn test_p4_56_sieve_name_pre_read_still_remembers_the_read() {
 
 #[test]
 fn test_p4_54_session_id_never_leaves_the_session_dir_through_a_hook() {
-    let tmp = TempDir::new("hooks-p4-54d");
+    let tmp = TempDir::new("hooks-session-dir");
     let copy = bare_copy(&tmp);
     let escape =
         r#"{"conversation_id":"../../../../ESC","tool_name":"sieve_query","result_json":"x"}"#;
@@ -750,7 +750,7 @@ fn test_p4_54_session_id_never_leaves_the_session_dir_through_a_hook() {
 
 #[test]
 fn test_p4_54_cursor_keys_pick_in_golden_order() {
-    let tmp = TempDir::new("hooks-p4-54e");
+    let tmp = TempDir::new("hooks-cursor-keys");
     let copy = bare_copy(&tmp);
     // conversation_id wins over session_id; tool_output wins over tool_response.
     let both = r#"{"conversation_id":"A","session_id":"B","tool_name":"Shell","tool_input":{"command":"echo"},"tool_output":"[sieve] tokens saved ≈ 10","tool_response":"[sieve] tokens saved ≈ 20"}"#;

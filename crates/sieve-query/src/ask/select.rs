@@ -8,7 +8,7 @@ use sieve_core::collate::collate;
 use sieve_core::{Kind, Node};
 
 use super::concept::ConceptDoc;
-use super::lexical::{has_exact, has_term, inline_test_factor, Corpus, DocBag};
+use super::lexical::{has_exact, has_term, inline_test_factor, Corpus, Docs};
 use super::{kind_word, test_factor, AskHit, RankGroup, Ranking};
 
 fn clamp01(x: f64) -> f64 {
@@ -96,7 +96,8 @@ pub(crate) fn build_candidates<'a>(
     lex: &HashMap<String, f64>,
     pr: &HashMap<String, f64>,
     query_wants_tests: bool,
-    docs: Option<(&HashMap<&str, DocBag>, &[String])>,
+    query_words: &[String],
+    docs: Option<(&Docs, &[String])>,
 ) -> Vec<Cand<'a>> {
     let lex_max = lex.values().cloned().fold(0.0_f64, f64::max);
 
@@ -119,7 +120,9 @@ pub(crate) fn build_candidates<'a>(
             Some((d, t)) => inline_test_factor(query_wants_tests, d, t),
             None => 1.0,
         };
-        let rank_factor = test_factor(query_wants_tests, &node.path).min(inline);
+        // A script, like a test path, gets this factor twice: here and in the
+        // lexical score.
+        let rank_factor = test_factor(query_wants_tests, query_words, &node.path).min(inline);
         let baseline = (lexical + super::GRAPH_WEIGHT * graph) * rank_factor;
         if baseline <= 0.0 {
             continue;
@@ -677,6 +680,7 @@ pub(crate) fn select_hits_with_concepts<'a>(
 
 #[cfg(test)]
 mod tests {
+    use super::super::lexical::DocBag;
     use super::*;
 
     /// The symbol id, or `concept:<slug>`, of the top item.
@@ -869,9 +873,9 @@ mod tests {
         let bag = |words: &[&str]| -> Vec<(String, u32)> {
             words.iter().map(|w| (w.to_string(), 1)).collect()
         };
-        let mut docs: HashMap<&str, DocBag> = HashMap::new();
+        let mut docs: Docs = HashMap::new();
         docs.insert(
-            n.id.as_str(),
+            n.id.clone(),
             DocBag {
                 name: bag(&["render", "helper"]),
                 path: bag(&["a", "rs"]),
@@ -883,7 +887,14 @@ mod tests {
         let lex: HashMap<String, f64> = [(n.id.clone(), 1.0)].into_iter().collect();
         let terms = vec!["helpers".to_string(), "render".to_string()];
         let nodes = [&n];
-        let cands = build_candidates(&nodes, &lex, &HashMap::new(), false, Some((&docs, &terms)));
+        let cands = build_candidates(
+            &nodes,
+            &lex,
+            &HashMap::new(),
+            false,
+            &[],
+            Some((&docs, &terms)),
+        );
         assert_eq!(cands[0].matched_terms, vec!["render".to_string()]);
     }
 
@@ -901,15 +912,22 @@ mod tests {
             body_len: 0,
             inline_test,
         };
-        let mut docs: HashMap<&str, DocBag> = HashMap::new();
-        docs.insert(code.id.as_str(), mk(&["run", "code"], false));
-        docs.insert(test.id.as_str(), mk(&["run", "test"], true));
+        let mut docs: Docs = HashMap::new();
+        docs.insert(code.id.clone(), mk(&["run", "code"], false));
+        docs.insert(test.id.clone(), mk(&["run", "test"], true));
         let lex: HashMap<String, f64> = [(code.id.clone(), 1.0), (test.id.clone(), 1.0)]
             .into_iter()
             .collect();
         let terms = vec!["run".to_string(), "stop".to_string()];
         let nodes = [&code, &test];
-        let cands = build_candidates(&nodes, &lex, &HashMap::new(), false, Some((&docs, &terms)));
+        let cands = build_candidates(
+            &nodes,
+            &lex,
+            &HashMap::new(),
+            false,
+            &[],
+            Some((&docs, &terms)),
+        );
         let base = |id: &str| cands.iter().find(|c| c.node.id == id).unwrap().baseline;
         assert!(base("a.rs#run_test") < base("a.rs#run_code"));
     }

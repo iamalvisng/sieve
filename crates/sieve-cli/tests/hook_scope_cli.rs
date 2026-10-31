@@ -128,7 +128,8 @@ fn scope_case_with(
     edit_file: Option<&str>,
     prompt: &str,
 ) {
-    let tmp = TempDir::new(case);
+    let plain = case.splitn(3, '-').nth(2).unwrap_or(case);
+    let tmp = TempDir::new(&format!("hook-scope-{plain}"));
     let copy = tmp.path.join("copy");
     copy_dir(&fixture_src(), &copy);
     if let Some((extra, src)) = extra {
@@ -241,7 +242,7 @@ fn test_p4_19_retrieval_snippet_cuts_at_140_utf16_units() {
 
 #[test]
 fn test_p4_13_session_start_cuts_a_long_index_at_1500_utf16_units() {
-    let tmp = TempDir::new("p4-13-utf16");
+    let tmp = TempDir::new("scope-utf16");
     let copy = tmp.path.join("copy");
     copy_dir(&fixture_src(), &copy);
     build(&copy);

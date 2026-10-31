@@ -79,7 +79,7 @@ building 2 workspace repos: a, b
 #[test]
 fn test_p4_45_init_verbose_at_a_parent_wires_the_parent_then_each_child() {
     let copy = parent("p4-45-wire");
-    let home = TempDir::new("p4-45-wire-home");
+    let home = TempDir::new("workspace-wire-home");
     let out = init(&copy.path, &home.path, &["--agents", "claude", "--verbose"]);
     assert_eq!(out.status.code(), Some(0));
     let stderr = drop_update_nudge(&mask(&String::from_utf8_lossy(&out.stderr), &copy.path));
@@ -99,7 +99,7 @@ fn test_p4_45_init_verbose_at_a_parent_wires_the_parent_then_each_child() {
 #[test]
 fn test_p4_45_init_compact_at_a_parent_wires_the_parent_then_each_child() {
     let copy = parent("p4-45-compact");
-    let home = TempDir::new("p4-45-compact-home");
+    let home = TempDir::new("workspace-compact-home");
     let out = init(&copy.path, &home.path, &["--agents", "claude"]);
     assert_eq!(out.status.code(), Some(0));
     let stderr = drop_update_nudge(&mask(&String::from_utf8_lossy(&out.stderr), &copy.path));
@@ -128,7 +128,7 @@ done \u{b7} wrote 3 files in this repo \u{b7} nothing outside this repo was writ
 #[test]
 fn test_p4_45_init_at_a_parent_writes_sieve_file_list() {
     let copy = parent("p4-45-files");
-    let home = TempDir::new("p4-45-files-home");
+    let home = TempDir::new("workspace-files-home");
     let out = init(&copy.path, &home.path, &["--agents", "claude"]);
     assert_eq!(out.status.code(), Some(0));
     let got: Vec<String> = files(&copy.path)
@@ -174,7 +174,7 @@ fn test_p4_45_init_at_a_parent_writes_sieve_file_list() {
 #[test]
 fn test_p4_45_init_dry_run_plan_equals_the_files_a_real_run_writes_at_a_parent() {
     let copy = parent("p4-45-plan");
-    let home = TempDir::new("p4-45-plan-home");
+    let home = TempDir::new("workspace-plan-home");
     let args = ["--all-agents", "--no-build"];
     let plan = init(
         &copy.path,
@@ -217,7 +217,7 @@ fn test_p4_45_init_dry_run_plan_equals_the_files_a_real_run_writes_at_a_parent()
 #[test]
 fn test_p4_45_second_init_at_a_parent_skips_the_build() {
     let copy = parent("p4-45-twice");
-    let home = TempDir::new("p4-45-twice-home");
+    let home = TempDir::new("workspace-twice-home");
     assert_eq!(
         init(&copy.path, &home.path, &["--agents", "claude"])
             .status

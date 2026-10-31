@@ -18,16 +18,15 @@
 //! `combine_comparable_scopes` put them there.
 
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 
 use sieve_core::collate::collate;
 use sieve_core::wiring::Scope;
 use sieve_core::{Graph, Node};
 
-use super::lexical::{has_term, Corpus, DocBag};
-use super::pagerank;
+use super::lexical::{has_term, Docs};
 use super::select::{build_candidates, rank_files_bounded, title_key, FileGroup, FusedTop};
-use super::{AlsoMatched, ScopeMeta, PARTICIPATION_RATIO};
+use super::{AlsoMatched, Prepared, ScopeMeta, PARTICIPATION_RATIO};
 
 /// The nearest-prefix scope owner of `path` among `scopes`, with the
 /// empty-prefix root as the fallback. Copied from `sieve-parse`'s
@@ -66,7 +65,7 @@ pub(crate) fn group_by_scope<'a>(
     out
 }
 
-fn has_identifier_match(nodes: &[&Node], docs: &HashMap<&str, DocBag>, terms: &[String]) -> bool {
+fn has_identifier_match(nodes: &[&Node], docs: &Docs, terms: &[String]) -> bool {
     nodes.iter().any(|n| {
         docs.get(n.id.as_str()).is_some_and(|d| {
             terms
@@ -83,6 +82,8 @@ fn has_identifier_match(nodes: &[&Node], docs: &HashMap<&str, DocBag>, terms: &[
 /// scope gets its own walk; there is no graph-wide `pr` in the multi-scope
 /// path.
 fn scope_pagerank(
+    prep: &Prepared,
+    scope: &str,
     graph: &Graph,
     nodes: &[&Node],
     seeds: &HashMap<String, f64>,
@@ -91,9 +92,7 @@ fn scope_pagerank(
     if !graph_rank || seeds.is_empty() {
         return HashMap::new();
     }
-    let node_ids: HashSet<&str> = nodes.iter().map(|n| n.id.as_str()).collect();
-    let adjacency = pagerank::build_adjacency(graph, &node_ids);
-    pagerank::run(nodes, seeds, &adjacency)
+    prep.topology(scope, graph, nodes).run(seeds)
 }
 
 /// One scored row at the granularity `combineComparableScopes` compares:
@@ -252,20 +251,29 @@ pub(crate) struct MultiScope<'a> {
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn run_multi_scope<'a>(
     by_scope: &BTreeMap<String, Vec<&'a Node>>,
-    docs: &HashMap<&str, DocBag>,
-    corpus: &Corpus,
+    prep: &Prepared,
     terms: &[String],
     query_wants_tests: bool,
+    query_words: &[String],
     lex: &HashMap<String, f64>,
     graph: &Graph,
     graph_rank: bool,
 ) -> MultiScope<'a> {
+    let (docs, corpus) = (&prep.docs, &prep.corpus);
     if by_scope.len() <= 1 {
         // One real scope: `combineComparableScopes` passes scores through
         // untouched, so the single-scope pipeline is byte-identical.
         let nodes: Vec<&Node> = by_scope.values().flatten().copied().collect();
-        let pr = scope_pagerank(graph, &nodes, lex, graph_rank);
-        let candidates = build_candidates(&nodes, lex, &pr, query_wants_tests, Some((docs, terms)));
+        let scope = by_scope.keys().next().map_or("", String::as_str);
+        let pr = scope_pagerank(prep, scope, graph, &nodes, lex, graph_rank);
+        let candidates = build_candidates(
+            &nodes,
+            lex,
+            &pr,
+            query_wants_tests,
+            query_words,
+            Some((docs, terms)),
+        );
         // Sieve still labels each hit with its scope on this path.
         let file_scope: HashMap<String, String> = by_scope
             .iter()
@@ -376,12 +384,13 @@ pub(crate) fn run_multi_scope<'a>(
             .iter()
             .filter_map(|n| lex.get(n.id.as_str()).map(|&v| (n.id.clone(), v)))
             .collect();
-        let scope_pr = scope_pagerank(graph, nodes, &scope_lex, graph_rank);
+        let scope_pr = scope_pagerank(prep, scope, graph, nodes, &scope_lex, graph_rank);
         let candidates = build_candidates(
             nodes,
             &trimmed_lex,
             &scope_pr,
             query_wants_tests,
+            query_words,
             Some((docs, terms)),
         );
         node_by_id.extend(candidates.iter().map(|c| (c.node.id.clone(), c.node)));

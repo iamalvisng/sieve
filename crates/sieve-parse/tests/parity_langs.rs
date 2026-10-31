@@ -330,7 +330,7 @@ fn test_p2_15_kotlin_this_and_trailing_lambda_calls_match_golden() {
 #[test]
 fn test_p2_05_dv16_kotlin_file_nodes_match_golden() {
     let src = "package a\nclass Foo(val x: Int) {\n    fun bar(): Int = baz()\n    fun baz(): Int = 1\n}\nfun top() { Foo(1).bar() }\nobject O { fun f() {} }\ninterface I { fun g() }\n";
-    let root = std::env::temp_dir().join(format!("sieve-p2-05-dv16-{}", std::process::id()));
+    let root = std::env::temp_dir().join(format!("sieve-parse-langs-{}", std::process::id()));
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(&root).expect("create temp repo");
     fs::write(root.join("A.kt"), src).expect("write A.kt");

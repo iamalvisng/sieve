@@ -23,8 +23,9 @@ pub use format::{format_ask, format_ask_json};
 pub use fuse::scope_of;
 pub(crate) use select::round_robin_queues;
 
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
-use std::sync::OnceLock;
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
 use regex::Regex;
 use serde::Serialize;
@@ -419,14 +420,47 @@ pub(crate) fn wants_tests(query: &str) -> bool {
     wants_tests_re().is_some_and(|re| re.is_match(query))
 }
 
+/// The query's lowercase words, split on every non-alphanumeric character.
+pub(crate) fn split_words(query: &str) -> Vec<String> {
+    query
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .map(str::to_lowercase)
+        .collect()
+}
+
+/// Whether the query names the file at `path`. The file stem, split on `-`,
+/// `_` and `.`, gives words. Each word of 3 or more letters must be a whole
+/// query word. A stem with no such word is never named.
+pub(crate) fn query_names_file(words: &[String], path: &str) -> bool {
+    let name = path.rsplit('/').next().unwrap_or(path);
+    let stem = name.rsplit_once('.').map_or(name, |(stem, _)| stem);
+    let mut long = stem
+        .split(['-', '_', '.'])
+        .filter(|w| w.chars().filter(|c| c.is_alphabetic()).count() >= 3)
+        .map(str::to_lowercase)
+        .peekable();
+    long.peek().is_some() && long.all(|w| words.contains(&w))
+}
+
+/// Whether `path` has a `scripts/` folder segment.
+pub(crate) fn is_script_path(path: &str) -> bool {
+    path.starts_with("scripts/") || path.contains("/scripts/")
+}
+
 /// Whether `path` looks like a test file.
 pub(crate) fn is_test_path(path: &str) -> bool {
     is_test_path_re().is_some_and(|re| re.is_match(path))
 }
 
-/// A candidate's test-path score multiplier.
-pub(crate) fn test_factor(query_wants_tests: bool, path: &str) -> f64 {
-    if !query_wants_tests && is_test_path(path) {
+/// Scripts rank like tests: a tool script is not the code a query looks for.
+/// A script the query names, or the word "script", takes no penalty.
+pub(crate) fn test_factor(query_wants_tests: bool, query_words: &[String], path: &str) -> f64 {
+    if (!query_wants_tests && is_test_path(path))
+        || (is_script_path(path)
+            && !query_words.iter().any(|w| w == "script" || w == "scripts")
+            && !query_names_file(query_words, path))
+    {
         TEST_RANK_PENALTY
     } else {
         1.0
@@ -459,7 +493,130 @@ pub fn ask(
     opts: &AskOptions,
     repo_root: &Path,
 ) -> Result<AskResult, AskError> {
-    ask_inner(graph, index, query, opts, repo_root, false).map(|(result, _)| result)
+    ask_inner(graph, index, query, opts, repo_root, false, None).map(|(result, _)| result)
+}
+
+/// What a warm caller knows about the state behind one query. The cache keeps
+/// the corpus and the PageRank shape only while the state stays the same.
+pub struct WarmKey<'a> {
+    /// The graph this call reads. A new graph is a new `Arc`, so a refresh,
+    /// a reload or a heal drops the cache.
+    pub graph: &'a Arc<Graph>,
+    /// The modification time (ns) and size of the ask index file, or `None`
+    /// when the file is missing. A rewrite of the file changes it.
+    pub index_stamp: Option<(u128, u64)>,
+    /// Reads and parses the ask index. It runs only on a cache miss.
+    pub load_index: &'a dyn Fn() -> Option<AskIndex>,
+}
+
+/// Runs one `ask` query like [`ask`] for a caller that keeps its graph between
+/// calls. The corpus and the PageRank shape are built once per graph.
+pub fn ask_warm(
+    key: &WarmKey,
+    query: &str,
+    opts: &AskOptions,
+    repo_root: &Path,
+) -> Result<AskResult, AskError> {
+    ask_inner(key.graph, None, query, opts, repo_root, false, Some(key)).map(|(result, _)| result)
+}
+
+/// Everything about a query that depends on the graph and not on the query
+/// words: the token bags, the corpus and the PageRank shape of each node set.
+pub(crate) struct Prepared {
+    pub(crate) docs: lexical::Docs,
+    pub(crate) corpus: lexical::Corpus,
+    topologies: Mutex<HashMap<String, Arc<pagerank::Topology>>>,
+}
+
+/// The one cached `Prepared`, with the state it was built from.
+struct CacheEntry {
+    graph: Arc<Graph>,
+    index_stamp: Option<(u128, u64)>,
+    prefix: Option<String>,
+    concept_bags: Vec<HashSet<String>>,
+    prep: Arc<Prepared>,
+}
+
+static PREPARED: Mutex<Option<CacheEntry>> = Mutex::new(None);
+
+impl Prepared {
+    fn build(
+        graph: &Graph,
+        index: Option<&AskIndex>,
+        active_nodes: &[&Node],
+        concept_bags: &[HashSet<String>],
+    ) -> Prepared {
+        let mut docs = lexical::build_docs(graph, index);
+        lexical::mark_inline_tests(&graph.nodes, &mut docs);
+        let corpus = lexical::Corpus::build_with_concepts(active_nodes, &docs, concept_bags);
+        Prepared {
+            docs,
+            corpus,
+            topologies: Mutex::new(HashMap::new()),
+        }
+    }
+
+    /// Returns the cached value when `warm` names the same graph, ask index,
+    /// prefix and concept bags as the cached one, else builds a new value.
+    /// A call with no `warm` key never reads or writes the cache.
+    fn get(
+        graph: &Graph,
+        index: Option<&AskIndex>,
+        warm: Option<&WarmKey>,
+        prefix: &Option<String>,
+        active_nodes: &[&Node],
+        concept_bags: Vec<HashSet<String>>,
+    ) -> Arc<Prepared> {
+        let Some(key) = warm else {
+            return Arc::new(Self::build(graph, index, active_nodes, &concept_bags));
+        };
+        let mut cache = PREPARED.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(e) = cache.as_ref() {
+            if Arc::ptr_eq(&e.graph, key.graph)
+                && e.index_stamp == key.index_stamp
+                && e.prefix == *prefix
+                && e.concept_bags == concept_bags
+            {
+                return Arc::clone(&e.prep);
+            }
+        }
+        let loaded = (key.load_index)();
+        let prep = Arc::new(Self::build(
+            graph,
+            loaded.as_ref(),
+            active_nodes,
+            &concept_bags,
+        ));
+        *cache = Some(CacheEntry {
+            graph: Arc::clone(key.graph),
+            index_stamp: key.index_stamp,
+            prefix: prefix.clone(),
+            concept_bags,
+            prep: Arc::clone(&prep),
+        });
+        prep
+    }
+
+    /// The PageRank shape of `nodes`, built once per `scope` name.
+    pub(crate) fn topology(
+        &self,
+        scope: &str,
+        graph: &Graph,
+        nodes: &[&Node],
+    ) -> Arc<pagerank::Topology> {
+        let mut topologies = self
+            .topologies
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        if let Some(t) = topologies.get(scope) {
+            return Arc::clone(t);
+        }
+        let ids: HashSet<&str> = nodes.iter().map(|n| n.id.as_str()).collect();
+        let adjacency = pagerank::build_adjacency(graph, &ids);
+        let topology = Arc::new(pagerank::Topology::new(nodes, &adjacency));
+        topologies.insert(scope.to_string(), Arc::clone(&topology));
+        topology
+    }
 }
 
 /// Runs one `ask` query like [`ask`], and returns the ranking metadata a
@@ -472,7 +629,7 @@ pub fn ask_ranked(
     opts: &AskOptions,
     repo_root: &Path,
 ) -> Result<(AskResult, Option<Ranking>), AskError> {
-    ask_inner(graph, index, query, opts, repo_root, true)
+    ask_inner(graph, index, query, opts, repo_root, true, None)
 }
 
 fn ask_inner(
@@ -482,6 +639,7 @@ fn ask_inner(
     opts: &AskOptions,
     repo_root: &Path,
     want_ranking: bool,
+    warm: Option<&WarmKey>,
 ) -> Result<(AskResult, Option<Ranking>), AskError> {
     let prefix = match &opts.in_prefix {
         Some(raw) => {
@@ -548,9 +706,8 @@ fn ask_inner(
 
     let terms = lexical::query_terms(query);
     let query_wants_tests = wants_tests(query);
+    let query_words = split_words(query);
 
-    let mut all_docs = lexical::build_docs(graph, index);
-    lexical::mark_inline_tests(&graph.nodes, &mut all_docs);
     let active_nodes: Vec<&Node> = graph
         .nodes
         .iter()
@@ -576,8 +733,16 @@ fn ask_inner(
     let concept_bags: Vec<std::collections::HashSet<String>> =
         concept_docs.iter().map(concept::idf_fold_terms).collect();
 
-    let corpus = lexical::Corpus::build_with_concepts(&active_nodes, &all_docs, &concept_bags);
-    let lex = lexical::score_all(&active_nodes, &all_docs, &corpus, &terms, query_wants_tests);
+    let prep = Prepared::get(graph, index, warm, &prefix, &active_nodes, concept_bags);
+    let (all_docs, corpus) = (&prep.docs, &prep.corpus);
+    let lex = lexical::score_all(
+        &active_nodes,
+        all_docs,
+        corpus,
+        &terms,
+        query_wants_tests,
+        &query_words,
+    );
 
     // The multi-scope branch keys on the graph's declared scope count, not on
     // how many scopes the active node set happens to touch
@@ -585,30 +750,30 @@ fn ask_inner(
     // separately (`preparePageRankPartitions`), so it computes its own PageRank
     // per scope rather than reusing one graph-wide walk. Both branches merge
     // the concept hits.
-    let concept_scored = concept::score_concepts(&concept_docs, &terms, &corpus);
+    let concept_scored = concept::score_concepts(&concept_docs, &terms, corpus);
     let concept_normalized = concept::normalize(&concept_scored);
     // A symbol with no doc bag reads `0` (`makeSymbolHit`);
     // a concept reads its name and body bags.
     let symbol_coverage = |node: &Node| match all_docs.get(node.id.as_str()) {
         Some(doc) => (
-            lexical::matched_idf_share(&terms, &[&doc.name, &doc.path, &doc.body], &corpus),
-            lexical::strong_share(node.kind, &doc.name, &terms, &corpus),
+            lexical::matched_idf_share(&terms, &[&doc.name, &doc.path, &doc.body], corpus),
+            lexical::strong_share(node.kind, &doc.name, &terms, corpus),
         ),
         None => (0.0, 0.0),
     };
     let item_coverage = |item: &select::QueueItem| match item {
         select::QueueItem::Symbol(node, _) => symbol_coverage(node),
-        select::QueueItem::Concept(doc, _) => concept::coverage_of(doc, &terms, &corpus),
+        select::QueueItem::Concept(doc, _) => concept::coverage_of(doc, &terms, corpus),
     };
     let mut ranking_meta: Option<Ranking> = None;
     let (hits, scope_meta, top, scored, pagerank_for_test) = if graph.meta.scopes.len() > 1 {
         let by_scope = fuse::group_by_scope(&active_nodes, &graph.meta.scopes);
         let multi = fuse::run_multi_scope(
             &by_scope,
-            &all_docs,
-            &corpus,
+            &prep,
             &terms,
             query_wants_tests,
+            &query_words,
             &lex,
             graph,
             opts.graph_rank,
@@ -653,10 +818,7 @@ fn ask_inner(
         (hits, scope_meta, top, scored, None)
     } else {
         let pr = if opts.graph_rank && !lex.is_empty() {
-            let active_ids: std::collections::HashSet<&str> =
-                active_nodes.iter().map(|n| n.id.as_str()).collect();
-            let adjacency = pagerank::build_adjacency(graph, &active_ids);
-            pagerank::run(&active_nodes, &lex, &adjacency)
+            prep.topology("", graph, &active_nodes).run(&lex)
         } else {
             std::collections::HashMap::new()
         };
@@ -665,14 +827,15 @@ fn ask_inner(
             &lex,
             &pr,
             query_wants_tests,
-            Some((&all_docs, &terms)),
+            &query_words,
+            Some((all_docs, &terms)),
         );
         let baseline_syms: Vec<(&Node, f64)> = if want_ranking {
             candidates.iter().map(|c| (c.node, c.baseline)).collect()
         } else {
             Vec::new()
         };
-        let groups = select::rank_files_bounded(candidates, &terms, &corpus);
+        let groups = select::rank_files_bounded(candidates, &terms, corpus);
         if want_ranking {
             ranking_meta = Some(select::build_ranking(
                 &groups,
@@ -701,7 +864,7 @@ fn ask_inner(
             (Some(broad), Some(strong))
         }
         Some(Top::Concept(doc)) => {
-            let (broad, strong) = concept::coverage_of(doc, &terms, &corpus);
+            let (broad, strong) = concept::coverage_of(doc, &terms, corpus);
             (Some(broad), Some(strong))
         }
     };
@@ -1349,7 +1512,7 @@ mod scope_prefix_tests {
     #[test]
     fn test_p3_08_multi_scope_ask_merges_concept_hits() {
         let g = two_scope_graph();
-        let root = crate::test_support::TempDir::new("p3-08");
+        let root = crate::test_support::TempDir::new("multi-scope");
         let context = root.join(sieve_core::product().context_dir_name());
         std::fs::create_dir_all(&context).expect("create the context dir");
         std::fs::write(
@@ -1380,7 +1543,7 @@ mod scope_prefix_tests {
     #[test]
     fn test_p3_08_in_prefix_on_a_two_scope_graph_keeps_the_scope_label() {
         let g = two_scope_graph();
-        let root = crate::test_support::TempDir::new("p3-08-in");
+        let root = crate::test_support::TempDir::new("multi-scope-in");
         let opts = AskOptions {
             in_prefix: Some("packages/alpha".to_string()),
             ..AskOptions::default()
@@ -1399,7 +1562,7 @@ mod scope_prefix_tests {
     #[test]
     fn test_p3_08_multi_scope_footer_puts_the_top_scope_first() {
         let g = two_scope_graph();
-        let root = crate::test_support::TempDir::new("p3-08-footer");
+        let root = crate::test_support::TempDir::new("multi-scope-footer");
 
         let result = ask(&g, None, "render", &AskOptions::default(), &root).expect("ask runs");
 
@@ -1434,5 +1597,120 @@ mod scope_prefix_tests {
     fn test_p1_44_scope_label_renders_root_and_prefix() {
         assert_eq!(scope_label(""), "(root)");
         assert_eq!(scope_label("apps/api"), "apps/api/");
+    }
+
+    /// A warm query reuses the corpus for the same graph. A new graph, as
+    /// after a refresh, gets a rebuilt corpus, so the new symbol shows.
+    #[test]
+    fn a_warm_query_rebuilds_the_corpus_when_the_graph_changes() {
+        let _serial = WARM_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+        let root = std::env::temp_dir().join("sieve-warm-fresh-no-such-dir");
+        let opts = AskOptions::default();
+        let no_index = || None;
+        let ask_for = |graph: &Arc<Graph>| {
+            let key = WarmKey {
+                graph,
+                index_stamp: None,
+                load_index: &no_index,
+            };
+            let result = ask_warm(&key, "quokkaz zebrafishz", &opts, &root).expect("ask");
+            result.hits.into_iter().map(|h| h.title).collect::<Vec<_>>()
+        };
+        let zebra = node(
+            "a.ts#zebrafishz",
+            "zebrafishz",
+            Kind::Function,
+            "a.ts",
+            "L1-L2",
+        );
+        let quokka = node("a.ts#quokkaz", "quokkaz", Kind::Function, "a.ts", "L3-L4");
+
+        let before = Arc::new(graph(vec![zebra.clone()]));
+        let first = ask_for(&before);
+        assert!(first.iter().any(|t| t.contains("zebrafishz")));
+        assert!(!first.iter().any(|t| t.contains("quokkaz")));
+        assert_eq!(ask_for(&before), first);
+
+        let after = Arc::new(graph(vec![zebra, quokka]));
+        let second = ask_for(&after);
+        assert!(second.iter().any(|t| t.contains("quokkaz")));
+        assert!(second.iter().any(|t| t.contains("zebrafishz")));
+    }
+
+    /// Serializes the tests that use the one shared cache slot.
+    static WARM_LOCK: Mutex<()> = Mutex::new(());
+
+    /// A warm call gives the bytes of an uncached call, on a miss and on a hit.
+    /// The ask index loader runs only on a miss, so its count shows each miss.
+    /// A new prefix, index stamp or concept doc is a miss with the right answer.
+    #[test]
+    fn a_warm_query_matches_the_cold_query_and_hits_the_cache() {
+        let _serial = WARM_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+        let g = Arc::new(two_scope_graph());
+        assert!(g.meta.scopes.len() > 1);
+        let root = crate::test_support::TempDir::new("warm-equal");
+        let loads = std::cell::Cell::new(0_u32);
+        let load = || {
+            loads.set(loads.get() + 1);
+            None
+        };
+        let run = |stamp: Option<(u128, u64)>, query: &str, prefix: Option<&str>| {
+            let opts = AskOptions {
+                in_prefix: prefix.map(str::to_string),
+                ..AskOptions::default()
+            };
+            let key = WarmKey {
+                graph: &g,
+                index_stamp: stamp,
+                load_index: &load,
+            };
+            let warm = ask_warm(&key, query, &opts, &root).expect("warm ask");
+            let cold = ask(&g, None, query, &opts, &root).expect("cold ask");
+            assert_eq!(format!("{warm:?}"), format!("{cold:?}"), "query {query}");
+            format!("{warm:?}")
+        };
+        let queries = ["render", "renderZed", "aardvark render", "nothing here"];
+
+        for prefix in [None, Some("packages/alpha"), Some("packages/beta")] {
+            for query in queries {
+                let before = loads.get();
+                let first = run(None, query, prefix);
+                let after_first = loads.get();
+                let second = run(None, query, prefix);
+                assert_eq!(first, second);
+                assert_eq!(loads.get(), after_first, "second call must hit");
+                // The first call of a query hits too, once its prefix is cached.
+                assert!(after_first - before <= 1);
+            }
+        }
+
+        // A new prefix misses, and the answer has only that scope.
+        run(None, "render", None);
+        let n = loads.get();
+        let alpha = run(None, "render", Some("packages/alpha"));
+        assert_eq!(loads.get(), n + 1, "a new prefix must miss");
+        assert!(alpha.contains("renderZed") && !alpha.contains("renderAardvark"));
+
+        // A new index stamp misses.
+        let n = loads.get();
+        run(Some((1, 2)), "render", Some("packages/alpha"));
+        assert_eq!(loads.get(), n + 1, "a new stamp must miss");
+        run(Some((1, 2)), "render", Some("packages/alpha"));
+        assert_eq!(loads.get(), n + 1, "the same stamp must hit");
+
+        // A new concept doc misses, and its hit shows in the answer.
+        let before = run(Some((1, 2)), "render", None);
+        assert!(!before.contains("Render Pipeline"));
+        let n = loads.get();
+        let context = root.join(sieve_core::product().context_dir_name());
+        std::fs::create_dir_all(&context).expect("create the context dir");
+        std::fs::write(
+            context.join("render-pipeline.md"),
+            "---\nname: Render Pipeline\nslug: render-pipeline\ntype: system\nsources:\n  - path: packages/beta/b.ts\n    hash: abc\n---\n## Summary\n\nThe render pipeline draws every render layout.\n",
+        )
+        .expect("write the concept doc");
+        let with_concept = run(Some((1, 2)), "render", None);
+        assert_eq!(loads.get(), n + 1, "new concept bags must miss");
+        assert!(with_concept.contains("Render Pipeline"));
     }
 }

@@ -16,13 +16,13 @@ use sieve_parse::{
     check_context, check_graph, check_graph_lookup, federated_check_text, format_check_report,
     format_graph_check_report, GraphCheck, LookupCheck,
 };
-use sieve_query::ask::{ask, format_ask, AskOptions};
+use sieve_query::ask::{ask, ask_warm, format_ask, AskOptions, WarmKey};
 use sieve_query::callers::{
     callers_hit_count, edge_walk_with, render_block, resolve_symbol_with, CallersError, Depth,
     Direction, Hit,
 };
 use sieve_query::grep::{
-    format_grep_result, grep_graph, zero_hit_note, GrepError, GrepOptions, DEFAULT_MAX_HITS,
+    format_grep_result, grep_graph_cached, zero_hit_note, GrepError, GrepOptions, DEFAULT_MAX_HITS,
 };
 use sieve_query::map::{build_repo_map, format_repo_map, MapOptions, RepoMap};
 use sieve_query::skeleton::{format_skeleton, skeleton, skeleton_saved_paths};
@@ -559,6 +559,19 @@ fn limit_arg(args: &Value) -> usize {
         .unwrap_or(5)
 }
 
+/// The modification time (ns) and size of `path`, or `None` when it is missing.
+/// A cache keyed on it drops its value when the file is rewritten.
+fn file_stamp(path: &Path) -> Option<(u128, u64)> {
+    let meta = std::fs::metadata(path).ok()?;
+    let ns = meta
+        .modified()
+        .ok()?
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?
+        .as_nanos();
+    Some((ns, meta.len()))
+}
+
 fn find_code(args: &Value, root: &Path, context_dir: &Path) -> (String, bool) {
     let query = js_string_arg(args, "query");
     if query.is_empty() {
@@ -568,8 +581,12 @@ fn find_code(args: &Value, root: &Path, context_dir: &Path) -> (String, bool) {
         );
     }
 
-    let graph = load_graph(context_dir).unwrap_or_else(|| std::sync::Arc::new(empty_graph()));
-    let index = read_ask_index(&ask_index_path(context_dir));
+    let warm_graph = crate::warm::current_graph(context_dir);
+    let graph = warm_graph
+        .clone()
+        .or_else(|| load_graph(context_dir))
+        .unwrap_or_else(|| std::sync::Arc::new(empty_graph()));
+    let index_path = ask_index_path(context_dir);
 
     let limit = limit_arg(args);
     let full = args.get("full") == Some(&Value::Bool(true));
@@ -583,7 +600,26 @@ fn find_code(args: &Value, root: &Path, context_dir: &Path) -> (String, bool) {
         full,
     };
 
-    let result = match ask(&graph, index.as_ref(), &query, &opts, root) {
+    // A graph from the warm path stays the same `Arc` until a refresh changes
+    // it, so the corpus built for it is reused. Any other graph is read fresh.
+    let result = match &warm_graph {
+        Some(graph) => {
+            let key = WarmKey {
+                graph,
+                index_stamp: file_stamp(&index_path),
+                load_index: &|| read_ask_index(&index_path),
+            };
+            ask_warm(&key, &query, &opts, root)
+        }
+        None => ask(
+            &graph,
+            read_ask_index(&index_path).as_ref(),
+            &query,
+            &opts,
+            root,
+        ),
+    };
+    let result = match result {
         Ok(r) => r,
         Err(e) => return (e.to_string(), true),
     };
@@ -775,7 +811,7 @@ fn find_all(args: &Value, root: &Path, context_dir: &Path) -> (String, bool) {
         max_hits: DEFAULT_MAX_HITS,
     };
 
-    let result = match grep_graph(&graph, root, &pattern, &opts) {
+    let result = match grep_graph_cached(&graph, root, &pattern, &opts) {
         Ok(r) => r,
         // The thrown `RegExp` message prints as is; the `invalid pattern`
         // prefix is the CLI's.

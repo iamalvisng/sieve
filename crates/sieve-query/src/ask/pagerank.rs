@@ -34,109 +34,142 @@ pub(crate) fn build_adjacency(
     adjacency
 }
 
-/// Runs 25 fixed iterations of personalized PageRank, seeded from `lex`,
-/// and top-normalizes the result.
-///
-/// `nodes` is the walk's whole universe, in the caller's own node order
-/// (`active_nodes`, or one scope's node slice) — every seed and every
-/// `adjacency` id is one of `nodes`, since `adjacency` was built from the
-/// same node set (`build_adjacency`'s `active_ids`). Summing floats is not
-/// associative, so the order candidate nodes are folded in can shift the
-/// last bit of the result; walking `nodes` in the caller's own order,
-/// rather than a `HashMap`'s iteration order, keeps that order the same
-/// as the node-array walk (rule book 9.1).
-///
-/// Returns an empty map when the seed weights sum to zero.
+/// The walk's fixed shape over one node set: the node order, and each
+/// node's neighbours as positions. It depends on the graph and the node set
+/// only, so a warm caller builds it once and reuses it for every query.
+#[derive(Debug)]
+pub(crate) struct Topology {
+    ids: Vec<String>,
+    neighbours: Vec<Vec<usize>>,
+}
+
+impl Topology {
+    /// Builds the shape over `nodes`, in the caller's own node order.
+    ///
+    /// The topology keeps the ids in a `Set`: a repeated id counts once, at
+    /// its first position. Every `adjacency` id is one of `nodes`, since
+    /// `adjacency` was built from the same node set (`build_adjacency`'s
+    /// `active_ids`). A neighbour outside `nodes` is skipped.
+    pub(crate) fn new(nodes: &[&Node], adjacency: &HashMap<String, Vec<String>>) -> Topology {
+        let mut index_of: HashMap<&str, usize> = HashMap::with_capacity(nodes.len());
+        let mut ids: Vec<String> = Vec::with_capacity(nodes.len());
+        for n in nodes {
+            if !index_of.contains_key(n.id.as_str()) {
+                index_of.insert(n.id.as_str(), ids.len());
+                ids.push(n.id.clone());
+            }
+        }
+        let neighbours = ids
+            .iter()
+            .map(|id| {
+                adjacency
+                    .get(id)
+                    .map(|list| {
+                        list.iter()
+                            .filter_map(|nb| index_of.get(nb.as_str()).copied())
+                            .collect()
+                    })
+                    .unwrap_or_default()
+            })
+            .collect();
+        Topology { ids, neighbours }
+    }
+
+    /// Runs 25 fixed iterations of personalized PageRank, seeded from `lex`,
+    /// and top-normalizes the result.
+    ///
+    /// Summing floats is not associative, so the order candidate nodes are
+    /// folded in can shift the last bit of the result. The walk keeps the
+    /// caller's node order, and each node's neighbours in their edge order,
+    /// rather than a `HashMap`'s iteration order. A fixed order gives the same bits on every run.
+    ///
+    /// Returns an empty map when the seed weights sum to zero.
+    pub(crate) fn run(&self, lex: &HashMap<String, f64>) -> HashMap<String, f64> {
+        let restart: Vec<(usize, f64)> = self
+            .ids
+            .iter()
+            .enumerate()
+            .filter_map(|(i, id)| lex.get(id).filter(|&&w| w > 0.0).map(|&w| (i, w)))
+            .collect();
+        let sum: f64 = restart.iter().map(|(_, w)| w).sum();
+        if sum <= 0.0 {
+            return HashMap::new();
+        }
+        let restart: Vec<(usize, f64)> = restart.into_iter().map(|(i, w)| (i, w / sum)).collect();
+
+        let n = self.ids.len();
+        let mut mass = vec![0.0_f64; n];
+        for (i, w) in &restart {
+            mass[*i] = *w;
+        }
+        // The `rank` is a `Map`: the seeds come first, then every node in the order
+        // the walk first touched it. The `dangling` sum and the `next[nb] +=` sums
+        // add in that order, so `order` keeps it. A node index sits in `order`
+        // once, when first set.
+        let mut order: Vec<usize> = restart.iter().map(|(i, _)| *i).collect();
+        let mut next = vec![0.0_f64; n];
+        let mut seen = vec![false; n];
+        let mut next_order: Vec<usize> = Vec::with_capacity(order.len());
+
+        for _ in 0..super::ITERS {
+            next.fill(0.0);
+            seen.fill(false);
+            next_order.clear();
+            for (i, w) in &restart {
+                next[*i] += super::ALPHA * w;
+                seen[*i] = true;
+                next_order.push(*i);
+            }
+            let mut dangling = 0.0_f64;
+            for &i in &order {
+                // A zero-mass entry is still visited: the walk inserts its
+                // neighbours into the `Map` at this point.
+                let m = mass[i];
+                let neighbours = &self.neighbours[i];
+                if neighbours.is_empty() {
+                    dangling += m;
+                    continue;
+                }
+                let share = (1.0 - super::ALPHA) * m / neighbours.len() as f64;
+                for &j in neighbours {
+                    if !seen[j] {
+                        seen[j] = true;
+                        next_order.push(j);
+                    }
+                    next[j] += share;
+                }
+            }
+            if dangling > 0.0 {
+                for (i, w) in &restart {
+                    next[*i] += (1.0 - super::ALPHA) * dangling * w;
+                }
+            }
+            std::mem::swap(&mut mass, &mut next);
+            std::mem::swap(&mut order, &mut next_order);
+        }
+
+        let max = mass.iter().cloned().fold(0.0_f64, f64::max);
+        let mut out = HashMap::with_capacity(order.len());
+        if max > 0.0 {
+            for &i in &order {
+                if mass[i] > 0.0 {
+                    out.insert(self.ids[i].clone(), mass[i] / max);
+                }
+            }
+        }
+        out
+    }
+}
+
+/// Runs the walk once over `nodes`, seeded from `lex`. A cold caller uses
+/// this; a warm caller keeps a [`Topology`] and calls its `run`.
+#[cfg(test)]
 pub(crate) fn run(
     nodes: &[&Node],
     lex: &HashMap<String, f64>,
     adjacency: &HashMap<String, Vec<String>>,
 ) -> HashMap<String, f64> {
-    // The topology keeps the ids in a `Set` and the seeds in a `Map`: a
-    // repeated id counts once, at its first position.
-    let mut first = HashSet::new();
-    let nodes: Vec<&Node> = nodes
-        .iter()
-        .copied()
-        .filter(|n| first.insert(n.id.as_str()))
-        .collect();
-    let restart: Vec<(&str, f64)> = nodes
-        .iter()
-        .filter_map(|n| {
-            lex.get(n.id.as_str())
-                .filter(|&&w| w > 0.0)
-                .map(|&w| (n.id.as_str(), w))
-        })
-        .collect();
-    let sum: f64 = restart.iter().map(|(_, w)| w).sum();
-    if sum <= 0.0 {
-        return HashMap::new();
-    }
-    let restart: Vec<(&str, f64)> = restart.into_iter().map(|(id, w)| (id, w / sum)).collect();
-
-    let ids: Vec<&str> = nodes.iter().map(|n| n.id.as_str()).collect();
-    let index_of: HashMap<&str, usize> = ids.iter().enumerate().map(|(i, &id)| (id, i)).collect();
-
-    let n = ids.len();
-    let mut mass = vec![0.0_f64; n];
-    for (id, w) in &restart {
-        mass[index_of[id]] = *w;
-    }
-    // The `rank` is a `Map`: the seeds come first, then every node in the order
-    // the walk first touched it. The `dangling` sum and the `next[nb] +=` sums
-    // add in that order, so `order` keeps it. A node index sits in `order`
-    // once, when first set.
-    let mut order: Vec<usize> = restart.iter().map(|(id, _)| index_of[id]).collect();
-
-    for _ in 0..super::ITERS {
-        let mut next = vec![0.0_f64; n];
-        let mut seen = vec![false; n];
-        let mut next_order: Vec<usize> = Vec::with_capacity(order.len());
-        for (id, w) in &restart {
-            let i = index_of[id];
-            next[i] += super::ALPHA * w;
-            seen[i] = true;
-            next_order.push(i);
-        }
-        let mut dangling = 0.0_f64;
-        for &i in &order {
-            // A zero-mass entry is still visited: the walk inserts its
-            // neighbours into the `Map` at this point.
-            let m = mass[i];
-            match adjacency.get(ids[i]) {
-                Some(neighbours) if !neighbours.is_empty() => {
-                    let share = (1.0 - super::ALPHA) * m / neighbours.len() as f64;
-                    for nb in neighbours {
-                        let j = index_of[nb.as_str()];
-                        if !seen[j] {
-                            seen[j] = true;
-                            next_order.push(j);
-                        }
-                        next[j] += share;
-                    }
-                }
-                _ => dangling += m,
-            }
-        }
-        if dangling > 0.0 {
-            for (id, w) in &restart {
-                next[index_of[id]] += (1.0 - super::ALPHA) * dangling * w;
-            }
-        }
-        mass = next;
-        order = next_order;
-    }
-
-    let max = mass.iter().cloned().fold(0.0_f64, f64::max);
-    let mut out = HashMap::new();
-    if max > 0.0 {
-        for &i in &order {
-            if mass[i] > 0.0 {
-                out.insert(ids[i].to_string(), mass[i] / max);
-            }
-        }
-    }
-    out
+    Topology::new(nodes, adjacency).run(lex)
 }
 
 #[cfg(test)]

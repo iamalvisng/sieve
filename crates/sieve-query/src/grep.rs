@@ -315,6 +315,130 @@ fn read_file_text(path: &Path) -> Option<String> {
     decode_file_bytes(&bytes).map(std::borrow::Cow::into_owned)
 }
 
+/// The lines of `text` that hold `needle`, each with its zero-based line
+/// number, in file order. One line shows once, however often it holds the text.
+fn candidate_lines<'a>(text: &'a str, needle: &str) -> Vec<(usize, &'a str)> {
+    let mut out = Vec::new();
+    let mut line_no = 0;
+    let mut counted_to = 0;
+    let mut next_start = 0;
+    for (pos, _) in text.match_indices(needle) {
+        if pos < next_start {
+            continue;
+        }
+        let start = text[..pos].rfind('\n').map_or(0, |i| i + 1);
+        let end = text[pos..].find('\n').map_or(text.len(), |i| pos + i);
+        line_no += text[counted_to..start]
+            .bytes()
+            .filter(|&b| b == b'\n')
+            .count();
+        counted_to = start;
+        out.push((line_no, &text[start..end]));
+        next_start = end + 1;
+    }
+    out
+}
+
+/// The most decoded text the file cache keeps, in bytes.
+const TEXT_CACHE_CAP: usize = 128 * 1024 * 1024;
+
+/// What names one version of a file: its modification time (ns), size,
+/// inode and change time (ns). The inode and change time are 0 off Unix.
+type Stamp = (u128, u64, u64, i128);
+
+/// A cached file: its stamp and its decoded text.
+type CachedText = (Stamp, std::sync::Arc<str>);
+
+/// The cache map and its total size in bytes (text plus path).
+type TextCache = (HashMap<std::path::PathBuf, CachedText>, usize);
+
+/// The decoded text of files that `grep_graph_cached` has read, by path.
+static TEXT_CACHE: std::sync::Mutex<Option<TextCache>> = std::sync::Mutex::new(None);
+
+fn lock_cache() -> std::sync::MutexGuard<'static, Option<TextCache>> {
+    TEXT_CACHE.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// The stamp of `path`, or `None` when it is missing.
+fn stamp_of(path: &Path) -> Option<Stamp> {
+    let meta = std::fs::metadata(path).ok()?;
+    let ns = meta
+        .modified()
+        .ok()?
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?
+        .as_nanos();
+    #[cfg(unix)]
+    let (ino, ctime) = {
+        use std::os::unix::fs::MetadataExt;
+        (
+            meta.ino(),
+            i128::from(meta.ctime()) * 1_000_000_000 + i128::from(meta.ctime_nsec()),
+        )
+    };
+    #[cfg(not(unix))]
+    let (ino, ctime) = (0, 0);
+    Some((ns, meta.len(), ino, ctime))
+}
+
+/// The bytes one cache entry costs: its text and its path.
+fn entry_size(path: &Path, text: &str) -> usize {
+    path.as_os_str().len() + text.len()
+}
+
+/// Removes the entry for `path`, if any.
+fn drop_entry(path: &Path) {
+    if let Some((map, bytes)) = lock_cache().as_mut() {
+        if let Some((_, old)) = map.remove(path) {
+            *bytes = bytes.saturating_sub(entry_size(path, &old));
+        }
+    }
+}
+
+/// Reads a file through the cache. A changed stamp reads the file again, so
+/// an edited file never gives old text. The read and the decode run outside
+/// the lock. When the cache is full, the file is not kept: it is read from
+/// disk each time.
+fn read_file_text_cached(path: &Path) -> Option<std::sync::Arc<str>> {
+    let Some(stamp) = stamp_of(path) else {
+        drop_entry(path);
+        return None;
+    };
+    if let Some((map, _)) = lock_cache().as_ref() {
+        if let Some((cached, text)) = map.get(path) {
+            if *cached == stamp {
+                return Some(text.clone());
+            }
+        }
+    }
+    let text: std::sync::Arc<str> = read_file_text(path)?.into();
+    let mut guard = lock_cache();
+    let (map, bytes) = guard.get_or_insert_with(|| (HashMap::new(), 0));
+    if let Some((_, old)) = map.remove(path) {
+        *bytes = bytes.saturating_sub(entry_size(path, &old));
+    }
+    let size = entry_size(path, &text);
+    if *bytes + size <= TEXT_CACHE_CAP {
+        *bytes += size;
+        map.insert(path.to_path_buf(), (stamp, text.clone()));
+    }
+    Some(text)
+}
+
+/// Drops every cached file that is not a file of `graph` under `repo_root`.
+fn prune_cache(graph: &Graph, repo_root: &Path) {
+    let live: std::collections::HashSet<std::path::PathBuf> = graph
+        .nodes
+        .iter()
+        .filter(|n| n.kind == Kind::File)
+        .map(|n| repo_root.join(&n.path))
+        .collect();
+    if let Some((map, bytes)) = lock_cache().as_mut() {
+        map.retain(|path, _| live.contains(path));
+        *bytes = map.iter().map(|(p, (_, t))| entry_size(p, t)).sum();
+    }
+}
+
 /// Runs a `grep` search over `graph`'s indexed files, on disk under
 /// `repo_root`.
 pub fn grep_graph(
@@ -323,9 +447,33 @@ pub fn grep_graph(
     pattern: &str,
     opts: &GrepOptions,
 ) -> Result<GrepResult, GrepError> {
+    grep_with(graph, repo_root, pattern, opts, &read_file_text)
+}
+
+/// Like [`grep_graph`], but keeps decoded file text between calls. A long
+/// running server uses it to skip the file reads. Each call checks the
+/// stamp of every file, so a changed file is read again.
+pub fn grep_graph_cached(
+    graph: &Graph,
+    repo_root: &Path,
+    pattern: &str,
+    opts: &GrepOptions,
+) -> Result<GrepResult, GrepError> {
+    prune_cache(graph, repo_root);
+    grep_with(graph, repo_root, pattern, opts, &read_file_text_cached)
+}
+
+fn grep_with<T: AsRef<str>>(
+    graph: &Graph,
+    repo_root: &Path,
+    pattern: &str,
+    opts: &GrepOptions,
+    read: &dyn Fn(&Path) -> Option<T>,
+) -> Result<GrepResult, GrepError> {
     let regex = compile_pattern(pattern, opts)?;
 
-    let in_degree = compute_in_degree(graph);
+    // Built on first use: a search with no hit never pays for them.
+    let in_degree = std::cell::OnceCell::new();
 
     let prefix = match &opts.in_prefix {
         Some(raw) => {
@@ -367,21 +515,49 @@ pub fn grep_graph(
         })
         .collect();
 
-    let mut symbols_by_path: HashMap<&str, Vec<(&Node, u32, u32)>> = HashMap::new();
-    for node in &graph.nodes {
-        if node.kind == Kind::File {
-            continue;
+    let symbols_by_path = std::cell::OnceCell::new();
+    let build_symbols = || {
+        let mut map: HashMap<&str, Vec<(&Node, u32, u32)>> = HashMap::new();
+        for node in &graph.nodes {
+            if node.kind == Kind::File {
+                continue;
+            }
+            if let Some((start, end)) = parse_span(&node.span) {
+                map.entry(node.path.as_str())
+                    .or_default()
+                    .push((node, start, end));
+            }
         }
-        if let Some((start, end)) = parse_span(&node.span) {
-            symbols_by_path
-                .entry(node.path.as_str())
-                .or_default()
-                .push((node, start, end));
+        for symbols in map.values_mut() {
+            symbols.sort_by_key(|(_, start, _)| *start);
         }
-    }
-    for symbols in symbols_by_path.values_mut() {
-        symbols.sort_by_key(|(_, start, _)| *start);
-    }
+        map
+    };
+
+    let needle = if opts.ignore_case {
+        None
+    } else if opts.fixed {
+        Some(pattern.to_string())
+    } else {
+        // A regex scans every line: a literal taken from the pattern text
+        // can miss a true match (`\x41bc` matches "Abc").
+        None
+    };
+
+    // A regex search first asks the whole text for any match. A file with
+    // none is skipped. Multiline mode makes `^` and `$` fit each line, so
+    // every per-line match is also a match here. A look-around could see
+    // the next or the previous line, so such a pattern skips this check.
+    let file_filter = if opts.fixed
+        || pattern.contains("(?=")
+        || pattern.contains("(?!")
+        || pattern.contains("(?<")
+    {
+        None
+    } else {
+        let flags = if opts.ignore_case { "im" } else { "m" };
+        regress::Regex::with_flags(pattern, flags).ok()
+    };
 
     let mut groups: Vec<GrepGroup> = Vec::new();
     let mut group_index: HashMap<String, usize> = HashMap::new();
@@ -391,12 +567,32 @@ pub fn grep_graph(
 
     for file_node in &file_nodes {
         let full_path = repo_root.join(&file_node.path);
-        let Some(text) = read_file_text(&full_path) else {
+        let Some(text) = read(&full_path) else {
             truncated_files += 1;
             continue;
         };
-        let symbols = symbols_by_path.get(file_node.path.as_str());
-        for (idx, raw_line) in text.split('\n').enumerate() {
+        let text = text.as_ref();
+        if let Some(filter) = &file_filter {
+            if filter.find(text).is_none() {
+                continue;
+            }
+        }
+        // A line without the required text cannot match, so only the lines
+        // that hold it reach the regex. Most files hold none.
+        let lines: Box<dyn Iterator<Item = (usize, &str)>> = match &needle {
+            Some(n) => {
+                let found = candidate_lines(text, n);
+                if found.is_empty() {
+                    continue;
+                }
+                Box::new(found.into_iter())
+            }
+            None => Box::new(text.split('\n').enumerate()),
+        };
+        let symbols = symbols_by_path
+            .get_or_init(build_symbols)
+            .get(file_node.path.as_str());
+        for (idx, raw_line) in lines {
             if regex.find(raw_line).is_none() {
                 continue;
             }
@@ -429,7 +625,10 @@ pub fn grep_graph(
                                 span: node.span.clone(),
                             }),
                             path: node.path.clone(),
-                            in_degree: *in_degree.get(&node.id).unwrap_or(&0),
+                            in_degree: *in_degree
+                                .get_or_init(|| compute_in_degree(graph))
+                                .get(&node.id)
+                                .unwrap_or(&0),
                             hits: Vec::new(),
                         }
                     }
@@ -895,6 +1094,123 @@ mod tests {
             )
         );
         assert_eq!(text.lines().nth(2), Some(""));
+    }
+
+    #[test]
+    fn candidate_lines_gives_each_holding_line_once_with_its_number() {
+        let text = "a\nxx xx\nb\r\n\nx";
+        assert_eq!(candidate_lines(text, "x"), vec![(1, "xx xx"), (4, "x")]);
+        assert!(candidate_lines(text, "zz").is_empty());
+    }
+
+    #[test]
+    fn cached_grep_sees_an_edited_file_and_a_removed_file() {
+        let mut graph = empty_graph();
+        graph.nodes.push(file_node("a.ts", 1));
+        let dir = tempdir("cached-grep-fresh");
+        std::fs::write(dir.join("a.ts"), "old_name();\n").expect("write a.ts");
+        let first = grep_graph_cached(&graph, &dir, "old_name", &default_opts()).expect("grep");
+        assert_eq!(first.total_hits, 1);
+        // The edit changes the size, so the stamp differs at once.
+        std::fs::write(dir.join("a.ts"), "new_name_here();\n").expect("rewrite a.ts");
+        let old = grep_graph_cached(&graph, &dir, "old_name", &default_opts()).expect("grep");
+        assert_eq!(old.total_hits, 0);
+        let new = grep_graph_cached(&graph, &dir, "new_name", &default_opts()).expect("grep");
+        assert_eq!(new.total_hits, 1);
+        std::fs::remove_file(dir.join("a.ts")).expect("remove a.ts");
+        let gone = grep_graph_cached(&graph, &dir, "new_name", &default_opts()).expect("grep");
+        assert_eq!(gone.total_hits, 0);
+        assert_eq!(gone.truncated.files, 1);
+    }
+
+    #[test]
+    fn cached_grep_sees_a_same_size_rewrite_with_the_old_mtime() {
+        let mut graph = empty_graph();
+        graph.nodes.push(file_node("a.ts", 1));
+        let dir = tempdir("cached-grep-same-size");
+        let path = dir.join("a.ts");
+        std::fs::write(&path, "aaaa\n").expect("write a.ts");
+        let old_mtime = std::fs::metadata(&path)
+            .and_then(|m| m.modified())
+            .expect("mtime");
+        let first = grep_graph_cached(&graph, &dir, "aaaa", &default_opts()).expect("grep");
+        assert_eq!(first.total_hits, 1);
+        std::fs::write(&path, "bbbb\n").expect("rewrite a.ts");
+        std::fs::File::options()
+            .write(true)
+            .open(&path)
+            .and_then(|f| f.set_modified(old_mtime))
+            .expect("reset mtime");
+        let new = grep_graph_cached(&graph, &dir, "bbbb", &default_opts()).expect("grep");
+        assert_eq!(new.total_hits, 1);
+    }
+
+    #[test]
+    fn cached_and_uncached_grep_agree_on_odd_files() {
+        let utf16: Vec<u8> = [0xFF, 0xFE]
+            .into_iter()
+            .chain("foo\nbar foo\n".encode_utf16().flat_map(u16::to_le_bytes))
+            .collect();
+        let files: [(&str, Vec<u8>); 5] = [
+            ("crlf.ts", b"foo\r\nbar foo\r\n".to_vec()),
+            ("nofinal.ts", b"x\nfoo".to_vec()),
+            ("bom.ts", b"\xEF\xBB\xBFfoo\nfoo\n".to_vec()),
+            ("utf16.ts", utf16),
+            ("bad.ts", b"foo \xFF\xFE foo\nfoo\n".to_vec()),
+        ];
+        let mut graph = empty_graph();
+        let dir = tempdir("cached-uncached-agree");
+        for (name, bytes) in &files {
+            graph.nodes.push(file_node(name, 3));
+            std::fs::write(dir.join(name), bytes).expect("write file");
+        }
+        for (pattern, fixed) in [("foo", true), ("fo+$", false), (r"^\s*foo", false)] {
+            let opts = GrepOptions {
+                fixed,
+                ..default_opts()
+            };
+            let plain = grep_graph(&graph, &dir, pattern, &opts).expect("grep");
+            let cached = grep_graph_cached(&graph, &dir, pattern, &opts).expect("grep");
+            assert!(plain.total_hits > 0, "{pattern}");
+            assert_eq!(
+                format_grep_result(&plain),
+                format_grep_result(&cached),
+                "{pattern}"
+            );
+        }
+    }
+
+    #[test]
+    fn whole_file_prefilter_keeps_every_per_line_match() {
+        let text = "abc\r\nxabc\nA b\n\x41bc tab\tx\n  end\n";
+        let mut graph = empty_graph();
+        graph.nodes.push(file_node("a.ts", 6));
+        let dir = tempdir("prefilter-keeps");
+        std::fs::write(dir.join("a.ts"), text).expect("write");
+        for pattern in [
+            "^abc",
+            "abc$",
+            "abc\\r$",
+            r"A\sb",
+            r"\x41bc",
+            r"tab\tx",
+            r"^\s*end$",
+            "nomatch",
+            "(?<!\\n)^abc",
+            r"(?<![\s\S])abc",
+        ] {
+            let line_regex = compile_pattern(pattern, &default_opts()).expect("compile");
+            let want = text
+                .split('\n')
+                .filter(|l| line_regex.find(l).is_some())
+                .count();
+            let got = grep_graph(&graph, &dir, pattern, &default_opts()).expect("grep");
+            assert_eq!(got.total_hits, want, "{pattern}");
+            let cached = grep_graph_cached(&graph, &dir, pattern, &default_opts()).expect("grep");
+            assert_eq!(cached.total_hits, want, "cached {pattern}");
+        }
+        let behind = grep_graph_cached(&graph, &dir, r"(?<![\s\S])abc", &default_opts());
+        assert_eq!(behind.expect("grep").total_hits, 1);
     }
 
     #[test]

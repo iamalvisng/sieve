@@ -3870,7 +3870,7 @@ mod tests {
 
     #[test]
     fn test_p4_14_stale_count_on_the_lookup_path() {
-        let dir = TempDir::new("s3-p4-14");
+        let dir = TempDir::new("stale-stats");
         s3_write(&dir, "a.ts", "export function a() {}\n");
         s3_write(&dir, "b.ts", "export function b() {}\n");
         let ctx = s3_build(&dir);

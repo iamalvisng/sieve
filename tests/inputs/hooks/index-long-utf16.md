@@ -1,6 +1,6 @@
 # sieve — repo map
 
-A long index for the P4-13 cut test: the header em dash is one
+A long index for the cut test: the header em dash is one
 UTF-16 unit but three bytes, so a byte cut ends two bytes early.
 
 - line 1: pad

@@ -51,12 +51,13 @@ fn doc_bag_from_ask_doc(doc: &AskDoc) -> DocBag {
     }
 }
 
+/// Every node's token bags by node id. The keys are owned, so a warm caller
+/// can keep the map beyond one query.
+pub(crate) type Docs = HashMap<String, DocBag>;
+
 /// Builds every graph node's token bags, using the sidecar when it is
 /// usable, else tokenizing live.
-pub(crate) fn build_docs<'a>(
-    graph: &'a Graph,
-    index: Option<&AskIndex>,
-) -> HashMap<&'a str, DocBag> {
+pub(crate) fn build_docs(graph: &Graph, index: Option<&AskIndex>) -> Docs {
     if let Some(idx) = index {
         let by_id: HashMap<&str, &AskDoc> = idx.docs.iter().map(|d| (d.id.as_str(), d)).collect();
         let usable = idx.docs.len() == graph.nodes.len()
@@ -68,14 +69,14 @@ pub(crate) fn build_docs<'a>(
             return graph
                 .nodes
                 .iter()
-                .map(|n| (n.id.as_str(), doc_bag_from_ask_doc(by_id[n.id.as_str()])))
+                .map(|n| (n.id.clone(), doc_bag_from_ask_doc(by_id[n.id.as_str()])))
                 .collect();
         }
     }
     graph
         .nodes
         .iter()
-        .map(|n| (n.id.as_str(), doc_bag_from_node(n)))
+        .map(|n| (n.id.clone(), doc_bag_from_node(n)))
         .collect()
 }
 
@@ -195,7 +196,7 @@ impl Corpus {
     /// `avgBodyLen` never counts a concept: BM25 never scores one.
     pub(crate) fn build_with_concepts(
         active_nodes: &[&Node],
-        docs: &HashMap<&str, DocBag>,
+        docs: &Docs,
         concept_bags: &[HashSet<String>],
     ) -> Corpus {
         let mut df: HashMap<String, u32> = HashMap::new();
@@ -306,7 +307,7 @@ fn is_py_test_fn(n: &Node) -> bool {
 /// Python `Test*` class. A Python `test_*` function is a test too. The id
 /// has no scope, so the scope node's line span is the only signal.
 /// Runs once per ask run.
-pub(crate) fn mark_inline_tests(nodes: &[Node], docs: &mut HashMap<&str, DocBag>) {
+pub(crate) fn mark_inline_tests(nodes: &[Node], docs: &mut Docs) {
     let mut scopes: HashMap<&str, Vec<(u32, u32)>> = HashMap::new();
     for n in nodes {
         if is_test_scope(n) {
@@ -338,7 +339,7 @@ pub(crate) fn mark_inline_tests(nodes: &[Node], docs: &mut HashMap<&str, DocBag>
     // The id has no scope: a code node that shares an id with a test node
     // keeps its rank.
     for (id, d) in docs.iter_mut() {
-        if test_ids.contains(id) && !code_ids.contains(id) {
+        if test_ids.contains(id.as_str()) && !code_ids.contains(id.as_str()) {
             d.inline_test = true;
         }
     }
@@ -360,30 +361,44 @@ pub(crate) fn node_total(
     doc: &DocBag,
     corpus: &Corpus,
     query_wants_tests: bool,
+    query_words: &[String],
     path: &str,
 ) -> f64 {
     let name_score = score(terms, &doc.name, corpus) * 3.0;
     let path_score = score(terms, &doc.path, corpus) * 2.0;
     let body_score = bm25(terms, &doc.body, corpus, doc.body_len);
-    let factor =
-        test_factor(query_wants_tests, path).min(inline_test_factor(query_wants_tests, doc, terms));
+    // A script, like a test path, gets this factor twice: here and in the
+    // candidate baseline.
+    let factor = test_factor(query_wants_tests, query_words, path).min(inline_test_factor(
+        query_wants_tests,
+        doc,
+        terms,
+    ));
     (name_score + path_score + body_score) * factor
 }
 
 /// Scores every active node, keeping only a positive total.
 pub(crate) fn score_all(
     active_nodes: &[&Node],
-    docs: &HashMap<&str, DocBag>,
+    docs: &Docs,
     corpus: &Corpus,
     terms: &[String],
     query_wants_tests: bool,
+    query_words: &[String],
 ) -> HashMap<String, f64> {
     let mut lex = HashMap::new();
     for node in active_nodes {
         let Some(doc) = docs.get(node.id.as_str()) else {
             continue;
         };
-        let total = node_total(terms, doc, corpus, query_wants_tests, &node.path);
+        let total = node_total(
+            terms,
+            doc,
+            corpus,
+            query_wants_tests,
+            query_words,
+            &node.path,
+        );
         if total > 0.0 {
             lex.insert(node.id.clone(), total);
         }
@@ -500,10 +515,10 @@ mod tests {
         ]
     }
 
-    fn marked(nodes: &[Node]) -> HashMap<&str, DocBag> {
-        let mut docs: HashMap<&str, DocBag> = nodes
+    fn marked(nodes: &[Node]) -> Docs {
+        let mut docs: Docs = nodes
             .iter()
-            .map(|n| (n.id.as_str(), doc_bag_from_node(n)))
+            .map(|n| (n.id.clone(), doc_bag_from_node(n)))
             .collect();
         mark_inline_tests(nodes, &mut docs);
         docs
@@ -645,7 +660,7 @@ mod tests {
         docs.get_mut("src/a.rs#code").unwrap().name = bag(&["query".to_string()]);
         docs.get_mut("src/a.rs#code_name_words_test").unwrap().name =
             bag(&["code".to_string(), "query".to_string()]);
-        let total = |id: &str, path: &str| node_total(&terms, &docs[id], &corpus, false, path);
+        let total = |id: &str, path: &str| node_total(&terms, &docs[id], &corpus, false, &[], path);
         let code = total("src/a.rs#code", "src/a.rs");
         let test = total("src/a.rs#code_name_words_test", "src/a.rs");
         assert!(code > test, "{code} {test}");
@@ -793,11 +808,58 @@ mod tests {
     #[test]
     fn test_factor_penalizes_a_test_path_only_when_the_query_does_not_want_tests() {
         assert_eq!(
-            test_factor(false, "src/tests/app.rs"),
+            test_factor(false, &[], "src/tests/app.rs"),
             super::super::TEST_RANK_PENALTY
         );
-        assert_eq!(test_factor(true, "src/tests/app.rs"), 1.0);
-        assert_eq!(test_factor(false, "src/app.rs"), 1.0);
+        assert_eq!(test_factor(true, &[], "src/tests/app.rs"), 1.0);
+        assert_eq!(test_factor(false, &[], "src/app.rs"), 1.0);
+    }
+
+    #[test]
+    fn test_factor_penalizes_a_script_path_unless_the_query_wants_or_names_it() {
+        use super::super::split_words as w;
+        let p = super::super::TEST_RANK_PENALTY;
+        assert_eq!(test_factor(false, &[], "scripts/oracle/Run.kt"), p);
+        assert_eq!(
+            test_factor(false, &w("all scripts"), "scripts/oracle/Run.kt"),
+            1.0
+        );
+        assert_eq!(test_factor(false, &[], "crates/x/src/scripts.rs"), 1.0);
+        let q = w("where does the label gate check plan labels");
+        assert_eq!(test_factor(false, &q, "scripts/label-gate.sh"), 1.0);
+        assert_eq!(test_factor(false, &q, "scripts/label-lint.sh"), p);
+    }
+
+    #[test]
+    fn script_path_matches_whole_segments() {
+        use super::super::is_script_path;
+        assert!(is_script_path("scripts/a.sh"));
+        assert!(is_script_path("tools/scripts/a.sh"));
+        assert!(!is_script_path("myscripts/a.sh"));
+        assert!(!is_script_path("tools/a.sh"));
+    }
+
+    #[test]
+    fn query_names_file_needs_every_long_stem_word() {
+        use super::super::{query_names_file as names, split_words as w};
+        assert!(names(&w("the label gate"), "scripts/label-gate.sh"));
+        assert!(names(&w("LABEL Gate"), "scripts/label_gate.sh"));
+        assert!(!names(&w("the label"), "scripts/label-gate.sh"));
+        assert!(!names(&w("labels gate"), "scripts/label-gate.sh"));
+        // Words under 3 letters are ignored; a stem of only those is never named.
+        assert!(names(&w("the run"), "scripts/ab-run.sh"));
+        assert!(!names(&w("ab cd"), "scripts/ab-cd.sh"));
+        assert!(!names(&w("sh"), "scripts/.sh"));
+        // Digits do not count as letters.
+        assert!(names(&w("run2"), "scripts/run2-1.sh"));
+        assert!(!names(&w("run"), "scripts/run2-1.sh"));
+        assert!(!names(&w("123"), "scripts/123.sh"));
+        // The dot splits the stem; the folder never counts.
+        assert!(names(&w("build all"), "scripts/build.all.sh"));
+        assert!(!names(&w("scripts"), "scripts/label-gate.sh"));
+        // A joined name is one word; a dotfile has no stem.
+        assert!(!names(&w("label gate"), "scripts/LabelGate.sh"));
+        assert!(!names(&w("bashrc"), "scripts/.bashrc"));
     }
 
     #[test]

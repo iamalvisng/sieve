@@ -1,4 +1,4 @@
-# sieve — repo map (long, P4-13)
+# sieve — repo map (long)
 
 This card is longer than the 1500-byte session-start budget.
 

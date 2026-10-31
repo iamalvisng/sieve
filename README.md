@@ -92,7 +92,20 @@ The old names `ask`, `grep`, `blast` and `skeleton` still work. The [command ref
 
 The MCP server keeps the index in memory and watches your files, so an answer never comes from an old index.
 
-On macOS (vite clone, about 1,600 files, M1 Pro, median of 15 runs), a `callers` call takes about 1 ms when no file changed, and about 77 ms right after a one-file edit. `query` is slower and not tuned yet. Linux is not measured yet; for about 2 seconds after a new folder appears, Linux uses a slower full check. Set `SIEVE_NO_WARM=1` to turn the in-memory index off.
+Warm MCP calls on a clone of the vite repo (commit 90bc034a, about 1,600 files). The test ran in a Linux arm64 Docker container with release builds. Each cell is the median of 5 calls after one warm-up. The range shows two runs.
+
+| Call | 0.2.0 | 0.2.1 | 0.2.2 | 0.2.3 |
+|---|---|---|---|---|
+| `query` | 119–168 ms | 120–158 ms | 93–104 ms | 31–40 ms |
+| `find`, plain text | 44–57 ms | 47–60 ms | 18–21 ms | 7–8 ms |
+| `find`, regex | 45–49 ms | 46–61 ms | 19–23 ms | 7–8 ms |
+| `callers` | 70–71 ms | 71–80 ms | 0.4–0.5 ms | 0.4–0.5 ms |
+
+macOS shows the same trend. The macOS numbers are not in this table because the measuring Mac was under load.
+
+Run `scripts/bench-mcp.sh <sieve-binary> <repo>` to measure on your own machine and repo.
+
+For about 2 seconds after a new folder appears, Linux uses a slower full check. Set `SIEVE_NO_WARM=1` to turn the in-memory index off.
 
 ## Languages
 
