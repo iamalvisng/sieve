@@ -1,38 +1,11 @@
 //! Personalized PageRank over the walk-relation edges
 //!.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use sieve_core::{Graph, Node};
 
 use crate::relations::WALK_RELATIONS;
-
-/// The undirected adjacency list over the walk relations, restricted to
-/// `active_ids`.
-pub(crate) fn build_adjacency(
-    graph: &Graph,
-    active_ids: &HashSet<&str>,
-) -> HashMap<String, Vec<String>> {
-    let mut adjacency: HashMap<String, Vec<String>> = HashMap::new();
-    for edge in &graph.edges {
-        if !WALK_RELATIONS.contains(&edge.relation) {
-            continue;
-        }
-        if !active_ids.contains(edge.source.as_str()) || !active_ids.contains(edge.target.as_str())
-        {
-            continue;
-        }
-        adjacency
-            .entry(edge.source.clone())
-            .or_default()
-            .push(edge.target.clone());
-        adjacency
-            .entry(edge.target.clone())
-            .or_default()
-            .push(edge.source.clone());
-    }
-    adjacency
-}
 
 /// The walk's fixed shape over one node set: the node order, and each
 /// node's neighbours as positions. It depends on the graph and the node set
@@ -44,13 +17,33 @@ pub(crate) struct Topology {
 }
 
 impl Topology {
-    /// Builds the shape over `nodes`, in the caller's own node order.
+    /// Builds the shape over `nodes` straight from the graph's walk edges,
+    /// with no per-edge string copy. The graph edges give the undirected
+    /// neighbour lists, restricted to `nodes`, in edge order.
     ///
     /// The topology keeps the ids in a `Set`: a repeated id counts once, at
-    /// its first position. Every `adjacency` id is one of `nodes`, since
-    /// `adjacency` was built from the same node set (`build_adjacency`'s
-    /// `active_ids`). A neighbour outside `nodes` is skipped.
-    pub(crate) fn new(nodes: &[&Node], adjacency: &HashMap<String, Vec<String>>) -> Topology {
+    /// its first position.
+    pub(crate) fn from_graph(nodes: &[&Node], graph: &Graph) -> Topology {
+        let (index_of, ids) = Self::index(nodes);
+        let mut neighbours: Vec<Vec<usize>> = vec![Vec::new(); ids.len()];
+        for edge in &graph.edges {
+            if !WALK_RELATIONS.contains(&edge.relation) {
+                continue;
+            }
+            let (Some(&s), Some(&t)) = (
+                index_of.get(edge.source.as_str()),
+                index_of.get(edge.target.as_str()),
+            ) else {
+                continue;
+            };
+            neighbours[s].push(t);
+            neighbours[t].push(s);
+        }
+        Topology { ids, neighbours }
+    }
+
+    /// The node positions by id, and the ids in position order.
+    fn index<'n>(nodes: &[&'n Node]) -> (HashMap<&'n str, usize>, Vec<String>) {
         let mut index_of: HashMap<&str, usize> = HashMap::with_capacity(nodes.len());
         let mut ids: Vec<String> = Vec::with_capacity(nodes.len());
         for n in nodes {
@@ -59,6 +52,14 @@ impl Topology {
                 ids.push(n.id.clone());
             }
         }
+        (index_of, ids)
+    }
+
+    /// Builds the shape over `nodes` from a ready adjacency map. A
+    /// neighbour outside `nodes` is skipped.
+    #[cfg(test)]
+    pub(crate) fn new(nodes: &[&Node], adjacency: &HashMap<String, Vec<String>>) -> Topology {
+        let (index_of, ids) = Self::index(nodes);
         let neighbours = ids
             .iter()
             .map(|id| {
@@ -299,5 +300,63 @@ mod tests {
 
         let pr = run(&nodes, &lex, &adjacency);
         assert!(pr["c"] >= super::super::RESCUE_FLOOR);
+    }
+
+    #[test]
+    fn from_graph_matches_the_adjacency_map_shape() {
+        use sieve_core::wiring::{Confidence, Edge, Meta};
+        use sieve_core::Relation;
+
+        let edge = |s: &str, t: &str| Edge {
+            source: s.to_string(),
+            target: t.to_string(),
+            relation: Relation::Calls,
+            confidence: Confidence::LspResolved,
+        };
+        // A duplicate edge, a self-loop, a repeated node id, and an edge to
+        // "d", which is outside the node set.
+        let edges = vec![
+            edge("a", "b"),
+            edge("a", "b"),
+            edge("b", "b"),
+            edge("c", "a"),
+            edge("c", "d"),
+            edge("b", "c"),
+        ];
+        let graph = Graph {
+            meta: Meta {
+                version: 1,
+                node_count: 4,
+                edge_count: edges.len(),
+                languages: Vec::new(),
+                scopes: Vec::new(),
+            },
+            nodes: Vec::new(),
+            edges,
+        };
+        let (a, b, c) = (node("a"), node("b"), node("c"));
+        let nodes = [&a, &b, &a, &c];
+
+        // The reference: the adjacency map, as the edge list gives it.
+        let in_scope = |id: &str| nodes.iter().any(|n| n.id == id);
+        let mut adjacency: HashMap<String, Vec<String>> = HashMap::new();
+        for e in &graph.edges {
+            if in_scope(&e.source) && in_scope(&e.target) {
+                adjacency
+                    .entry(e.source.clone())
+                    .or_default()
+                    .push(e.target.clone());
+                adjacency
+                    .entry(e.target.clone())
+                    .or_default()
+                    .push(e.source.clone());
+            }
+        }
+
+        let direct = Topology::from_graph(&nodes, &graph);
+        let mapped = Topology::new(&nodes, &adjacency);
+        assert_eq!(direct.ids, mapped.ids);
+        assert_eq!(direct.neighbours, mapped.neighbours);
+        assert_eq!(direct.ids, ["a", "b", "c"]);
     }
 }

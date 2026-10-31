@@ -257,7 +257,7 @@ pub fn savings_report(
 ) -> Vec<(String, Json)> {
     let mut by_day: std::collections::BTreeMap<String, (u64, Option<f64>)> = Default::default();
     let dir = context_dir.join(".cache").join("session");
-    for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+    for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
         let Some(file) = std::fs::read_to_string(entry.path())
             .ok()
             .and_then(|t| Json::parse(&t))
@@ -286,11 +286,10 @@ pub fn savings_report(
     let (id, tokens, usd) = match latest {
         Some(s) => (
             s.get("id").cloned().unwrap_or(Json::Null),
-            if num(s, "savingsFormula") == crate::hook::SAVINGS_FORMULA as f64 {
-                num(s, "savedTokens")
-            } else {
-                0.0
-            },
+            // The session and its subagent files, as the status line shows.
+            s.get("id")
+                .and_then(Json::as_str)
+                .map_or(0.0, |id| crate::hook::session_total_in(&dir, id) as f64),
             dollars_saved(
                 num(s, "savedTokens"),
                 num(s, "inputCostMicros"),

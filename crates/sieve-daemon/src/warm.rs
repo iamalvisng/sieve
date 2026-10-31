@@ -12,7 +12,7 @@
 //! caller.
 
 use std::cell::RefCell;
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -21,7 +21,7 @@ use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::time::{Duration, Instant, SystemTime};
 
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
-use sieve_core::askindex::{ask_index_path, build_ask_index, write_ask_index};
+use sieve_core::askindex::{ask_index_path, build_ask_index, doc_of, write_ask_index};
 use sieve_core::fingerprint::{
     decode_source, fingerprint_path, hash_source, read_fingerprint, walk_start_ms,
     write_fingerprint, Fingerprint, Print,
@@ -37,6 +37,7 @@ use sieve_parse::refresh::{
 use sieve_parse::{
     claims, extractor_stamp, fresh_entry, link_entries_moving, walk_files, Extractors, ScopeMemo,
 };
+use sieve_query::ask::DocStep;
 use sieve_query::callers::{word_grep_chars_indexed, GraphIndex, WordIndex};
 
 #[cfg(target_os = "macos")]
@@ -480,6 +481,10 @@ pub(crate) struct Warm {
     qindex: Option<(Arc<Graph>, Arc<GraphIndex>)>,
     /// A patch's writes, not yet handed to the writer thread.
     pending: Option<Pending>,
+    /// The token bags each patch changed, oldest first, so a query patches its
+    /// cache with no read of the ask index file. Each step ends where the next
+    /// one starts.
+    doc_steps: Vec<Arc<DocStep>>,
     writer: Arc<Writer>,
     /// The graph a patch replaced. Its drop waits for the post-reply step.
     retired: Option<Arc<Graph>>,
@@ -742,6 +747,7 @@ impl Warm {
             words: None,
             qindex: None,
             pending: None,
+            doc_steps: Vec::new(),
             writer: Arc::new(Writer::default()),
             retired: None,
             opts: RefreshOptions::default(),
@@ -1156,6 +1162,16 @@ impl Warm {
         let (written, bodies, pos) = sieve_core::into_written_keeping_hinted(graph, &prior);
         let graph = Arc::new(written);
         timer.lap("patch: sort graph");
+        // A relink may change more than the files that changed, so a query
+        // reads the ask index file after it.
+        if relink {
+            self.doc_steps.clear();
+        } else {
+            let changed: HashSet<&str> =
+                touched.iter().chain(&removed).map(String::as_str).collect();
+            self.push_doc_step(&prior, &graph, &bodies, &changed);
+        }
+        timer.lap("patch: token bags");
         self.pending = Some(Pending {
             base,
             record: record.clone(),
@@ -1169,6 +1185,35 @@ impl Warm {
         true
     }
 
+    /// Records the token bags of the changed files of a patch from `prior` to
+    /// `graph`. `bodies` holds the body text of each node of `graph`.
+    fn push_doc_step(
+        &mut self,
+        prior: &Arc<Graph>,
+        graph: &Arc<Graph>,
+        bodies: &[Option<String>],
+        changed: &HashSet<&str>,
+    ) {
+        /// The steps a query can walk back over. A cache older than this reads
+        /// the ask index file.
+        const KEPT: usize = 8;
+        if !self.doc_steps.last().is_none_or(|last| last.ends_at(prior)) {
+            self.doc_steps.clear();
+        }
+        let mut files: HashMap<&str, Vec<_>> = changed.iter().map(|p| (*p, Vec::new())).collect();
+        for (node, body) in graph.nodes.iter().zip(bodies) {
+            if let Some(docs) = files.get_mut(node.path.as_str()) {
+                docs.push(doc_of(node, body.as_deref()));
+            }
+        }
+        let files = files.into_iter().map(|(p, d)| (p.to_owned(), d)).collect();
+        self.doc_steps
+            .push(Arc::new(DocStep::new(prior, graph, files)));
+        if self.doc_steps.len() > KEPT {
+            self.doc_steps.remove(0);
+        }
+    }
+
     /// Drops everything in memory, so the next call reloads from disk.
     fn invalidate(&mut self) {
         self.graph = None;
@@ -1177,6 +1222,7 @@ impl Warm {
         self.parts = None;
         self.words = None;
         self.pending = None;
+        self.doc_steps.clear();
         // A queued job starts from a record this graph no longer follows.
         let mut st = self.writer.lock();
         st.slot = None;
@@ -1633,6 +1679,16 @@ pub(crate) fn query_index(
         .qindex
         .as_ref()?;
     Arc::ptr_eq(g, graph).then(|| Arc::clone(index))
+}
+
+/// The token bag changes of the patches of one pair, oldest first.
+pub(crate) fn doc_steps(root: &Path, context_dir: &Path) -> Vec<Arc<DocStep>> {
+    let warms = WARMS.lock().unwrap_or_else(PoisonError::into_inner);
+    warms
+        .iter()
+        .find(|w| w.root == root && w.context_dir == context_dir)
+        .map(|w| w.doc_steps.clone())
+        .unwrap_or_default()
 }
 
 /// The `word_grep_chars` figure for one name, from the word index when this
@@ -2656,6 +2712,158 @@ mod tests {
             body(&lookup_patch) == body(&fs::read(&lookup).unwrap()),
             "lookup differs"
         );
+        forget(&root, &ctx);
+    }
+
+    /// The text of a cold query on the tree on disk, as `find_code` prints it.
+    fn cold_query(root: &Path, ctx: &Path, word: &str, prefix: Option<&str>) -> String {
+        flush(root, ctx);
+        let wiring = fs::read(ctx.join(".graph").join("wiring.json")).unwrap();
+        let graph: Graph = serde_json::from_slice(&wiring).unwrap();
+        let index =
+            sieve_core::askindex::read_ask_index(&sieve_core::askindex::ask_index_path(ctx));
+        let opts = sieve_query::ask::AskOptions {
+            limit: 5,
+            in_prefix: prefix.map(str::to_string),
+            graph_rank: true,
+            source: true,
+            full: false,
+        };
+        let result = sieve_query::ask::ask(&graph, index.as_ref(), word, &opts, root).unwrap();
+        let body = sieve_query::ask::format_ask(&result);
+        if result.hits.is_empty() {
+            return body;
+        }
+        let baseline = sieve_query::ask::crux_baseline_chars(&graph, None, &result.hits);
+        sieve_savings::append_line(
+            &body,
+            &sieve_savings::ranked_line(result.hits.len(), baseline, &body),
+        )
+    }
+
+    /// Asks `word` through the tool, and checks the answer equals a cold query.
+    /// Gives the answer, and whether the disk write was still queued after it.
+    fn query_equals_cold(
+        root: &Path,
+        ctx: &Path,
+        word: &str,
+        prefix: Option<&str>,
+    ) -> (String, bool) {
+        let mut args = json!({ "query": word });
+        if let Some(p) = prefix {
+            args["in"] = json!(p);
+        }
+        let warm = call("sieve_query", &args, root, ctx).0;
+        let queued = with(root, ctx, |w| w.pending.is_some()).unwrap();
+        assert_eq!(warm, cold_query(root, ctx, word, prefix), "query {word}");
+        (warm, queued)
+    }
+
+    /// A query right after an edit answers from memory, with the ask index
+    /// write still queued, and gives the text of a cold query on the same tree.
+    #[test]
+    fn a_query_right_after_an_edit_matches_a_cold_query() {
+        let files = [
+            ("a.ts", "export function alpha() { return 1; }\n"),
+            ("b.ts", "export function bravo() { return bravotoken; }\n"),
+            ("c.ts", "export function charlie() { return 3; }\n"),
+            ("package.json", "{\"name\":\"a\"}\n"),
+            ("src/s.ts", "export function sfn() { return 1; }\n"),
+        ];
+        let (_s, root, ctx) = fixture("askpatch", &files);
+        query_equals_cold(&root, &ctx, "alpha", None);
+        settle(&root, &ctx);
+        let steps: [(&str, Option<&str>, &str); 4] = [
+            (
+                "a.ts",
+                Some("export function alpha() { return quokkaword; }\n"),
+                "quokkaword",
+            ),
+            (
+                "a.ts",
+                Some("export function omegarenamed() { return 1; }\n"),
+                "omegarenamed",
+            ),
+            ("b.ts", None, "bravotoken"),
+            (
+                "d.ts",
+                Some("export function delta() { return deltafresh; }\n"),
+                "deltafresh",
+            ),
+        ];
+        for (file, body, word) in steps {
+            match body {
+                Some(text) => fs::write(root.join(file), text).unwrap(),
+                None => fs::remove_file(root.join(file)).unwrap(),
+            }
+            assert!(
+                query_equals_cold(&root, &ctx, word, None).1,
+                "{file}: the query waited"
+            );
+        }
+
+        // Two patches before one query: the later one wins for the same file.
+        fs::write(
+            root.join("a.ts"),
+            "export function one() { return firstword; }\n",
+        )
+        .unwrap();
+        trace(&root, &ctx, "zzz");
+        fs::write(
+            root.join("a.ts"),
+            "export function one() { return secondword; }\n",
+        )
+        .unwrap();
+        assert!(query_equals_cold(&root, &ctx, "secondword", None).1);
+        query_equals_cold(&root, &ctx, "firstword", None);
+
+        // More patches than the chain keeps: the query reads the disk.
+        for i in 0..10 {
+            let text = format!("export function one() {{ return manyword{i}; }}\n");
+            fs::write(root.join("a.ts"), text).unwrap();
+            trace(&root, &ctx, "zzz");
+        }
+        query_equals_cold(&root, &ctx, "manyword9", None);
+
+        // A manifest edit with a source edit in one patch relinks the set.
+        settle(&root, &ctx);
+        let patches = stats(&root, &ctx).patches;
+        fs::write(
+            root.join("package.json"),
+            "{\"name\":\"b\",\"workspaces\":[\"x\"]}\n",
+        )
+        .unwrap();
+        fs::write(
+            root.join("a.ts"),
+            "export function one() { return linkword; }\n",
+        )
+        .unwrap();
+        assert!(
+            !query_equals_cold(&root, &ctx, "linkword", None).1,
+            "a relink must read the disk after the write"
+        );
+
+        assert_eq!(
+            stats(&root, &ctx).patches,
+            patches + 1,
+            "the relink patched"
+        );
+        // A failed write meets a cache that cannot take the patch (another prefix).
+        settle(&root, &ctx);
+        let patches = stats(&root, &ctx).patches;
+        *HOOK.lock().unwrap() = Some((ctx.clone(), true));
+        fs::write(
+            root.join("src/s.ts"),
+            "export function sfn() { return failword; }\n",
+        )
+        .unwrap();
+        let (answer, _) = query_equals_cold(&root, &ctx, "failword", Some("src"));
+        assert!(
+            answer.contains("sfn"),
+            "the answer lacks the edited node: {answer}"
+        );
+        assert_eq!(stats(&root, &ctx).patches, patches + 1, "the edit patched");
+        assert!(HOOK.lock().unwrap().is_none(), "the writer did not fail");
         forget(&root, &ctx);
     }
 

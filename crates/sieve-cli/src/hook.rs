@@ -634,15 +634,6 @@ impl SessionState {
 pub(crate) const SAVINGS_FORMULA: u64 = 2;
 
 impl SessionState {
-    /// The tokens this session saved by the current formula. An old file gives 0.
-    pub(crate) fn current_saved(&self) -> u64 {
-        if self.savings_formula == Some(SAVINGS_FORMULA) {
-            self.saved_tokens
-        } else {
-            0
-        }
-    }
-
     /// Adds `n` saved tokens to the session total and to today's local-day
     /// total.
     fn add_saved(&mut self, n: u64) {
@@ -667,6 +658,44 @@ pub struct ReadRecord {
     pub hash: String,
     #[serde(default)]
     pub denied: bool,
+    /// The 1-based inclusive line ranges the reads of this hash returned,
+    /// sorted and merged. An old state file has none, so nothing counts as
+    /// covered and the next read passes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ranges: Vec<(usize, usize)>,
+}
+
+/// The Read tool returns this many lines when the call sets no `limit`.
+const READ_DEFAULT_LINES: usize = 2000;
+
+/// The 1-based inclusive lines a Read call asks for.
+fn requested_lines(input: &Value) -> (usize, usize) {
+    let tool = input.get("tool_input");
+    let get = |k: &str| tool.and_then(|t| t.get(k)).and_then(Value::as_u64);
+    let start = get("offset").map_or(1, |n| (n as usize).max(1));
+    let count = get("limit").map_or(READ_DEFAULT_LINES, |n| (n as usize).max(1));
+    (start, start.saturating_add(count - 1))
+}
+
+impl ReadRecord {
+    /// True when one recorded range holds every line of `req`.
+    fn covers(&self, req: (usize, usize)) -> bool {
+        self.ranges.iter().any(|r| r.0 <= req.0 && req.1 <= r.1)
+    }
+
+    /// Adds `req` to the recorded ranges and merges ranges that touch.
+    fn add(&mut self, req: (usize, usize)) {
+        self.ranges.push(req);
+        self.ranges.sort_unstable();
+        let mut merged: Vec<(usize, usize)> = Vec::with_capacity(self.ranges.len());
+        for &(a, b) in &self.ranges {
+            match merged.last_mut() {
+                Some(last) if a <= last.1.saturating_add(1) => last.1 = last.1.max(b),
+                _ => merged.push((a, b)),
+            }
+        }
+        self.ranges = merged;
+    }
 }
 
 /// The longest session file stem, in bytes.
@@ -711,6 +740,49 @@ pub(crate) fn read_session(project_dir: &Path, id: &str) -> SessionState {
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
         .unwrap_or_default()
+}
+
+/// The tokens a session and its subagents saved by the current formula.
+///
+/// A subagent keeps its own file, `<session>.<agent>.json`. The function
+/// reads the session dir once. It parses only a file whose name starts with
+/// the session stem, so a file of another session costs a name check.
+pub(crate) fn read_session_total(project_dir: &Path, id: &str) -> u64 {
+    session_total_in(&cache_dir(project_dir).join("session"), id)
+}
+
+/// [`read_session_total`] for an explicit session directory.
+pub(crate) fn session_total_in(dir: &Path, id: &str) -> u64 {
+    #[derive(serde::Deserialize)]
+    struct Tally {
+        #[serde(rename = "savedTokens", default)]
+        saved_tokens: u64,
+        #[serde(rename = "savingsFormula", default)]
+        savings_formula: Option<u64>,
+    }
+    let stem = safe_session_stem(id);
+    let mut total = 0;
+    for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        let name = entry.file_name();
+        let Some(rest) = name
+            .to_str()
+            .and_then(|n| n.strip_prefix(stem.as_str()))
+            .and_then(|n| n.strip_suffix(".json"))
+        else {
+            continue;
+        };
+        // The main file has no suffix; a subagent file has `.<agent>`.
+        if !(rest.is_empty() || rest.starts_with('.')) {
+            continue;
+        }
+        let tally = std::fs::read(entry.path())
+            .ok()
+            .and_then(|b| serde_json::from_slice::<Tally>(&b).ok());
+        if let Some(t) = tally.filter(|t| t.savings_formula == Some(SAVINGS_FORMULA)) {
+            total += t.saved_tokens;
+        }
+    }
+    total
 }
 
 fn write_session(project_dir: &Path, id: &str, state: &SessionState) -> std::io::Result<()> {
@@ -940,6 +1012,26 @@ fn handle_session_start(project_dir: &Path) {
 // prompt
 // ---------------------------------------------------------------------------
 
+/// Wrappers the host puts around text that the user did not type: a
+/// subagent hand-back, a background task notice and a system notice.
+const SYSTEM_TEXT_WRAPPERS: [&str; 3] =
+    ["<agent-message", "<task-notification", "<system-reminder"];
+
+/// True if the prompt event carries host text, not a user prompt. The
+/// payload has no field that tells the two apart, so the check looks at
+/// the leading wrapper tag: its name must end at `>`, a space or the end
+/// of the text. A user prompt that starts with a pasted wrapper tag is
+/// therefore not stored as `lastQuery`.
+fn is_system_text(prompt: &str) -> bool {
+    SYSTEM_TEXT_WRAPPERS.iter().any(|w| {
+        prompt.strip_prefix(w).is_some_and(|rest| {
+            rest.chars()
+                .next()
+                .is_none_or(|c| c == '>' || c.is_whitespace())
+        })
+    })
+}
+
 fn handle_prompt(input: &Value, project_dir: &Path) {
     let prompt = input
         .get("prompt")
@@ -948,7 +1040,7 @@ fn handle_prompt(input: &Value, project_dir: &Path) {
         .trim()
         .to_string();
     // JS `.length`: UTF-16 code units, not chars (six emoji pass the floor).
-    if prompt.encode_utf16().count() < MIN_PROMPT_CHARS {
+    if prompt.encode_utf16().count() < MIN_PROMPT_CHARS || is_system_text(&prompt) {
         return;
     }
 
@@ -1493,27 +1585,29 @@ fn handle_pre_read(input: &Value, project_dir: &Path) -> Option<String> {
         // Every read clears the old narrow-read note. Only a narrowing below writes a
         // new one. So `post-read` never sends a note for a full read.
         session.narrowed.remove(&key);
-        let unchanged_and_not_yet_denied = session
-            .reads
-            .get(&key)
-            .is_some_and(|r| r.hash == hash && !r.denied);
-        if unchanged_and_not_yet_denied {
-            session
-                .reads
-                .insert(key.clone(), ReadRecord { hash, denied: true });
+        let req = requested_lines(input);
+        // Only a Read whose every line an earlier Read of these bytes
+        // returned may be skipped. A new line must reach the agent. This
+        // handler only checks coverage: `post-read` records the lines, so a
+        // Read that fails never counts as delivered.
+        let mut record = match session.reads.remove(&key) {
+            Some(r) if r.hash == hash => r,
+            _ => ReadRecord {
+                hash,
+                ..ReadRecord::default()
+            },
+        };
+        if record.covers(req) && !record.denied {
+            record.denied = true;
+            session.reads.insert(key.clone(), record);
             session.add_saved(bytes.len() as u64 / 4);
             return true;
         }
         // ponytail: the deny alternates by design, one deny per two reads. The
         // deny text names the escape, so the agent spends it only when it lost
         // the copy, not on every unchanged read.
-        session.reads.insert(
-            key.clone(),
-            ReadRecord {
-                hash,
-                denied: false,
-            },
-        );
+        record.denied = false;
+        session.reads.insert(key.clone(), record);
         false
     });
     if deny {
@@ -1538,9 +1632,8 @@ fn handle_pre_read(input: &Value, project_dir: &Path) -> Option<String> {
     let graph_answer = intercept::answer(project_dir, &context_dir, &intent);
     let note = intercept::decide(&intent, Some(raw_bytes), graph_answer)?;
     let (_, recorded) = update_session_checked(project_dir, session_id, |session| {
-        // The repeat-read rule's record claims that the agent holds the content. The narrow-read rule did not
-        // deliver the content. So the narrow-read rule removes the record.
-        session.reads.remove(&key);
+        // The record keeps only the lines earlier Reads returned. `post-read`
+        // adds the narrowed range, because the call below returns only that.
         session.narrowed.insert(key, note);
     });
     recorded.then(|| pre_read_narrow_json(file_path))
@@ -1583,7 +1676,19 @@ fn handle_post_read(input: &Value, project_dir: &Path) -> Option<String> {
         .to_string_lossy()
         .into_owned();
     let note = update_session(project_dir, session_id, |session| {
-        session.narrowed.remove(&key)
+        let note = session.narrowed.remove(&key);
+        // The host runs this hook only after a Read succeeds, so the lines
+        // are delivered. A narrowed Read returned the narrowed range, not
+        // the range the agent asked for.
+        let lines = if note.is_some() {
+            (1, intercept::NARROWED_LINES as usize)
+        } else {
+            requested_lines(input)
+        };
+        if let Some(record) = session.reads.get_mut(&key) {
+            record.add(lines);
+        }
+        note
     });
     // One line when the read range holds a node with a decision link.
     let hint = why_read_hint(input, project_dir, file_path);
@@ -2821,13 +2926,94 @@ mod tests {
         std::fs::write(&file, "one").expect("write file");
         let input = pre_read_input("s1", &file);
 
-        assert_eq!(handle_pre_read(&input, &dir.path), None);
+        assert_eq!(delivered_read(&input, &dir.path), None);
         let second = handle_pre_read(&input, &dir.path);
         assert!(
             second.is_some(),
             "the second read of an unchanged file must deny"
         );
         assert!(second.unwrap().contains("\"permissionDecision\":\"deny\""));
+    }
+
+    /// Runs the pre-read hook and, when the Read passes, the post-read hook,
+    /// as the host does for a Read that succeeds.
+    fn delivered_read(input: &Value, project_dir: &Path) -> Option<String> {
+        let out = handle_pre_read(input, project_dir);
+        if out.is_none() {
+            handle_post_read(input, project_dir);
+        }
+        out
+    }
+
+    /// A Read input with a line range.
+    fn ranged_read(file: &Path, offset: u64, limit: u64) -> Value {
+        let mut input = pre_read_input("s1", file);
+        input["tool_input"]["offset"] = Value::from(offset);
+        input["tool_input"]["limit"] = Value::from(limit);
+        input
+    }
+
+    fn lines_file(label: &str) -> (TempDir, PathBuf) {
+        let dir = TempDir::new(label);
+        let file = dir.path.join("a.txt");
+        let body: String = (1..=400).map(|n| format!("line {n}\n")).collect();
+        std::fs::write(&file, body).expect("write file");
+        (dir, file)
+    }
+
+    #[test]
+    fn pre_read_allows_a_range_never_read() {
+        let (dir, file) = lines_file("pre-read-new-range");
+        assert_eq!(delivered_read(&ranged_read(&file, 1, 100), &dir.path), None);
+        assert_eq!(
+            delivered_read(&ranged_read(&file, 200, 101), &dir.path),
+            None
+        );
+    }
+
+    #[test]
+    fn pre_read_skips_only_when_the_union_covers() {
+        let (dir, file) = lines_file("pre-read-union");
+        assert_eq!(delivered_read(&ranged_read(&file, 1, 100), &dir.path), None);
+        assert_eq!(
+            delivered_read(&ranged_read(&file, 101, 100), &dir.path),
+            None
+        );
+        assert!(handle_pre_read(&ranged_read(&file, 1, 200), &dir.path).is_some());
+    }
+
+    #[test]
+    fn pre_read_skips_a_range_after_a_whole_file_read() {
+        let (dir, file) = lines_file("pre-read-whole-then-range");
+        let whole = pre_read_input("s1", &file);
+        assert_eq!(delivered_read(&whole, &dir.path), None);
+        assert!(handle_pre_read(&ranged_read(&file, 300, 50), &dir.path).is_some());
+    }
+
+    #[test]
+    fn pre_read_allows_a_retry_after_a_failed_read() {
+        let (dir, file) = lines_file("pre-read-failed-read");
+        // The host never runs post-read for a Read that fails.
+        assert_eq!(
+            handle_pre_read(&ranged_read(&file, 1, 100), &dir.path),
+            None
+        );
+        assert_eq!(
+            handle_pre_read(&ranged_read(&file, 1, 100), &dir.path),
+            None
+        );
+    }
+
+    #[test]
+    fn pre_read_allows_the_span_a_narrowed_read_names() {
+        let (dir, file) = large_file_project("pre-read-narrow-then-span");
+        let whole = read_tool_input("s1", &file);
+        let narrowed = handle_pre_read(&whole, &dir.path).expect("large file narrows");
+        assert!(narrowed.contains("updatedInput"));
+        handle_post_read(&whole, &dir.path);
+        // The narrowed Read returned the first lines only; a later span passes.
+        let span = ranged_read(&file, 200, 50);
+        assert_eq!(handle_pre_read(&span, &dir.path), None);
     }
 
     #[test]
@@ -2839,7 +3025,7 @@ mod tests {
         sub["agent_id"] = Value::from("a1");
         let parent = pre_read_input("s1", &file);
 
-        assert_eq!(handle_pre_read(&sub, &dir.path), None);
+        assert_eq!(delivered_read(&sub, &dir.path), None);
         assert_eq!(handle_pre_read(&parent, &dir.path), None);
         assert!(handle_pre_read(&sub, &dir.path).is_some());
     }
@@ -2852,7 +3038,7 @@ mod tests {
         let mut input = pre_read_input("s1", &file);
         input["agent_id"] = Value::from("a1");
 
-        assert_eq!(handle_pre_read(&input, &dir.path), None);
+        assert_eq!(delivered_read(&input, &dir.path), None);
         assert!(handle_pre_read(&input, &dir.path).is_some());
     }
 
@@ -2886,7 +3072,7 @@ mod tests {
         std::fs::write(&file, "one").expect("write file");
         let input = pre_read_input("s1", &file);
 
-        assert_eq!(handle_pre_read(&input, &dir.path), None);
+        assert_eq!(delivered_read(&input, &dir.path), None);
         let second = handle_pre_read(&input, &dir.path).expect("second read must deny");
         assert!(
             second.contains("again"),
@@ -2913,11 +3099,7 @@ mod tests {
         std::fs::write(&file, "one").expect("write file");
         let input = pre_read_input("s1", &file);
 
-        assert_eq!(
-            handle_pre_read(&input, &dir.path),
-            None,
-            "first read passes"
-        );
+        assert_eq!(delivered_read(&input, &dir.path), None, "first read passes");
         assert!(
             handle_pre_read(&input, &dir.path).is_some(),
             "second read denies"
@@ -2936,7 +3118,7 @@ mod tests {
         std::fs::write(&file, "some bytes to read twice").expect("write file");
         let input = pre_read_input("s1", &file);
 
-        handle_pre_read(&input, &dir.path);
+        delivered_read(&input, &dir.path);
         handle_pre_read(&input, &dir.path);
 
         let session = read_session(&dir.path, "s1");
@@ -2975,7 +3157,7 @@ mod tests {
         let relative_input = pre_read_input("s1", Path::new("a.txt"));
 
         assert_eq!(
-            handle_pre_read(&absolute_input, &dir.path),
+            delivered_read(&absolute_input, &dir.path),
             None,
             "first read, by the absolute path, must pass"
         );
@@ -3007,6 +3189,7 @@ mod tests {
                         ReadRecord {
                             hash: "h".into(),
                             denied: true,
+                            ranges: Vec::new(),
                         },
                     );
                 });
@@ -3174,7 +3357,7 @@ mod tests {
     fn test_f1_pre_read_span_passthrough_keeps_the_f3_deny() {
         let (dir, file) = long_line_project("f1-read-span-f3");
         let input = span_read_input("s1", &file);
-        assert_eq!(handle_pre_read(&input, &dir.path), None);
+        assert_eq!(delivered_read(&input, &dir.path), None);
         let second = handle_pre_read(&input, &dir.path).expect("F3 denies the repeat");
         assert!(second.contains("\"permissionDecision\":\"deny\""));
     }
@@ -3269,11 +3452,7 @@ mod tests {
         std::fs::write(&file, "pub fn one() {}\n").expect("write file");
         let input = read_tool_input("s1", &file);
 
-        assert_eq!(
-            handle_pre_read(&input, &dir.path),
-            None,
-            "first read passes"
-        );
+        assert_eq!(delivered_read(&input, &dir.path), None, "first read passes");
         let second = handle_pre_read(&input, &dir.path).expect("second read denies");
         assert!(
             second.contains("\"permissionDecision\":\"deny\""),
@@ -3565,7 +3744,7 @@ mod tests {
         std::fs::write(&small, "pub fn one() {}\n").expect("write file");
         // A Read of the small file passes and writes its repeat-read record.
         assert_eq!(
-            handle_pre_read(&read_tool_input("s1", &small), &dir.path),
+            delivered_read(&read_tool_input("s1", &small), &dir.path),
             None
         );
         let before = read_session(&dir.path, "s1").reads;
@@ -3583,6 +3762,56 @@ mod tests {
             second.is_some_and(|s| s.contains("\"deny\"")),
             "F3 still denies the second Read after a cat"
         );
+    }
+
+    #[test]
+    fn prompt_hook_keeps_the_last_query_on_host_text() {
+        // Over the cap, a real prompt is recorded with no graph load.
+        struct ResetCap;
+        impl Drop for ResetCap {
+            fn drop(&mut self) {
+                set_test_wiring_cap(None);
+            }
+        }
+        set_test_wiring_cap(Some(1));
+        let _reset = ResetCap;
+        let dir = capped_project("prompt-host-text");
+        update_session(&dir.path, "s1", |s| {
+            s.last_query = Some("where is the parser".into());
+        });
+        for text in [
+            "<agent-message from=\"a1\">Report: the parser lives in parse.rs</agent-message>",
+            "<task-notification>background task finished</task-notification>",
+        ] {
+            handle_prompt(
+                &serde_json::json!({"session_id": "s1", "prompt": text}),
+                &dir.path,
+            );
+        }
+        assert_eq!(
+            read_session(&dir.path, "s1").last_query.as_deref(),
+            Some("where is the parser")
+        );
+        assert!(is_system_text("<agent-message>x"));
+        assert!(!is_system_text("<agent-messages>x"));
+        assert!(!is_system_text("fix the <agent-message> bug"));
+    }
+
+    #[test]
+    fn statusline_session_total_counts_subagent_files_only_of_that_session() {
+        let dir = TempDir::new("session-total");
+        let save = |id: &str, n: u64| {
+            update_session(&dir.path, id, |s| {
+                s.savings_formula = Some(SAVINGS_FORMULA);
+                s.saved_tokens = n;
+            });
+        };
+        save("s1", 100);
+        save("s1.agentA", 20);
+        save("s1.agentB", 3);
+        save("s10", 5000);
+        save("s2.agentA", 7000);
+        assert_eq!(read_session_total(&dir.path, "s1"), 123);
     }
 
     #[test]

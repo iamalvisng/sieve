@@ -140,14 +140,24 @@ pub fn def_line(name: &str, baseline_chars: u64, body: &str) -> String {
     )
 }
 
-/// The answer line of `grep` and `find_all`: no saving number.
-pub fn hits_line(hits: usize, symbols: usize) -> String {
-    answer_line(&format!("{hits} hits in {symbols} symbols"), 0)
+/// The answer line of `grep` and `find_all`: the saving against
+/// `baseline_chars` of `grep -n` rows for the same hits. A `baseline_chars` of
+/// 0 prints no saving.
+pub fn hits_line(hits: usize, symbols: usize, baseline_chars: u64, body: &str) -> String {
+    answer_line(
+        &format!("{hits} hits in {symbols} symbols"),
+        saved_tokens(baseline_chars, body),
+    )
 }
 
-/// The answer line of a ranked `ask` and `find_code`: no saving number.
-pub fn ranked_line(hits: usize) -> String {
-    answer_line(&format!("{hits} ranked hits"), 0)
+/// The answer line of a ranked `ask` and `find_code`: the saving against
+/// `baseline_chars` of source the answer cut to a short excerpt. A
+/// `baseline_chars` of 0 prints no saving.
+pub fn ranked_line(hits: usize, baseline_chars: u64, body: &str) -> String {
+    answer_line(
+        &format!("{hits} ranked hits"),
+        saved_tokens(baseline_chars, body),
+    )
 }
 
 /// The answer line of a ready `rename` plan.
@@ -335,8 +345,16 @@ mod tests {
             "\u{1f3af} exact body of run \u{b7} ~100 tokens saved"
         );
         assert_eq!(callers_line(2, 40, &body), "\u{1f3af} 2 exact callers");
-        assert_eq!(hits_line(9, 4), "\u{1f3af} 9 hits in 4 symbols");
-        assert_eq!(ranked_line(5), "\u{1f3af} 5 ranked hits");
+        assert_eq!(hits_line(9, 4, 40, &body), "\u{1f3af} 9 hits in 4 symbols");
+        assert_eq!(ranked_line(5, 40, &body), "\u{1f3af} 5 ranked hits");
+        assert_eq!(
+            hits_line(9, 4, 440, &body),
+            "\u{1f3af} 9 hits in 4 symbols \u{b7} ~100 tokens saved"
+        );
+        assert_eq!(
+            ranked_line(5, 440, &body),
+            "\u{1f3af} 5 ranked hits \u{b7} ~100 tokens saved"
+        );
         assert_eq!(rename_line(3), "\u{1f3af} 3 files \u{b7} 0 unproven edits");
     }
 

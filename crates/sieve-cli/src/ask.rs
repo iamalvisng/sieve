@@ -8,7 +8,8 @@ use clap::Args;
 use sieve_core::askindex::{ask_index_path, read_ask_index};
 use sieve_core::workspace;
 use sieve_query::ask::{
-    ask, define, format_ask, format_ask_json, format_def, single_ident, AskOptions, AskSaved, Ident,
+    ask, crux_baseline_chars, define, format_ask, format_ask_json, format_def, single_ident,
+    AskOptions, AskSaved, Ident,
 };
 use sieve_query::workspace::{federate_ask, FederateAskOptions};
 use sieve_savings::{append_line, def_line, ranked_line, savings_for};
@@ -107,7 +108,7 @@ pub fn run(args: &AskArgs, dir_override: Option<&Path>) -> Result<(), String> {
         return Ok(());
     }
 
-    print!("{}", render_text(&result));
+    print!("{}", render_text(&graph, &result));
     Ok(())
 }
 
@@ -170,12 +171,13 @@ fn source_saved(
 
 /// Renders the text report, with the ranked answer line as the last line
 /// when the result holds a hit.
-fn render_text(result: &sieve_query::ask::AskResult) -> String {
+fn render_text(graph: &sieve_core::wiring::Graph, result: &sieve_query::ask::AskResult) -> String {
     let body = format_ask(result);
     if result.hits.is_empty() {
         body
     } else {
-        append_line(&body, &ranked_line(result.hits.len()))
+        let baseline = crux_baseline_chars(graph, None, &result.hits);
+        append_line(&body, &ranked_line(result.hits.len(), baseline, &body))
     }
 }
 
@@ -240,6 +242,7 @@ mod tests {
                 scope: None,
                 code: None,
                 scope_last: false,
+                cut: false,
                 path: path.to_string(),
                 span: span.map(|s| s.to_string()),
             }

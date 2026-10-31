@@ -5,6 +5,22 @@ All notable changes to this project are in this file.
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.4] - 2026-10-31
+
+This release makes a warm MCP `query` faster, fixes the Read hook, and makes the status line count subagent work.
+
+### Changed
+
+- A warm MCP `query` does no per-query copy of the link graph. On the vite repo on Linux, with no file change since the last call: 24–31 ms in 0.2.3 to 8–16 ms.
+- The first warm `query` after a file edit reads the changed files from memory and does not wait for the index write. On the vite repo on Linux: 350–373 ms in 0.2.3 to 236–239 ms.
+- `find` and `query` print `~N tokens saved` on the answer line when the answer is smaller than its baseline. `find` compares with the plain grep rows. `query` counts only code that it cuts from a symbol longer than 80 lines. Many calls save nothing, and then the line shows no figure.
+- The status line counts the main session and its subagents in "this session". Before, it counted only the main session.
+
+### Fixed
+
+- The Read hook skips a Read only when earlier Reads of the unchanged file returned every requested line. Before, a second Read was skipped even for lines that the agent never saw. A failed Read no longer counts as read.
+- The prompt hook no longer stores a subagent report or a host notice as the last query.
+
 ## [0.2.3] - 2026-10-31
 
 This release makes warm MCP `query` and `find` calls faster.

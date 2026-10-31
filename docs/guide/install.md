@@ -46,7 +46,7 @@ cargo install --locked --git https://github.com/iamalvisng/sieve sieve-cli
 sieve --version
 ```
 
-Release 0.2.3 prints `0.2.3`.
+Release 0.2.4 prints `0.2.4`.
 
 ## Check a downloaded archive
 

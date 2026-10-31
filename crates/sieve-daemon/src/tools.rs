@@ -16,7 +16,7 @@ use sieve_parse::{
     check_context, check_graph, check_graph_lookup, federated_check_text, format_check_report,
     format_graph_check_report, GraphCheck, LookupCheck,
 };
-use sieve_query::ask::{ask, ask_warm, format_ask, AskOptions, WarmKey};
+use sieve_query::ask::{ask, ask_warm, crux_baseline_chars, format_ask, AskOptions, WarmKey};
 use sieve_query::callers::{
     callers_hit_count, edge_walk_with, render_block, resolve_symbol_with, CallersError, Depth,
     Direction, Hit,
@@ -125,6 +125,14 @@ fn base_tool(canonical: &str) -> &str {
     canonical.strip_prefix(&prefix).unwrap_or(canonical)
 }
 
+/// The refresh options the environment asks for.
+fn refresh_options() -> RefreshOptions {
+    RefreshOptions {
+        disabled: env_truthy(&product().env_var("NO_REFRESH")) && !refresh_forced(),
+        force_hash: std::env::var(product().env_var("REFRESH")).as_deref() == Ok("hash"),
+    }
+}
+
 /// Waits for the disk writes of the warm index. If they failed and dropped the
 /// graph, refreshes again, so the call reads one state: the new disk.
 fn reload_if_dropped(
@@ -173,10 +181,7 @@ pub fn call(name: &str, args: &Value, root: &Path, context_dir: &Path) -> (Strin
     let note = if base_tool(&canonical) == "check" {
         None
     } else {
-        let opts = RefreshOptions {
-            disabled: env_truthy(&product().env_var("NO_REFRESH")) && !refresh_forced(),
-            force_hash: std::env::var(product().env_var("REFRESH")).as_deref() == Ok("hash"),
-        };
+        let opts = refresh_options();
         // A workspace root keeps the full path: a parent has no graph of
         // its own, and each child needs its own watcher. Only a single
         // root uses the warm index.
@@ -197,11 +202,13 @@ pub fn call(name: &str, args: &Value, root: &Path, context_dir: &Path) -> (Strin
         }
         // These tools read only the graph in memory. That graph matches the
         // source files, because the watch feeds every edit into it before the
-        // answer, and a queued disk write cannot change it. The others read
-        // the ask-index, the lookup or the cards, so the patch writes first.
+        // answer, and a queued disk write cannot change it. `query` reads the
+        // ask-index only when its cache cannot take the patch, and then it
+        // waits for the write itself. The others read the lookup or the cards,
+        // so the patch writes first.
         if !matches!(
             base_tool(&canonical),
-            "callers" | "find" | "map" | "symbols"
+            "callers" | "find" | "map" | "symbols" | "query"
         ) {
             reload_if_dropped(root, context_dir, &opts, &mut outcome);
         }
@@ -304,7 +311,7 @@ fn call_workspace(
                 let body = format_grep_result(&fed.result);
                 append_line(
                     &body,
-                    &hits_line(fed.result.total_hits, fed.result.groups.len()),
+                    &hits_line(fed.result.total_hits, fed.result.groups.len(), 0, &body),
                 )
             };
             let coverage = coverage_note(&graphs);
@@ -572,6 +579,48 @@ fn file_stamp(path: &Path) -> Option<(u128, u64)> {
     Some((ns, meta.len()))
 }
 
+/// Answers from the warm graph. The ask index file is read only when the
+/// cache cannot take the patches, and then after the pending disk writes end.
+/// If those writes failed, the warm graph is gone. The answer then comes from
+/// the graph and the index that a new refresh wrote.
+fn ask_from_memory(
+    graph: &std::sync::Arc<Graph>,
+    query: &str,
+    opts: &AskOptions,
+    root: &Path,
+    context_dir: &Path,
+) -> Result<sieve_query::ask::AskResult, sieve_query::ask::AskError> {
+    let index_path = ask_index_path(context_dir);
+    let write_failed = std::cell::Cell::new(false);
+    let load_index = || {
+        if crate::warm::flush(root, context_dir) {
+            write_failed.set(true);
+            return None;
+        }
+        read_ask_index(&index_path)
+    };
+    let steps = crate::warm::doc_steps(root, context_dir);
+    let key = WarmKey {
+        graph,
+        index_stamp: &|| file_stamp(&index_path),
+        load_index: &load_index,
+        steps: &steps,
+    };
+    let result = ask_warm(&key, query, opts, root);
+    if !write_failed.get() {
+        return result;
+    }
+    crate::warm::refresh(root, context_dir, &refresh_options());
+    let graph = load_graph(context_dir).unwrap_or_else(|| std::sync::Arc::new(empty_graph()));
+    ask(
+        &graph,
+        read_ask_index(&index_path).as_ref(),
+        query,
+        opts,
+        root,
+    )
+}
+
 fn find_code(args: &Value, root: &Path, context_dir: &Path) -> (String, bool) {
     let query = js_string_arg(args, "query");
     if query.is_empty() {
@@ -582,6 +631,9 @@ fn find_code(args: &Value, root: &Path, context_dir: &Path) -> (String, bool) {
     }
 
     let warm_graph = crate::warm::current_graph(context_dir);
+    if warm_graph.is_none() {
+        crate::warm::flush(root, context_dir);
+    }
     let graph = warm_graph
         .clone()
         .or_else(|| load_graph(context_dir))
@@ -603,14 +655,7 @@ fn find_code(args: &Value, root: &Path, context_dir: &Path) -> (String, bool) {
     // A graph from the warm path stays the same `Arc` until a refresh changes
     // it, so the corpus built for it is reused. Any other graph is read fresh.
     let result = match &warm_graph {
-        Some(graph) => {
-            let key = WarmKey {
-                graph,
-                index_stamp: file_stamp(&index_path),
-                load_index: &|| read_ask_index(&index_path),
-            };
-            ask_warm(&key, &query, &opts, root)
-        }
+        Some(graph) => ask_from_memory(graph, &query, &opts, root, context_dir),
         None => ask(
             &graph,
             read_ask_index(&index_path).as_ref(),
@@ -628,7 +673,9 @@ fn find_code(args: &Value, root: &Path, context_dir: &Path) -> (String, bool) {
     let text = if result.hits.is_empty() {
         body
     } else {
-        append_line(&body, &ranked_line(result.hits.len()))
+        let index = crate::warm::query_index(root, context_dir, &graph);
+        let baseline = crux_baseline_chars(&graph, index.as_deref(), &result.hits);
+        append_line(&body, &ranked_line(result.hits.len(), baseline, &body))
     };
     (text, false)
 }
@@ -823,7 +870,12 @@ fn find_all(args: &Value, root: &Path, context_dir: &Path) -> (String, bool) {
         return (zero_hit_note(&result), false);
     }
     let body = format_grep_result(&result);
-    let line = hits_line(result.total_hits, result.groups.len());
+    let line = hits_line(
+        result.total_hits,
+        result.groups.len(),
+        result.row_chars(),
+        &body,
+    );
     (append_line(&body, &line), false)
 }
 

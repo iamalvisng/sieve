@@ -74,6 +74,24 @@ pub struct GrepResult {
     pub truncated: GrepTruncated,
 }
 
+impl GrepResult {
+    /// The UTF-16 length of the `path:line:text` rows a plain `grep -n` would
+    /// print for the hits in `groups`. Hits past the cap are not in `groups`,
+    /// so they do not count.
+    pub fn row_chars(&self) -> u64 {
+        let mut sum = 0u64;
+        for group in &self.groups {
+            let path = group.path.encode_utf16().count() as u64;
+            for hit in &group.hits {
+                let digits = u64::from(hit.line.checked_ilog10().unwrap_or(0)) + 1;
+                // `path` + `:` + line + `:` + text + `\n`
+                sum += path + 2 + digits + hit.text.encode_utf16().count() as u64 + 1;
+            }
+        }
+        sum
+    }
+}
+
 /// Renders the `PrefixNotIndexed` message, with the scope list only when
 /// there is more than one scope to name.
 fn prefix_not_indexed_message(prefix: &str, scopes: &[String]) -> String {

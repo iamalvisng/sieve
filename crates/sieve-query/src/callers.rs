@@ -196,6 +196,14 @@ impl GraphIndex {
             by_id,
         }
     }
+
+    /// The node of `graph` with `id`, in one lookup. `graph` must be the
+    /// graph this index was built for.
+    pub(crate) fn node<'g>(&self, graph: &'g Graph, id: &str) -> Option<&'g Node> {
+        self.by_id
+            .get(id)
+            .and_then(|&i| graph.nodes.get(i as usize))
+    }
 }
 
 /// [`resolve_symbol`] with an index built for the same graph.
@@ -1205,6 +1213,27 @@ mod tests {
             );
         }
         assert!(word_grep_chars(&g, &dir, "run") > 0);
+    }
+
+    #[test]
+    fn grep_row_chars_matches_the_reference() {
+        let dir = crate::test_support::TempDir::new("grep-row-chars");
+        let g = word_fixture(&dir);
+        let opts = GrepOptions {
+            ignore_case: false,
+            fixed: false,
+            in_prefix: None,
+            max_hits: 1_000_000,
+        };
+        for word in ["run", "runner", "a", "caf\u{e9}", "\u{1D4BB}", "absent"] {
+            let pattern = format!(r"\b{}\b", escape_regex(word));
+            let result = grep_graph(&g, &dir, &pattern, &opts).expect("grep");
+            assert_eq!(
+                result.row_chars(),
+                word_grep_chars_reference(&g, &dir, word),
+                "word {word}"
+            );
+        }
     }
 
     #[test]

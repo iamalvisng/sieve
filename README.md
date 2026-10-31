@@ -94,7 +94,7 @@ The MCP server keeps the index in memory and watches your files, so an answer ne
 
 Warm MCP calls on a clone of the vite repo (commit 90bc034a, about 1,600 files). The test ran in a Linux arm64 Docker container with release builds. Each cell is the median of 5 calls after one warm-up. The range shows two runs. No file changed between the calls.
 
-After a file edit, the first `query` rebuilds its cache, so it does not get this speed. That case is not in the table. After an edit, `find` reads again only the edited file.
+After a file edit, `find` reads again only the edited file. The first `query` after an edit is slower; the second table shows it.
 
 | Call | 0.2.0 | 0.2.1 | 0.2.2 | 0.2.3 |
 |---|---|---|---|---|
@@ -102,6 +102,18 @@ After a file edit, the first `query` rebuilds its cache, so it does not get this
 | `find`, plain text | 44–57 ms | 47–60 ms | 18–21 ms | 7–8 ms |
 | `find`, regex | 45–49 ms | 46–61 ms | 19–23 ms | 7–8 ms |
 | `callers` | 70–71 ms | 71–80 ms | 0.4–0.5 ms | 0.4–0.5 ms |
+
+0.2.3 against 0.2.4, measured in one later session with the same method. The 0.2.3 release binary is faster here than in the first table, so compare only within one table.
+
+| Call | 0.2.3 | 0.2.4 |
+|---|---|---|
+| `query` | 24–31 ms | 8–16 ms |
+| `query`, first call after a file edit | 350–373 ms | 236–239 ms |
+| `find`, plain text | 6 ms | 6 ms |
+| `find`, regex | 5–6 ms | 5–6 ms |
+| `callers` | 0.3 ms | 0.3 ms |
+
+The after-edit row appends one line to one file, waits 300 ms, then times one `query`.
 
 macOS shows the same trend. The macOS numbers are not in this table because the measuring Mac was under load.
 

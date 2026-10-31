@@ -39,13 +39,13 @@ pub fn run(_args: &StatuslineArgs, _dir_override: Option<&Path>) -> Result<(), S
         .and_then(Value::as_str)
         .filter(|s| !s.is_empty())
         .unwrap_or("default");
-    let session = hook::read_session(&project_dir, session_id);
 
     if let Some(agent) = input
         .get("agent")
         .and_then(|a| a.get("name"))
         .and_then(Value::as_str)
     {
+        let session = hook::read_session(&project_dir, session_id);
         print!("{}", render_subagent(agent, &session));
         return Ok(());
     }
@@ -58,12 +58,7 @@ pub fn run(_args: &StatuslineArgs, _dir_override: Option<&Path>) -> Result<(), S
         .map(|p| p.round() as i64);
     print!(
         "{}",
-        render_sieve_now(
-            stats.as_ref(),
-            &project_dir,
-            ctx_pct,
-            session.current_saved()
-        )
+        render_sieve_now(stats.as_ref(), &project_dir, ctx_pct, session_id)
     );
     Ok(())
 }
@@ -528,14 +523,16 @@ fn session_stamp(session_dir: &Path) -> u64 {
     files.chain([nanos(session_dir)]).max().unwrap_or(0)
 }
 
-/// Returns the saved tokens (today, last 7 days) from a small cache file.
-/// The cache stays valid while the session stamp is the same and under
+/// Returns the saved tokens (today, last 7 days, this session with its
+/// subagents) from a small cache file. The cache stays valid for the same
+/// session id while the session stamp is the same and under
 /// `SAVINGS_TTL_SECS` old. Else `compute` runs and the cache is rewritten.
 fn cached_savings(
     context_dir: &Path,
     now: u64,
-    compute: impl FnOnce() -> (u64, u64),
-) -> (u64, u64) {
+    session_id: &str,
+    compute: impl FnOnce() -> (u64, u64, u64),
+) -> (u64, u64, u64) {
     let stamp = session_stamp(&context_dir.join(".cache").join("session"));
     let path = context_dir.join(".cache").join("statusline-savings.json");
     let field = |v: &Value, k: &str| v.get(k).and_then(Value::as_u64);
@@ -543,23 +540,34 @@ fn cached_savings(
         .ok()
         .and_then(|t| serde_json::from_str::<Value>(&t).ok())
         .filter(|v| field(v, "stamp") == Some(stamp))
+        .filter(|v| v.get("sid").and_then(Value::as_str) == Some(session_id))
         .filter(|v| field(v, "at").is_some_and(|at| now.saturating_sub(at) < SAVINGS_TTL_SECS))
-        .and_then(|v| Some((field(&v, "today")?, field(&v, "week")?)));
+        .and_then(|v| {
+            Some((
+                field(&v, "today")?,
+                field(&v, "week")?,
+                field(&v, "session")?,
+            ))
+        });
     if let Some(totals) = hit {
         return totals;
     }
-    let (today, week) = compute();
-    let body = serde_json::json!({"stamp": stamp, "at": now, "today": today, "week": week});
+    let (today, week, session) = compute();
+    let body = serde_json::json!({
+        "stamp": stamp, "at": now, "sid": session_id,
+        "today": today, "week": week, "session": session,
+    });
     // A failed write only costs a recompute on the next run.
     let _ = std::fs::write(&path, body.to_string());
-    (today, week)
+    (today, week, session)
 }
 
-/// Reads the saved tokens for today and for the last 7 days. The numbers
-/// come from `savings_report`, the code behind `sieve stats --json`.
-fn read_savings(project_dir: &Path, now: u64) -> (u64, u64) {
+/// Reads the saved tokens for today, for the last 7 days and for the
+/// session with its subagents. The day numbers come from `savings_report`,
+/// the code behind `sieve stats --json`.
+fn read_savings(project_dir: &Path, now: u64, session_id: &str) -> (u64, u64, u64) {
     let context_dir = crate::stats::stats_context_dir(project_dir);
-    cached_savings(&context_dir, now, || {
+    cached_savings(&context_dir, now, session_id, || {
         let report = crate::stats::savings_report(
             &context_dir,
             None,
@@ -574,7 +582,11 @@ fn read_savings(project_dir: &Path, now: u64) -> (u64, u64) {
                 .and_then(crate::jsonv::Json::as_f64)
                 .unwrap_or(0.0) as u64
         };
-        (tokens("today"), tokens("last7daysTotal"))
+        (
+            tokens("today"),
+            tokens("last7daysTotal"),
+            hook::read_session_total(project_dir, session_id),
+        )
     })
 }
 
@@ -583,14 +595,14 @@ fn render_sieve_now(
     stats: Option<&Stats>,
     project_dir: &Path,
     ctx_pct: Option<i64>,
-    session: u64,
+    session_id: &str,
 ) -> String {
     let depth = depth_from(
         std::env::var("NO_COLOR").ok().as_deref(),
         std::env::var("COLORTERM").ok().as_deref(),
     );
     let now = crate::telemetry::now_secs();
-    let text = render_sieve_at(stats, project_dir, ctx_pct, session, now, depth);
+    let text = render_sieve_at(stats, project_dir, ctx_pct, session_id, now, depth);
     let note = setup_note(project_dir, now);
     if note.is_empty() {
         return text;
@@ -679,12 +691,12 @@ fn render_sieve_at(
     stats: Option<&Stats>,
     project_dir: &Path,
     ctx_pct: Option<i64>,
-    session: u64,
+    session_id: &str,
     now: u64,
     depth: Depth,
 ) -> String {
     let name = read_mascot(&project_dir.join(product().home_dir_name()));
-    let (today, _week) = read_savings(project_dir, now);
+    let (today, _week, session) = read_savings(project_dir, now, session_id);
     render_sieve(&SieveView {
         stats,
         ctx_pct,
@@ -1128,18 +1140,24 @@ mod tests {
         std::fs::create_dir_all(&session).expect("make session dir");
         let reads = std::cell::Cell::new(0);
         let call = |now: u64| {
-            cached_savings(&ctx, now, || {
+            cached_savings(&ctx, now, "s1", || {
                 reads.set(reads.get() + 1);
-                (reads.get() as u64, 9)
+                (reads.get() as u64, 9, 5)
             })
         };
-        assert_eq!(call(100), (1, 9));
-        assert_eq!(call(110), (1, 9), "no session change: the cache serves it");
+        assert_eq!(call(100), (1, 9, 5));
+        assert_eq!(
+            call(110),
+            (1, 9, 5),
+            "no session change: the cache serves it"
+        );
         assert_eq!(reads.get(), 1);
-        assert_eq!(call(131), (2, 9), "the cache expires after 30 seconds");
+        assert_eq!(call(131), (2, 9, 5), "the cache expires after 30 seconds");
         std::fs::write(session.join("a.json"), "{}").expect("write session");
-        assert_eq!(call(132), (3, 9), "a new session file busts the cache");
+        assert_eq!(call(132), (3, 9, 5), "a new session file busts the cache");
         assert_eq!(reads.get(), 3);
+        let other = cached_savings(&ctx, 132, "s2", || (0, 0, 8));
+        assert_eq!(other.2, 8, "another session id does not read the cache");
         std::fs::remove_dir_all(&ctx).expect("remove dir");
     }
 
@@ -1304,7 +1322,7 @@ mod tests {
                 Some(&stats),
                 &dir,
                 None,
-                0,
+                "default",
                 0,
                 Depth::Plain,
             ))

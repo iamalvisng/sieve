@@ -29,36 +29,42 @@ use super::select::{build_candidates, rank_files_bounded, title_key, FileGroup, 
 use super::{AlsoMatched, Prepared, ScopeMeta, PARTICIPATION_RATIO};
 
 /// The nearest-prefix scope owner of `path` among `scopes`, with the
-/// empty-prefix root as the fallback. Copied from `sieve-parse`'s
+/// empty-prefix root as the fallback. Same rule as `sieve-parse`'s
 /// `scope_of`, so this crate adds no dependency on `sieve-parse`. Public
 /// so the prompt hook's `lastFileScopeHint` resolves a scope the same way
 /// `ask --in` does.
 pub fn scope_of(path: &str, scopes: &[Scope]) -> String {
-    let mut best: Option<&str> = None;
+    scope_of_ref(path, scopes).to_string()
+}
+
+/// Like [`scope_of`], but borrows the owner from `scopes`: the hot path
+/// calls it once per node and must not allocate.
+pub(crate) fn scope_of_ref<'s>(path: &str, scopes: &'s [Scope]) -> &'s str {
+    let mut best = "";
     for s in scopes {
-        if s.prefix.is_empty() {
-            continue;
-        }
-        let under_prefix = path == s.prefix || path.starts_with(&format!("{}/", s.prefix));
-        if under_prefix && best.is_none_or(|b| s.prefix.len() > b.len()) {
-            best = Some(s.prefix.as_str());
+        let p = s.prefix.as_str();
+        // A prefix owns the path when it equals the path or ends at a `/`.
+        let under_prefix = !p.is_empty()
+            && path
+                .strip_prefix(p)
+                .is_some_and(|r| r.is_empty() || r.starts_with('/'));
+        if under_prefix && p.len() > best.len() {
+            best = p;
         }
     }
-    best.map(str::to_string).unwrap_or_default()
+    best
 }
 
 /// Groups `active_nodes` by `scope_of`, in ascending byte order of the
-/// scope prefix. `BTreeMap<String, _>` orders its keys by `Ord`, the same
-/// plain byte order `[...byScope.keys].sort` uses at
-/// (never `localeCompare`), so this iterates in the exact order that
-/// feeds `rankScopesAndFuse`.
-pub(crate) fn group_by_scope<'a>(
+/// scope prefix. A `BTreeMap` orders `&str` keys by plain byte order, not
+/// by locale, so the scopes come out in the order the ranking expects.
+pub(crate) fn group_by_scope<'a, 's>(
     active_nodes: &[&'a Node],
-    scopes: &[Scope],
-) -> BTreeMap<String, Vec<&'a Node>> {
-    let mut out: BTreeMap<String, Vec<&'a Node>> = BTreeMap::new();
+    scopes: &'s [Scope],
+) -> BTreeMap<&'s str, Vec<&'a Node>> {
+    let mut out: BTreeMap<&'s str, Vec<&'a Node>> = BTreeMap::new();
     for &node in active_nodes {
-        out.entry(scope_of(&node.path, scopes))
+        out.entry(scope_of_ref(&node.path, scopes))
             .or_default()
             .push(node);
     }
@@ -250,7 +256,7 @@ pub(crate) struct MultiScope<'a> {
 /// and round-robins the groups once.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn run_multi_scope<'a>(
-    by_scope: &BTreeMap<String, Vec<&'a Node>>,
+    by_scope: &BTreeMap<&str, Vec<&'a Node>>,
     prep: &Prepared,
     terms: &[String],
     query_wants_tests: bool,
@@ -264,7 +270,7 @@ pub(crate) fn run_multi_scope<'a>(
         // One real scope: `combineComparableScopes` passes scores through
         // untouched, so the single-scope pipeline is byte-identical.
         let nodes: Vec<&Node> = by_scope.values().flatten().copied().collect();
-        let scope = by_scope.keys().next().map_or("", String::as_str);
+        let scope = by_scope.keys().next().copied().unwrap_or("");
         let pr = scope_pagerank(prep, scope, graph, &nodes, lex, graph_rank);
         let candidates = build_candidates(
             &nodes,
@@ -277,7 +283,10 @@ pub(crate) fn run_multi_scope<'a>(
         // Sieve still labels each hit with its scope on this path.
         let file_scope: HashMap<String, String> = by_scope
             .iter()
-            .flat_map(|(scope, ns)| ns.iter().map(move |n| (n.path.clone(), scope.clone())))
+            .flat_map(|(scope, ns)| {
+                ns.iter()
+                    .map(move |n| (n.path.clone(), (*scope).to_string()))
+            })
             .collect();
         // One scope passes through `combineComparableScopes` sorted by
         // score desc, then id (`byScore`).
@@ -321,7 +330,7 @@ pub(crate) fn run_multi_scope<'a>(
             }
         }
         if let Some(best_id) = best_id.filter(|_| max_lex > 0.0) {
-            meta.push((scope.clone(), max_lex, best_id));
+            meta.push(((*scope).to_string(), max_lex, best_id));
         }
     }
 
@@ -330,14 +339,14 @@ pub(crate) fn run_multi_scope<'a>(
     // is reported in `also_matched` instead of ranked.
     let any_identifier_match = meta.iter().any(|(scope, _, _)| {
         by_scope
-            .get(scope)
+            .get(scope.as_str())
             .is_some_and(|nodes| has_identifier_match(nodes, docs, terms))
     });
     let mut survivors: Vec<String> = Vec::new();
     let mut also_matched: Vec<AlsoMatched> = Vec::new();
     for (scope, _, best_id) in &meta {
         let named = by_scope
-            .get(scope)
+            .get(scope.as_str())
             .is_some_and(|nodes| has_identifier_match(nodes, docs, terms));
         if any_identifier_match && !named {
             also_matched.push(AlsoMatched {
@@ -358,7 +367,7 @@ pub(crate) fn run_multi_scope<'a>(
     // no such trim.
     let surviving_nodes: Vec<&Node> = survivors
         .iter()
-        .flat_map(|s| by_scope.get(s).into_iter().flatten().copied())
+        .flat_map(|s| by_scope.get(s.as_str()).into_iter().flatten().copied())
         .collect();
     let trimmed_lex: HashMap<String, f64> = surviving_nodes
         .iter()
@@ -377,7 +386,7 @@ pub(crate) fn run_multi_scope<'a>(
     let mut candidate_rows: Vec<ScopedRow> = Vec::new();
     let mut node_by_id: HashMap<String, &'a Node> = HashMap::new();
     for scope in &survivors {
-        let Some(nodes) = by_scope.get(scope) else {
+        let Some(nodes) = by_scope.get(scope.as_str()) else {
             continue;
         };
         let scope_lex: HashMap<String, f64> = nodes
@@ -536,5 +545,32 @@ mod tests {
                 "b.ts#betaFive"
             ]
         );
+    }
+
+    fn scope(prefix: &str) -> Scope {
+        Scope {
+            prefix: prefix.to_string(),
+            label: prefix.to_string(),
+            markers: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn scope_of_picks_the_nearest_whole_segment_prefix() {
+        let scopes = [
+            scope(""),
+            scope("crates/a"),
+            scope("crates/a/sub"),
+            scope("web"),
+        ];
+        assert_eq!(scope_of_ref("crates/a/x.rs", &scopes), "crates/a");
+        assert_eq!(scope_of_ref("crates/a/sub/y.rs", &scopes), "crates/a/sub");
+        // A path equal to a scope belongs to that scope.
+        assert_eq!(scope_of_ref("crates/a", &scopes), "crates/a");
+        // A shared prefix that ends mid-segment does not match.
+        assert_eq!(scope_of_ref("crates/ab/x.rs", &scopes), "");
+        // The root scope takes every path no other scope takes.
+        assert_eq!(scope_of_ref("README.md", &scopes), "");
+        assert_eq!(scope_of("web/app.ts", &scopes), "web");
     }
 }

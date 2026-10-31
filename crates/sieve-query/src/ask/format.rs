@@ -245,6 +245,7 @@ mod tests {
             scope: None,
             code: None,
             scope_last: false,
+            cut: false,
             path: "a.ts".to_string(),
             span: Some("L1-L1".to_string()),
         }

@@ -16,4 +16,10 @@ else
 fi
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
-cargo test --workspace
+# nextest runs each test in its own process, in parallel; it skips doc-tests.
+if cargo nextest --version >/dev/null 2>&1; then
+  cargo nextest run --workspace --no-fail-fast
+  cargo test --workspace --doc
+else
+  cargo test --workspace
+fi

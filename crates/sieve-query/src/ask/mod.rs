@@ -12,6 +12,7 @@ mod format;
 mod fuse;
 mod lexical;
 mod pagerank;
+mod saving;
 mod select;
 /// `pub(crate)` so `callers.rs` can reuse `resolve_symbol`, the same
 ///  resolution `callers` itself needs
@@ -21,15 +22,19 @@ pub(crate) mod structural;
 pub use def::{define, format_def, single_ident, Def, Ident};
 pub use format::{format_ask, format_ask_json};
 pub use fuse::scope_of;
+pub use saving::crux_baseline_chars;
 pub(crate) use select::round_robin_queues;
 
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
-use std::sync::{Arc, Mutex, OnceLock, PoisonError};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError, Weak};
 
 use regex::Regex;
 use serde::Serialize;
-use sieve_core::{askindex::AskIndex, Graph, Kind, Node};
+use sieve_core::{
+    askindex::{AskDoc, AskIndex},
+    Graph, Kind, Node,
+};
 use thiserror::Error;
 
 /// The most source lines `--source` inlines per hit before it truncates
@@ -115,6 +120,8 @@ pub struct AskHit {
     pub scope: Option<String>,
     /// The hit's inlined source, set only under `--source`.
     pub code: Option<String>,
+    /// True when `code` holds less than the hit's span. Never serialized.
+    pub cut: bool,
     /// Set on a federated hit whose `scope` key is new: the
     /// `qualifyHit` step appends it after `code`.
     pub scope_last: bool,
@@ -502,11 +509,49 @@ pub struct WarmKey<'a> {
     /// The graph this call reads. A new graph is a new `Arc`, so a refresh,
     /// a reload or a heal drops the cache.
     pub graph: &'a Arc<Graph>,
-    /// The modification time (ns) and size of the ask index file, or `None`
-    /// when the file is missing. A rewrite of the file changes it.
-    pub index_stamp: Option<(u128, u64)>,
-    /// Reads and parses the ask index. It runs only on a cache miss.
+    /// Reads the modification time (ns) and size of the ask index file, or
+    /// `None` when the file is missing. A rewrite of the file changes it. The
+    /// cache reads it again after `load_index`, because that call may write
+    /// the file.
+    pub index_stamp: &'a dyn Fn() -> Option<(u128, u64)>,
+    /// Reads and parses the ask index. It runs only on a cache miss that
+    /// `steps` cannot patch.
     pub load_index: &'a dyn Fn() -> Option<AskIndex>,
+    /// The file changes between the graphs the caller held, oldest first. A
+    /// cache built for an earlier graph of this chain is patched in place of
+    /// a rebuild from the ask index file.
+    pub steps: &'a [Arc<DocStep>],
+}
+
+/// The token bags a patch changed, between two graphs of a warm caller.
+pub struct DocStep {
+    from: Weak<Graph>,
+    to: Weak<Graph>,
+    /// Each changed file with the bags of its nodes in `to`. A deleted file
+    /// has none.
+    files: Vec<(String, Vec<AskDoc>)>,
+}
+
+impl DocStep {
+    /// A step from `from` to `to`. `files` holds each changed file with the
+    /// bags of all its nodes in `to`, as `sieve_core::askindex::doc_of` builds
+    /// them from the node and its body text.
+    pub fn new(from: &Arc<Graph>, to: &Arc<Graph>, files: Vec<(String, Vec<AskDoc>)>) -> Self {
+        DocStep {
+            from: Arc::downgrade(from),
+            to: Arc::downgrade(to),
+            files,
+        }
+    }
+
+    /// True when this step ends at `graph`.
+    pub fn ends_at(&self, graph: &Arc<Graph>) -> bool {
+        Weak::ptr_eq(&self.to, &Arc::downgrade(graph))
+    }
+
+    fn starts_at(&self, graph: &Arc<Graph>) -> bool {
+        Weak::ptr_eq(&self.from, &Arc::downgrade(graph))
+    }
 }
 
 /// Runs one `ask` query like [`ask`] for a caller that keeps its graph between
@@ -525,13 +570,25 @@ pub fn ask_warm(
 pub(crate) struct Prepared {
     pub(crate) docs: lexical::Docs,
     pub(crate) corpus: lexical::Corpus,
+    /// True when `docs` came from the ask index. Only such docs hold the body
+    /// text, so only they take a patch.
+    indexed: bool,
     topologies: Mutex<HashMap<String, Arc<pagerank::Topology>>>,
+}
+
+/// Where the bags of a cached `Prepared` came from.
+enum Source {
+    /// The ask index file, with the stamp it had when it was read.
+    Disk(Option<(u128, u64)>),
+    /// A patch. The file may change under it, because the caller writes the
+    /// same bags there, and any other writer also changes the graph.
+    Patched,
 }
 
 /// The one cached `Prepared`, with the state it was built from.
 struct CacheEntry {
     graph: Arc<Graph>,
-    index_stamp: Option<(u128, u64)>,
+    source: Source,
     prefix: Option<String>,
     concept_bags: Vec<HashSet<String>>,
     prep: Arc<Prepared>,
@@ -546,19 +603,71 @@ impl Prepared {
         active_nodes: &[&Node],
         concept_bags: &[HashSet<String>],
     ) -> Prepared {
-        let mut docs = lexical::build_docs(graph, index);
+        let (mut docs, indexed) = lexical::build_docs(graph, index);
         lexical::mark_inline_tests(&graph.nodes, &mut docs);
+        Self::with_docs(docs, indexed, active_nodes, concept_bags)
+    }
+
+    /// The corpus over `docs`. The PageRank shapes start empty, because they
+    /// depend on the whole graph.
+    fn with_docs(
+        docs: lexical::Docs,
+        indexed: bool,
+        active_nodes: &[&Node],
+        concept_bags: &[HashSet<String>],
+    ) -> Prepared {
         let corpus = lexical::Corpus::build_with_concepts(active_nodes, &docs, concept_bags);
         Prepared {
             docs,
             corpus,
+            indexed,
             topologies: Mutex::new(HashMap::new()),
         }
     }
 
+    /// Takes the cached value for an earlier graph of the `steps` chain and
+    /// patches the bags of the changed files, so the bags of every other file
+    /// stay. Gives `None`, and leaves the cache as it was, when the chain does
+    /// not reach from the cached graph to the graph of `key`, or when the
+    /// cached value has another prefix or other concept bags.
+    fn patched(
+        cache: &mut Option<CacheEntry>,
+        key: &WarmKey,
+        prefix: &Option<String>,
+        active_nodes: &[&Node],
+        concept_bags: &[HashSet<String>],
+    ) -> Option<Arc<Prepared>> {
+        let e = cache.as_mut()?;
+        if !e.prep.indexed || e.prefix != *prefix || e.concept_bags != concept_bags {
+            return None;
+        }
+        let from = key.steps.iter().position(|s| s.starts_at(&e.graph))?;
+        let steps = &key.steps[from..];
+        let chained = steps.windows(2).all(|w| w[0].to.ptr_eq(&w[1].from));
+        if !chained || !steps.last()?.ends_at(key.graph) {
+            return None;
+        }
+        // A later step replaces the bags of an earlier one for the same file.
+        let changed: HashMap<&str, &[AskDoc]> = steps
+            .iter()
+            .flat_map(|s| s.files.iter())
+            .map(|(path, docs)| (path.as_str(), docs.as_slice()))
+            .collect();
+        // A reader that still holds the value keeps it, so only a sole owner
+        // patches it. A failed check leaves the cache as it was.
+        let mut docs = std::mem::take(&mut Arc::get_mut(&mut e.prep)?.docs);
+        lexical::patch_docs(&mut docs, &e.graph, key.graph, &changed);
+        let prep = Arc::new(Self::with_docs(docs, true, active_nodes, concept_bags));
+        e.graph = Arc::clone(key.graph);
+        e.source = Source::Patched;
+        e.prep = Arc::clone(&prep);
+        Some(prep)
+    }
+
     /// Returns the cached value when `warm` names the same graph, ask index,
-    /// prefix and concept bags as the cached one, else builds a new value.
-    /// A call with no `warm` key never reads or writes the cache.
+    /// prefix and concept bags as the cached one. Else it patches the cached
+    /// value from `warm.steps`, or builds a new value from the ask index. A
+    /// call with no `warm` key never reads or writes the cache.
     fn get(
         graph: &Graph,
         index: Option<&AskIndex>,
@@ -572,15 +681,23 @@ impl Prepared {
         };
         let mut cache = PREPARED.lock().unwrap_or_else(PoisonError::into_inner);
         if let Some(e) = cache.as_ref() {
+            let same_source = match e.source {
+                Source::Disk(stamp) => stamp == (key.index_stamp)(),
+                Source::Patched => true,
+            };
             if Arc::ptr_eq(&e.graph, key.graph)
-                && e.index_stamp == key.index_stamp
+                && same_source
                 && e.prefix == *prefix
                 && e.concept_bags == concept_bags
             {
                 return Arc::clone(&e.prep);
             }
         }
+        if let Some(prep) = Self::patched(&mut cache, key, prefix, active_nodes, &concept_bags) {
+            return prep;
+        }
         let loaded = (key.load_index)();
+        let stamp = (key.index_stamp)();
         let prep = Arc::new(Self::build(
             graph,
             loaded.as_ref(),
@@ -589,7 +706,7 @@ impl Prepared {
         ));
         *cache = Some(CacheEntry {
             graph: Arc::clone(key.graph),
-            index_stamp: key.index_stamp,
+            source: Source::Disk(stamp),
             prefix: prefix.clone(),
             concept_bags,
             prep: Arc::clone(&prep),
@@ -611,9 +728,7 @@ impl Prepared {
         if let Some(t) = topologies.get(scope) {
             return Arc::clone(t);
         }
-        let ids: HashSet<&str> = nodes.iter().map(|n| n.id.as_str()).collect();
-        let adjacency = pagerank::build_adjacency(graph, &ids);
-        let topology = Arc::new(pagerank::Topology::new(nodes, &adjacency));
+        let topology = Arc::new(pagerank::Topology::from_graph(nodes, graph));
         topologies.insert(scope.to_string(), Arc::clone(&topology));
         topology
     }
@@ -937,8 +1052,10 @@ fn parse_span_pointer(pointer: &str) -> Option<(&str, u32, u32)> {
 /// Reads the source lines `[from, to]` (1-indexed, inclusive) of `path`
 /// under `repo_root`, clamped to the file length, and capped at
 /// [`MAX_SPAN_LINES`] with a truncation marker.
-fn slice_span(repo_root: &Path, path: &str, from: u32, to: u32) -> Option<String> {
-    slice_span_capped(repo_root, path, from, to, MAX_SPAN_LINES, None)
+///
+/// The flag is true when the text holds less than the span.
+fn slice_span(repo_root: &Path, path: &str, from: u32, to: u32) -> Option<(String, bool)> {
+    slice_span_marked(repo_root, path, from, to, MAX_SPAN_LINES, None)
 }
 
 /// Like [`slice_span`], with a line cap and an optional cap in UTF-16 units.
@@ -954,6 +1071,18 @@ pub(crate) fn slice_span_capped(
     max_lines: usize,
     max_chars: Option<usize>,
 ) -> Option<String> {
+    slice_span_marked(repo_root, path, from, to, max_lines, max_chars).map(|(text, _)| text)
+}
+
+/// [`slice_span_capped`], and whether the text holds less than the span.
+fn slice_span_marked(
+    repo_root: &Path,
+    path: &str,
+    from: u32,
+    to: u32,
+    max_lines: usize,
+    max_chars: Option<usize>,
+) -> Option<(String, bool)> {
     let bytes = std::fs::read(repo_root.join(path)).ok()?;
     // The span read goes through the source decoder.
     let source = sieve_core::fingerprint::decode_source(&bytes)?;
@@ -961,7 +1090,7 @@ pub(crate) fn slice_span_capped(
     let start = from.max(1) as usize;
     let end = (to as usize).min(lines.len());
     if start > end {
-        return Some(String::new());
+        return Some((String::new(), false));
     }
     let slice = &lines[start - 1..end];
     let mut keep = slice.len().min(max_lines);
@@ -986,7 +1115,7 @@ pub(crate) fn slice_span_capped(
         }
     }
     if keep == slice.len() && first_cut.is_none() {
-        return Some(slice.join("\n"));
+        return Some((slice.join("\n"), false));
     }
     let mut head: Vec<String> = slice[..keep].iter().map(|l| l.to_string()).collect();
     let was_cut = first_cut.is_some();
@@ -1003,7 +1132,7 @@ pub(crate) fn slice_span_capped(
         "… (+{} more lines; open {path}:L{open_from}-L{end}){note}",
         slice.len() - keep
     ));
-    Some(head.join("\n"))
+    Some((head.join("\n"), true))
 }
 
 /// The longest prefix of `line` that holds at most `cap` UTF-16 units, cut at
@@ -1047,13 +1176,17 @@ fn inline_source<'h>(
                     "{}\n… (crux — full definition at {}; rerun with --full)",
                     crux.code, hit.pointer
                 ));
+                hit.cut = true;
                 continue;
             }
         }
         // Sieve sets the code only when it is truthy: a span past the end
         // of the file reads as an empty string and gives no code.
-        if let Some(code) = slice_span(repo_root, path, from, to).filter(|c| !c.is_empty()) {
+        if let Some((code, cut)) =
+            slice_span(repo_root, path, from, to).filter(|(c, _)| !c.is_empty())
+        {
             hit.code = Some(code);
+            hit.cut = cut;
         }
     }
 }
@@ -1090,6 +1223,7 @@ pub(crate) fn to_hit(node: &Node, score: f64, scope: Option<String>) -> AskHit {
         scope,
         code: None,
         scope_last: false,
+        cut: false,
         path: node.path.clone(),
         span: span_of(node),
     }
@@ -1154,12 +1288,13 @@ mod source_tests {
     fn slice_span_reads_the_clamped_inclusive_lines() {
         let dir = tempdir("slice-clamped");
         std::fs::write(dir.join("a.txt"), "one\ntwo\nthree\nfour\n").expect("write");
-        let code = slice_span(&dir, "a.txt", 2, 3).expect("file reads");
+        let (code, cut) = slice_span(&dir, "a.txt", 2, 3).expect("file reads");
         assert_eq!(code, "two\nthree");
+        assert!(!cut);
         // `to` past the file end clamps to the last line. The file's
         // trailing newline is a real empty final line, matching
         // JavaScript's `source.split("\n")`.
-        let code = slice_span(&dir, "a.txt", 3, 100).expect("file reads");
+        let (code, _) = slice_span(&dir, "a.txt", 3, 100).expect("file reads");
         assert_eq!(code, "three\nfour\n");
     }
 
@@ -1171,7 +1306,8 @@ mod source_tests {
             .collect::<Vec<_>>()
             .join("\n");
         std::fs::write(dir.join("big.txt"), &text).expect("write");
-        let code = slice_span(&dir, "big.txt", 1, 100).expect("file reads");
+        let (code, cut) = slice_span(&dir, "big.txt", 1, 100).expect("file reads");
+        assert!(cut);
         let lines: Vec<&str> = code.lines().collect();
         assert_eq!(lines.len(), MAX_SPAN_LINES + 1);
         assert_eq!(lines[0], "line1");
@@ -1241,6 +1377,7 @@ mod source_tests {
             scope: None,
             code: None,
             scope_last: false,
+            cut: false,
             path: "a.ts".to_string(),
             span: Some("L1-L3".to_string()),
         }];
@@ -1293,6 +1430,7 @@ mod source_tests {
             scope: None,
             code: None,
             scope_last: false,
+            cut: false,
             path: "a.ts".to_string(),
             span: Some("L1-L2".to_string()),
         }];
@@ -1325,6 +1463,7 @@ mod source_tests {
             scope: None,
             code: None,
             scope_last: false,
+            cut: false,
             path: "a.ts".to_string(),
             span: None,
         }];
@@ -1610,8 +1749,9 @@ mod scope_prefix_tests {
         let ask_for = |graph: &Arc<Graph>| {
             let key = WarmKey {
                 graph,
-                index_stamp: None,
+                index_stamp: &|| None,
                 load_index: &no_index,
+                steps: &[],
             };
             let result = ask_warm(&key, "quokkaz zebrafishz", &opts, &root).expect("ask");
             result.hits.into_iter().map(|h| h.title).collect::<Vec<_>>()
@@ -1661,8 +1801,9 @@ mod scope_prefix_tests {
             };
             let key = WarmKey {
                 graph: &g,
-                index_stamp: stamp,
+                index_stamp: &|| stamp,
                 load_index: &load,
+                steps: &[],
             };
             let warm = ask_warm(&key, query, &opts, &root).expect("warm ask");
             let cold = ask(&g, None, query, &opts, &root).expect("cold ask");

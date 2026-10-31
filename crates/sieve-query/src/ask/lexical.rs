@@ -56,8 +56,8 @@ fn doc_bag_from_ask_doc(doc: &AskDoc) -> DocBag {
 pub(crate) type Docs = HashMap<String, DocBag>;
 
 /// Builds every graph node's token bags, using the sidecar when it is
-/// usable, else tokenizing live.
-pub(crate) fn build_docs(graph: &Graph, index: Option<&AskIndex>) -> Docs {
+/// usable, else tokenizing live. The flag is true when the sidecar was used.
+pub(crate) fn build_docs(graph: &Graph, index: Option<&AskIndex>) -> (Docs, bool) {
     if let Some(idx) = index {
         let by_id: HashMap<&str, &AskDoc> = idx.docs.iter().map(|d| (d.id.as_str(), d)).collect();
         let usable = idx.docs.len() == graph.nodes.len()
@@ -66,18 +66,46 @@ pub(crate) fn build_docs(graph: &Graph, index: Option<&AskIndex>) -> Docs {
                 .iter()
                 .all(|n| by_id.contains_key(n.id.as_str()));
         if usable {
-            return graph
+            let docs = graph
                 .nodes
                 .iter()
                 .map(|n| (n.id.clone(), doc_bag_from_ask_doc(by_id[n.id.as_str()])))
                 .collect();
+            return (docs, true);
         }
     }
-    graph
+    let docs = graph
         .nodes
         .iter()
         .map(|n| (n.id.clone(), doc_bag_from_node(n)))
-        .collect()
+        .collect();
+    (docs, false)
+}
+
+/// Swaps the bags of the files in `changed`. It drops the bags of the nodes
+/// these files held in `old`, adds their fresh bags, and decides the inline
+/// tests again for these files only. A test scope and the nodes in it share
+/// one file, so no other file changes.
+pub(crate) fn patch_docs(
+    docs: &mut Docs,
+    old: &Graph,
+    new: &Graph,
+    changed: &HashMap<&str, &[AskDoc]>,
+) {
+    for node in &old.nodes {
+        if changed.contains_key(node.path.as_str()) {
+            docs.remove(&node.id);
+        }
+    }
+    for doc in changed.values().flat_map(|docs| docs.iter()) {
+        docs.insert(doc.id.clone(), doc_bag_from_ask_doc(doc));
+    }
+    mark_inline_tests(
+        new.nodes
+            .iter()
+            .filter(|n| changed.contains_key(n.path.as_str())),
+        docs,
+    );
 }
 
 /// The query's unique tokens, in first-occurrence order.
@@ -307,9 +335,12 @@ fn is_py_test_fn(n: &Node) -> bool {
 /// Python `Test*` class. A Python `test_*` function is a test too. The id
 /// has no scope, so the scope node's line span is the only signal.
 /// Runs once per ask run.
-pub(crate) fn mark_inline_tests(nodes: &[Node], docs: &mut Docs) {
+pub(crate) fn mark_inline_tests<'a>(
+    nodes: impl IntoIterator<Item = &'a Node> + Clone,
+    docs: &mut Docs,
+) {
     let mut scopes: HashMap<&str, Vec<(u32, u32)>> = HashMap::new();
-    for n in nodes {
+    for n in nodes.clone() {
         if is_test_scope(n) {
             if let Some(b) = span_bounds(&n.span) {
                 scopes.entry(n.path.as_str()).or_default().push(b);
@@ -338,8 +369,8 @@ pub(crate) fn mark_inline_tests(nodes: &[Node], docs: &mut Docs) {
     }
     // The id has no scope: a code node that shares an id with a test node
     // keeps its rank.
-    for (id, d) in docs.iter_mut() {
-        if test_ids.contains(id.as_str()) && !code_ids.contains(id.as_str()) {
+    for id in test_ids.difference(&code_ids) {
+        if let Some(d) = docs.get_mut(*id) {
             d.inline_test = true;
         }
     }

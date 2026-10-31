@@ -473,6 +473,7 @@ fn qualify_hit(child: &str, hit: &AskHit, score: f64, scope: String) -> AskHit {
     AskHit {
         score,
         scope_last: hit.scope.is_none(),
+        cut: hit.cut,
         scope: Some(scope),
         pointer: prefix_pointer(child, &hit.pointer),
         ..hit.clone()
@@ -1241,6 +1242,7 @@ mod tests {
             scope: Some("alpha".to_string()),
             code: None,
             scope_last: false,
+            cut: false,
             path: String::new(),
             span: None,
         }

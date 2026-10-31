@@ -110,13 +110,14 @@ pub struct AskIndex {
 /// The node count from which `build_ask_index` uses threads.
 const PARALLEL_MIN: usize = 512;
 
-/// Builds the three token bags of one node.
-fn doc_of(node: &crate::wiring::Node) -> AskDoc {
+/// Builds the three token bags of one node. `body_text` is the body of the
+/// node, which a written graph does not carry.
+pub fn doc_of(node: &crate::wiring::Node, body_text: Option<&str>) -> AskDoc {
     let body_source = format!(
         "{} {} {}",
         node.signature.as_deref().unwrap_or(""),
         node.summary.as_deref().unwrap_or(""),
-        node.body_text.as_deref().unwrap_or("")
+        body_text.unwrap_or("")
     );
     AskDoc {
         id: node.id.clone(),
@@ -139,7 +140,10 @@ pub fn build_ask_index(graph: &Graph) -> AskIndex {
     // The token bags depend on one node each, so threads build them in
     // chunks. The chunks join in order, so the docs match a serial build.
     let docs: Vec<AskDoc> = if nodes.len() < PARALLEL_MIN {
-        nodes.iter().map(|node| doc_of(node)).collect()
+        nodes
+            .iter()
+            .map(|n| doc_of(n, n.body_text.as_deref()))
+            .collect()
     } else {
         let threads = std::thread::available_parallelism().map_or(1, |n| n.get().min(8));
         let size = nodes.len().div_ceil(threads);
@@ -147,7 +151,12 @@ pub fn build_ask_index(graph: &Graph) -> AskIndex {
             let handles: Vec<_> = nodes
                 .chunks(size)
                 .map(|chunk| {
-                    scope.spawn(move || chunk.iter().map(|n| doc_of(n)).collect::<Vec<_>>())
+                    scope.spawn(move || {
+                        chunk
+                            .iter()
+                            .map(|n| doc_of(n, n.body_text.as_deref()))
+                            .collect::<Vec<_>>()
+                    })
                 })
                 .collect();
             handles
@@ -368,7 +377,10 @@ mod tests {
         let index = build_ask_index(&graph);
         let mut nodes: Vec<_> = graph.nodes.iter().collect();
         nodes.sort_by(|a, b| collate(&a.id, &b.id));
-        let serial: Vec<AskDoc> = nodes.iter().map(|n| doc_of(n)).collect();
+        let serial: Vec<AskDoc> = nodes
+            .iter()
+            .map(|n| doc_of(n, n.body_text.as_deref()))
+            .collect();
         assert_eq!(index.docs, serial);
         let run_loop = index.df.iter().find(|(t, _)| t == "loop").map(|(_, c)| *c);
         assert_eq!(run_loop, Some(PARALLEL_MIN as u32 * 2 + 1));

@@ -175,6 +175,7 @@ pub(crate) fn to_hit(doc: &ConceptDoc, score: f64) -> AskHit {
         scope: None,
         code: None,
         scope_last: false,
+        cut: false,
         path: String::new(),
         span: None,
     }

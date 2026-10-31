@@ -96,7 +96,12 @@ pub fn run(args: &GrepArgs, dir_override: Option<&Path>) -> Result<(), String> {
     }
 
     let body = format_grep_result(&result);
-    let line = hits_line(result.total_hits, result.groups.len());
+    let line = hits_line(
+        result.total_hits,
+        result.groups.len(),
+        result.row_chars(),
+        &body,
+    );
     print!("{}", append_line(&body, &line));
     Ok(())
 }
@@ -156,7 +161,7 @@ fn run_workspace(
         return Ok(());
     }
     let body = format_grep_result(&fed.result);
-    let line = hits_line(fed.result.total_hits, fed.result.groups.len());
+    let line = hits_line(fed.result.total_hits, fed.result.groups.len(), 0, &body);
     print!("{}", append_line(&body, &line));
     if !coverage.is_empty() {
         println!("{coverage}");
