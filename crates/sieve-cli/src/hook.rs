@@ -214,6 +214,8 @@ pub(crate) fn record_capped(context_dir: &Path) {
     if read_stats_at(&cache).is_some_and(|s| s.capped) {
         return;
     }
+    // A missed lock drops this flag. It is a status hint only, and the next
+    // capped build sets it again.
     patch_stats_at(&cache, |s| s.capped = true);
 }
 
@@ -325,6 +327,7 @@ pub(crate) fn write_build_counts(
     // A build under the cap clears `capped`. Never create `stats.json` here.
     let cache = context_dir.join(".cache");
     if wiring_bytes <= wiring_cap_bytes() && read_stats_at(&cache).is_some_and(|s| s.capped) {
+        // A missed lock keeps the old flag. The next build under the cap clears it.
         patch_stats_at(&cache, |s| s.capped = false);
     }
 }
@@ -819,20 +822,24 @@ fn write_session(project_dir: &Path, id: &str, state: &SessionState) -> std::io:
 /// Waits this long between two tries of the session lock.
 const SESSION_LOCK_POLL_MS: u64 = 10;
 /// Stops waiting for the session lock after this many milliseconds in total.
-const SESSION_LOCK_WAIT_MS: u64 = 200;
+///
+/// The wait applies only while a live process holds the lock. The lock code
+/// takes over a lock at once when its owner process is dead. So only a live
+/// holder that hangs makes every hook pay the full wait.
+const SESSION_LOCK_WAIT_MS: u64 = 1000;
 
-/// Waits for the lock in `lock_dir`, for up to `SESSION_LOCK_WAIT_MS`.
+/// Waits for the lock in `lock_dir`, for up to `wait_ms` milliseconds.
 ///
 /// The function tries every `SESSION_LOCK_POLL_MS`. It returns `None` when
-/// the wait ends or when an IO error occurs. The caller then runs unlocked,
-/// so a hook never hangs the host session.
+/// the wait ends or when an IO error occurs. The caller must then not write
+/// the file that the lock guards, because a write without the lock can erase
+/// the update of another hook.
 ///
 /// `lock_path` always appends `.cache/.sync.lock` to `lock_dir`. So the lock
 /// file sits in `<lock_dir>/.cache/`, and the call leaves that empty
 /// directory behind.
-fn acquire_hook_lock(lock_dir: &Path) -> Option<sieve_core::lock::LockGuard> {
-    let deadline =
-        std::time::Instant::now() + std::time::Duration::from_millis(SESSION_LOCK_WAIT_MS);
+fn acquire_hook_lock(lock_dir: &Path, wait_ms: u64) -> Option<sieve_core::lock::LockGuard> {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(wait_ms);
     loop {
         match sieve_core::lock::LockGuard::acquire(lock_dir) {
             Ok(Some(guard)) => return Some(guard),
@@ -846,28 +853,33 @@ fn acquire_hook_lock(lock_dir: &Path) -> Option<sieve_core::lock::LockGuard> {
 /// Reads the session, runs `change` on it, and writes it back under a lock.
 ///
 /// Two parallel hook calls must not lose each other's update. The function
-/// tries the lock every 10 ms, for up to 200 ms in total. If it still has no
-/// lock, it runs unlocked, so a hook never hangs the host session. An IO
-/// error is not contention: on an error the function stops waiting at once
-/// and runs unlocked.
+/// tries the lock every 10 ms, for up to `SESSION_LOCK_WAIT_MS` in total. If
+/// it still has no lock, it runs `change` on the state it read but writes
+/// nothing, so a hook never hangs the host session and never erases another
+/// hook's update. An IO error is not contention: on an error the function
+/// stops waiting at once and writes nothing.
 ///
 /// Cost: the read-modify-write takes microseconds, so a real wait almost
-/// never exceeds one retry. If a killed holder leaves a stale lock, every
-/// hook pays up to 200 ms until `LOCK_STALE_MS` clears it, which is 300
+/// never exceeds one retry. The wait is long because a short wait drops a
+/// record when the machine is loaded. A dead holder costs nothing, because the
+/// lock code takes its lock over at once. A live holder that hangs makes every
+/// hook pay the full wait until `LOCK_STALE_MS` clears it, which is 300
 /// seconds.
 pub(crate) fn update_session<R>(
     project_dir: &Path,
     id: &str,
     change: impl FnOnce(&mut SessionState) -> R,
 ) -> R {
-    update_session_checked(project_dir, id, change).0
+    update_session_checked(project_dir, id, SESSION_LOCK_WAIT_MS, change).0
 }
 
-/// [`update_session`], and whether the write to disk succeeded. The narrow-read rule needs
-/// the flag: a narrowed Read with no record on disk gets no note.
+/// [`update_session`] with a given wait, and whether the write to disk
+/// succeeded. The narrow-read rule needs the flag: a narrowed Read with no
+/// record on disk gets no note. The flag is false when the lock is not taken.
 fn update_session_checked<R>(
     project_dir: &Path,
     id: &str,
+    wait_ms: u64,
     change: impl FnOnce(&mut SessionState) -> R,
 ) -> (R, bool) {
     // The session directory keeps this lock apart from the graph build lock
@@ -876,10 +888,11 @@ fn update_session_checked<R>(
         .parent()
         .map(Path::to_path_buf)
         .unwrap_or_default();
-    let _guard = acquire_hook_lock(&lock_dir);
+    let guard = acquire_hook_lock(&lock_dir, wait_ms);
     let mut state = read_session(project_dir, id);
     let out = change(&mut state);
-    let written = write_session(project_dir, id, &state).is_ok();
+    // Callers need the result of `change` even when the lock is missing.
+    let written = guard.is_some() && write_session(project_dir, id, &state).is_ok();
     (out, written)
 }
 
@@ -896,19 +909,29 @@ fn read_stats_at(cache: &Path) -> Option<Stats> {
 /// Read-modify-write over `stats.json` under a lock, so two parallel hook
 /// calls do not lose each other's update.
 fn patch_stats(project_dir: &Path, patch: impl FnOnce(&mut Stats)) {
+    // A missed lock drops the patch. Each caller records a count that the
+    // next hook or build writes again, so the result is not needed.
     patch_stats_at(&cache_dir(project_dir), patch);
 }
 
 /// `patch_stats` for a cache dir given directly.
 fn patch_stats_at(cache: &Path, patch: impl FnOnce(&mut Stats)) {
+    patch_stats_waiting(cache, SESSION_LOCK_WAIT_MS, patch);
+}
+
+/// `patch_stats_at` with a given wait. It returns false and writes nothing
+/// when the lock is not taken in time.
+fn patch_stats_waiting(cache: &Path, wait_ms: u64, patch: impl FnOnce(&mut Stats)) -> bool {
     // The lock directory is the cache directory itself. So the lock file is
     // `<ctx>/.cache/.cache/.sync.lock`. This differs from the session lock
     // (`<ctx>/.cache/session/.cache/.sync.lock`) and from the graph build
     // lock (`<ctx>/.cache/.sync.lock`), so a hook never waits for a rebuild.
-    let _guard = acquire_hook_lock(cache);
+    let Some(_guard) = acquire_hook_lock(cache, wait_ms) else {
+        return false;
+    };
     let mut next = read_stats_at(cache).unwrap_or_default();
     patch(&mut next);
-    let _ = write_json_atomic(&cache.join("stats.json"), &next);
+    write_json_atomic(&cache.join("stats.json"), &next).is_ok()
 }
 
 /// Writes `value` as 2-space JSON via a scratch file and a rename
@@ -1608,37 +1631,40 @@ fn handle_pre_read(input: &Value, project_dir: &Path) -> Option<String> {
     }
     let key = canonical.to_string_lossy().into_owned();
     let hash = sieve_core::fingerprint::hash_source(&bytes);
-    let deny = update_session(project_dir, session_id, |session| {
-        // Every read clears the old narrow-read note. Only a narrowing below writes a
-        // new one. So `post-read` never sends a note for a full read.
-        session.narrowed.remove(&key);
-        let req = requested_lines(input);
-        // Only a Read whose every line an earlier Read of these bytes
-        // returned may be skipped. A new line must reach the agent. This
-        // handler only checks coverage: `post-read` records the lines, so a
-        // Read that fails never counts as delivered.
-        let mut record = match session.reads.remove(&key) {
-            Some(r) if r.hash == hash => r,
-            _ => ReadRecord {
-                hash,
-                ..ReadRecord::default()
-            },
-        };
-        if record.covers(req) && !record.denied {
-            record.denied = true;
+    let (deny, recorded) =
+        update_session_checked(project_dir, session_id, SESSION_LOCK_WAIT_MS, |session| {
+            // Every read clears the old narrow-read note. Only a narrowing below writes a
+            // new one. So `post-read` never sends a note for a full read.
+            session.narrowed.remove(&key);
+            let req = requested_lines(input);
+            // Only a Read whose every line an earlier Read of these bytes
+            // returned may be skipped. A new line must reach the agent. This
+            // handler only checks coverage: `post-read` records the lines, so a
+            // Read that fails never counts as delivered.
+            let mut record = match session.reads.remove(&key) {
+                Some(r) if r.hash == hash => r,
+                _ => ReadRecord {
+                    hash,
+                    ..ReadRecord::default()
+                },
+            };
+            if record.covers(req) && !record.denied {
+                record.denied = true;
+                session.reads.insert(key.clone(), record);
+                session.add_saved(sieve_savings::to_tokens(requested_chars(&bytes, req)));
+                return true;
+            }
+            // ponytail: the deny alternates by design, one deny per two reads. The
+            // deny text names the escape, so the agent spends it only when it lost
+            // the copy, not on every unchanged read.
+            record.denied = false;
             session.reads.insert(key.clone(), record);
-            session.add_saved(sieve_savings::to_tokens(requested_chars(&bytes, req)));
-            return true;
-        }
-        // ponytail: the deny alternates by design, one deny per two reads. The
-        // deny text names the escape, so the agent spends it only when it lost
-        // the copy, not on every unchanged read.
-        record.denied = false;
-        session.reads.insert(key.clone(), record);
-        false
-    });
+            false
+        });
     if deny {
-        return Some(pre_read_deny_json(file_path));
+        // Without the record on disk the next read cannot pass, and the saving
+        // is never kept. So a missed lock lets the Read through.
+        return recorded.then(|| pre_read_deny_json(file_path));
     }
     // Only the Read tool reaches this line. `handle_pre_bash` owns a Bash
     // read. A Grep has no wiring yet.
@@ -1658,11 +1684,12 @@ fn handle_pre_read(input: &Value, project_dir: &Path) -> Option<String> {
     let context_dir = resolve_context_dir(project_dir);
     let graph_answer = intercept::answer(project_dir, &context_dir, &intent);
     let note = intercept::decide(&intent, Some(raw_bytes), graph_answer)?;
-    let (_, recorded) = update_session_checked(project_dir, session_id, |session| {
-        // The record keeps only the lines earlier Reads returned. `post-read`
-        // adds the narrowed range, because the call below returns only that.
-        session.narrowed.insert(key, note);
-    });
+    let (_, recorded) =
+        update_session_checked(project_dir, session_id, SESSION_LOCK_WAIT_MS, |session| {
+            // The record keeps only the lines earlier Reads returned. `post-read`
+            // adds the narrowed range, because the call below returns only that.
+            session.narrowed.insert(key, note);
+        });
     recorded.then(|| pre_read_narrow_json(file_path))
 }
 
@@ -1712,6 +1739,8 @@ fn handle_post_read(input: &Value, project_dir: &Path) -> Option<String> {
         } else {
             requested_lines(input)
         };
+        // A skipped write loses this range. That only makes a later deny less
+        // likely, so it is safe.
         if let Some(record) = session.reads.get_mut(&key) {
             record.add(lines);
         }
@@ -1800,18 +1829,19 @@ fn handle_pre_bash(input: &Value, project_dir: &Path) -> Option<String> {
     let context_dir = resolve_context_dir(project_dir);
     let graph_answer = intercept::answer_bash(project_dir, &context_dir, &intent);
     let note = intercept::decide(&intent, Some(*raw_bytes), graph_answer);
-    let (narrowed, recorded) = update_session_checked(project_dir, session_id, |session| {
-        // Every Bash read clears the old note. Only a narrowing writes a
-        // new one. So `post-read` never sends a note for a full read.
-        session.narrowed.remove(&key);
-        match note {
-            Some(text) => {
-                session.narrowed.insert(key.clone(), text);
-                true
+    let (narrowed, recorded) =
+        update_session_checked(project_dir, session_id, SESSION_LOCK_WAIT_MS, |session| {
+            // Every Bash read clears the old note. Only a narrowing writes a
+            // new one. So `post-read` never sends a note for a full read.
+            session.narrowed.remove(&key);
+            match note {
+                Some(text) => {
+                    session.narrowed.insert(key.clone(), text);
+                    true
+                }
+                None => false,
             }
-            None => false,
-        }
-    });
+        });
     (narrowed && recorded).then(|| pre_bash_narrow_json(input, &key))
 }
 
@@ -2496,6 +2526,9 @@ fn has_tally_for(text: &str, name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A wait that no loaded machine reaches. The tests never wait this long.
+    const TEST_WAIT_MS: u64 = 60_000;
 
     #[test]
     fn test_p4_24_session_rewrite_keeps_the_billing_fields() {
@@ -3292,8 +3325,8 @@ mod tests {
             scope.spawn(|| {
                 barrier.wait();
                 // The sleep holds the lock, so the two calls must overlap.
-                // Do not delete it: without it the test can pass with no lock.
-                update_session(&dir.path, "s1", |s| {
+                // The wait is long, so a loaded machine cannot time it out.
+                update_session_checked(&dir.path, "s1", TEST_WAIT_MS, |s| {
                     std::thread::sleep(std::time::Duration::from_millis(100));
                     s.reads.insert(
                         "a".into(),
@@ -3307,7 +3340,7 @@ mod tests {
             });
             scope.spawn(|| {
                 barrier.wait();
-                update_session(&dir.path, "s1", |s| {
+                update_session_checked(&dir.path, "s1", TEST_WAIT_MS, |s| {
                     std::thread::sleep(std::time::Duration::from_millis(100));
                     s.saved_tokens += 7;
                 });
@@ -3326,15 +3359,15 @@ mod tests {
             scope.spawn(|| {
                 barrier.wait();
                 // The sleep holds the lock, so the two calls must overlap.
-                // Do not delete it: without it the test can pass with no lock.
-                patch_stats(&dir.path, |s| {
+                // The wait is long, so a loaded machine cannot time it out.
+                patch_stats_waiting(&cache_dir(&dir.path), TEST_WAIT_MS, |s| {
                     std::thread::sleep(std::time::Duration::from_millis(100));
                     s.node_count += 3;
                 });
             });
             scope.spawn(|| {
                 barrier.wait();
-                patch_stats(&dir.path, |s| {
+                patch_stats_waiting(&cache_dir(&dir.path), TEST_WAIT_MS, |s| {
                     std::thread::sleep(std::time::Duration::from_millis(100));
                     s.edge_count += 4;
                 });
@@ -3346,7 +3379,7 @@ mod tests {
     }
 
     #[test]
-    fn test_f3_update_session_works_when_the_lock_is_held() {
+    fn test_f3_no_write_when_the_lock_is_held() {
         let dir = TempDir::new("lock-held");
         let lock_dir = session_path(&dir.path, "s1")
             .parent()
@@ -3357,10 +3390,25 @@ mod tests {
             .expect("lock is free");
 
         let start = std::time::Instant::now();
-        update_session(&dir.path, "s1", |s| s.saved_tokens = 5);
+        let (out, written) = update_session_checked(&dir.path, "s1", 30, |s| {
+            s.saved_tokens = 5;
+            "result"
+        });
+        // The call gives up after the wait, so a hook never hangs. The bound is
+        // far above the wait, so a loaded machine does not fail it.
+        assert!(start.elapsed() < std::time::Duration::from_secs(20));
 
-        assert!(start.elapsed() < std::time::Duration::from_millis(1000));
-        assert_eq!(read_session(&dir.path, "s1").saved_tokens, 5);
+        // The caller still gets its result, but the file stays untouched.
+        assert_eq!(out, "result");
+        assert!(!written);
+        assert_eq!(read_session(&dir.path, "s1").saved_tokens, 0);
+
+        let cache = cache_dir(&dir.path);
+        let _held_stats = sieve_core::lock::LockGuard::acquire(&cache)
+            .expect("acquire stats lock")
+            .expect("stats lock is free");
+        assert!(!patch_stats_waiting(&cache, 30, |s| s.node_count = 9));
+        assert!(read_stats(&dir.path).is_none());
     }
 
     // -----------------------------------------------------------------------
