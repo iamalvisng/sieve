@@ -12,7 +12,7 @@
         ]
       },
       {
-        "matcher": "Bash|mcp__sieve__|Read|Grep|Glob",
+        "matcher": "Bash|mcp__.*sieve.*|Read|Grep|Glob",
         "hooks": [
           {
             "type": "command",

@@ -1533,7 +1533,7 @@ fn test_p4_07_hooks_merge_keeps_foreign_and_drops_stale_own_entries() {
     let expected_post_tool_use = serde_json::json!([
         foreign,
         claude_hook_json("Write|Edit|MultiEdit", "post-edit", 10),
-        claude_hook_json("Bash|mcp__sieve__|Read|Grep|Glob", "tool-savings", 8),
+        claude_hook_json("Bash|mcp__.*sieve.*|Read|Grep|Glob", "tool-savings", 8),
         claude_hook_json("Read", "post-read", 5),
         claude_hook_json("Bash", "post-read", 5),
         claude_hook_json("Bash", "post-search", 3),

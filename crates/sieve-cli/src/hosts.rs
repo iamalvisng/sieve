@@ -1104,7 +1104,11 @@ fn merged_hooks_ojson(existing_hooks: Option<&OJson>) -> OJson {
     let mut post_tool_use = vec![
         claude_hook_block(Some("Write|Edit|MultiEdit"), "post-edit", 10),
         claude_hook_block(
-            Some(&format!("Bash|mcp__{}__|Read|Grep|Glob", product().name)),
+            // Claude Code reads a matcher of only letters, digits, `_` and `|`
+            // as exact tool names. The `.*` makes this a pattern, so it
+            // matches `mcp__sieve__sieve_callers` and a server registered
+            // under another name, such as `mcp__sieve-local__...`.
+            Some(&format!("Bash|mcp__.*{}.*|Read|Grep|Glob", product().name)),
             "tool-savings",
             8,
         ),
@@ -2143,6 +2147,51 @@ mod tests {
         // so it survives again with no duplication.
         let (action, _) = merge_claude_settings(&path, false).unwrap();
         assert_eq!(action, WriteAction::Unchanged);
+    }
+
+    /// Whether Claude Code would run a hook for `tool`. A matcher alternative
+    /// of only word characters is an exact name; one with `.*` is a pattern.
+    fn matcher_fires(matcher: &str, tool: &str) -> bool {
+        matcher.split('|').any(|alt| {
+            if !alt.contains(".*") {
+                return alt == tool;
+            }
+            let mut rest = tool;
+            alt.split(".*").all(|part| match rest.find(part) {
+                Some(i) => {
+                    rest = &rest[i + part.len()..];
+                    true
+                }
+                None => false,
+            })
+        })
+    }
+
+    #[test]
+    fn the_tool_savings_matcher_fires_for_an_mcp_sieve_tool() {
+        let dir = TempDir::new("claude-settings-mcp-matcher");
+        let path = dir.path.join("settings.json");
+        merge_claude_settings(&path, false).unwrap();
+        let value: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+        let blocks = value["hooks"]["PostToolUse"].as_array().unwrap();
+        let savings = blocks
+            .iter()
+            .find(|b| {
+                b["hooks"][0]["command"]
+                    .as_str()
+                    .is_some_and(|c| c.ends_with("tool-savings"))
+            })
+            .expect("a tool-savings block");
+        let matcher = savings["matcher"].as_str().unwrap();
+        for tool in [
+            "mcp__sieve__sieve_callers",
+            "mcp__sieve-local__sieve_callers",
+            "Bash",
+        ] {
+            assert!(matcher_fires(matcher, tool), "{matcher} misses {tool}");
+        }
+        assert!(!matcher_fires(matcher, "mcp__other__lookup"));
     }
 
     #[test]

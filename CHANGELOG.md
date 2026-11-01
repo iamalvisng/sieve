@@ -5,6 +5,15 @@ All notable changes to this project are in this file.
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.7] - 2026-11-01
+
+This release makes the status line count MCP Sieve calls.
+
+### Fixed
+
+- The status line counts a Sieve MCP call as a lookup. Before, the Claude Code hook matcher held `mcp__sieve__`. Claude Code reads a matcher of only letters, digits, `_` and `|` as exact tool names, so that entry matched no tool, and the hook never ran on an MCP call. The matcher is now `Bash|mcp__.*sieve.*|Read|Grep|Glob`. It also covers a Sieve server registered under another name.
+- To get the new matcher, run `sieve init` again in each repo where you set up Sieve.
+
 ## [0.2.6] - 2026-11-01
 
 This release builds the index on the first query and adds monorepo scoping.
