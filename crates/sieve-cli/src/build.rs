@@ -69,6 +69,12 @@ pub struct BuildArgs {
         overrides_with = "follow_nested_repos"
     )]
     pub no_follow_nested_repos: bool,
+    /// Leaves a repo-relative folder or file out of the index; repeatable, persisted for later builds and automatic refreshes.
+    #[arg(long = "exclude", value_name = "path", allow_hyphen_values = true, action = clap::ArgAction::Append)]
+    pub exclude: Vec<String>,
+    /// Takes a path back out of the persisted `--exclude` list; repeatable.
+    #[arg(long = "no-exclude", value_name = "path", allow_hyphen_values = true, action = clap::ArgAction::Append)]
+    pub no_exclude: Vec<String>,
     /// Repo-relative prefixes to index; recorded in the fingerprint.
     #[arg(long = "only-dir", value_name = "path", allow_hyphen_values = true, action = clap::ArgAction::Append)]
     pub only_dir: Vec<String>,
@@ -78,6 +84,27 @@ pub struct BuildArgs {
 }
 
 impl BuildArgs {
+    /// The flags of a plain `sieve build` over `root_dir`. This is not a
+    /// `Default` impl, because a `Default` on a clap type changes the help.
+    fn plain(root_dir: &Path) -> Self {
+        Self {
+            root_dir: root_dir.to_path_buf(),
+            no_gitignore: false,
+            no_ignore: false,
+            lsp: false,
+            extensions: Vec::new(),
+            include_dir: Vec::new(),
+            follow_submodules: false,
+            no_follow_submodules: false,
+            follow_nested_repos: false,
+            no_follow_nested_repos: false,
+            exclude: Vec::new(),
+            no_exclude: Vec::new(),
+            only_dir: Vec::new(),
+            no_reuse: false,
+        }
+    }
+
     /// The follow choices given on the command line, as config keys.
     /// A flag not given leaves the persisted value.
     fn follow_patch(&self) -> Vec<(&'static str, bool)> {
@@ -100,6 +127,98 @@ impl BuildArgs {
         }
         out
     }
+}
+
+/// The `--exclude` and `--no-exclude` paths, checked and made relative to the
+/// repo root.
+#[derive(Debug, Default)]
+struct ExcludeEdit {
+    add: Vec<String>,
+    remove: Vec<String>,
+}
+
+impl ExcludeEdit {
+    /// Checks every path the user gave. The first bad path is the error.
+    fn from_args(args: &BuildArgs, root: &Path) -> Result<Self, String> {
+        let check = |flag, paths: &[String]| -> Result<Vec<String>, String> {
+            paths.iter().map(|p| exclude_path(flag, p, root)).collect()
+        };
+        Ok(Self {
+            add: check("--exclude", &args.exclude)?,
+            remove: check("--no-exclude", &args.no_exclude)?,
+        })
+    }
+
+    fn is_empty(&self) -> bool {
+        self.add.is_empty() && self.remove.is_empty()
+    }
+
+    /// The persisted list after this edit: the old paths less `remove`, then
+    /// the new paths in the order given, with no repeat.
+    fn apply(&self, old: &mut Vec<String>) {
+        old.retain(|p| !self.remove.contains(p));
+        for path in &self.add {
+            if !old.contains(path) {
+                old.push(path.clone());
+            }
+        }
+    }
+}
+
+/// `given` without the `root` prefix. An absolute path that does not start with
+/// `root` is tried again with both sides resolved, so `/tmp/x` and `/private/tmp/x`
+/// (a symlinked prefix) name the same place. Any other path is returned as is.
+fn under_root<'a>(given: &'a Path, root: &Path) -> std::borrow::Cow<'a, Path> {
+    use std::borrow::Cow;
+    if let Ok(rel) = given.strip_prefix(root) {
+        return Cow::Borrowed(rel);
+    }
+    if !given.is_absolute() {
+        return Cow::Borrowed(given);
+    }
+    let real_root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    match resolve_existing_prefix(given).strip_prefix(&real_root) {
+        Ok(rel) => Cow::Owned(rel.to_path_buf()),
+        Err(_) => Cow::Borrowed(given),
+    }
+}
+
+/// Resolves the longest existing ancestor of `path` and appends the rest, so a
+/// path that does not exist yet still resolves.
+fn resolve_existing_prefix(path: &Path) -> PathBuf {
+    let mut tail = Vec::new();
+    let mut current = path;
+    loop {
+        if let Ok(real) = current.canonicalize() {
+            return tail.iter().rev().fold(real, |acc, name| acc.join(name));
+        }
+        match (current.parent(), current.file_name()) {
+            (Some(parent), Some(name)) => {
+                tail.push(name);
+                current = parent;
+            }
+            _ => return path.to_path_buf(),
+        }
+    }
+}
+
+/// The repo-relative form of an `--exclude` path with forward slashes. A path
+/// outside the root, or the root itself, is an error.
+fn exclude_path(flag: &str, raw: &str, root: &Path) -> Result<String, String> {
+    let normalized = normalize_path_prefix(raw);
+    let given = Path::new(&normalized);
+    let rel = under_root(given, root);
+    let outside = rel.is_absolute() || rel.components().any(|c| c == Component::ParentDir);
+    if outside || rel.as_os_str().is_empty() {
+        return Err(format!(
+            "{flag} \"{raw}\": expected a file or folder inside the repo root \u{2014} try {flag} packages/app"
+        ));
+    }
+    Ok(rel
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/"))
 }
 
 /// The `--include-dir` check: a bare directory name, never a dot name and never
@@ -164,6 +283,7 @@ fn patch_build_config(
     root: &Path,
     include_dirs: &[String],
     follow: &[(&str, bool)],
+    exclude: &ExcludeEdit,
 ) -> Result<(), String> {
     let config_dir_name = product().home_dir_name();
     let path = root.join(&config_dir_name).join("config.json");
@@ -186,6 +306,28 @@ fn patch_build_config(
     }
     for (key, value) in follow {
         config.set(key, OJson::Bool(*value));
+    }
+    if !exclude.is_empty() {
+        let mut paths: Vec<String> = parsed
+            .as_ref()
+            .and_then(|p| p.get("excludeDirs"))
+            .and_then(OJson::as_arr)
+            .map(|old| {
+                old.iter()
+                    .filter_map(OJson::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default();
+        exclude.apply(&mut paths);
+        if paths.is_empty() {
+            config.remove("excludeDirs");
+        } else {
+            config.set(
+                "excludeDirs",
+                OJson::arr(paths.iter().map(OJson::s).collect()),
+            );
+        }
     }
 
     let gitignore = root.join(".gitignore");
@@ -266,8 +408,9 @@ pub fn run(args: &BuildArgs, context_dir_override: Option<&Path>) -> Result<(), 
     // Persisted before the build, so this walk and every later one read
     // the same override.
     let follow = args.follow_patch();
-    if !args.include_dir.is_empty() || !follow.is_empty() {
-        patch_build_config(&root, &args.include_dir, &follow)?;
+    let exclude = ExcludeEdit::from_args(args, &root)?;
+    if !args.include_dir.is_empty() || !follow.is_empty() || !exclude.is_empty() {
+        patch_build_config(&root, &args.include_dir, &follow, &exclude)?;
     }
 
     let context_dir = match context_dir_override {
@@ -275,8 +418,7 @@ pub fn run(args: &BuildArgs, context_dir_override: Option<&Path>) -> Result<(), 
         None => root.join(product().context_dir_name()),
     };
 
-    let skip_gitignore = args.no_gitignore || env_truthy(&product().env_var("NO_GITIGNORE"));
-    let skip_ignore = args.no_ignore || env_truthy(&product().env_var("NO_IGNORE"));
+    let (skip_gitignore, skip_ignore) = skip_ignore_edits(args);
 
     // A workspace parent: build each git child on its own, then
     // leave only `workspace.json` here.
@@ -332,6 +474,53 @@ pub fn run(args: &BuildArgs, context_dir_override: Option<&Path>) -> Result<(), 
         None => lines.iter().for_each(|l| println!("{l}")),
     }
     Ok(())
+}
+
+/// Whether the build skips the `.gitignore` edit and the `.ignore` edit.
+fn skip_ignore_edits(args: &BuildArgs) -> (bool, bool) {
+    (
+        args.no_gitignore || env_truthy(&product().env_var("NO_GITIGNORE")),
+        args.no_ignore || env_truthy(&product().env_var("NO_IGNORE")),
+    )
+}
+
+/// How long a first query waits for another process that builds the same
+/// index.
+const FIRST_BUILD_WAIT: std::time::Duration = std::time::Duration::from_secs(600);
+
+/// Builds the index of the single repo at `root`, the same build as a plain
+/// `sieve build`, for a query that found no index. It prints no report;
+/// the caller prints one note. Returns the count of indexed files, or
+/// `None` when another process built the index while this one waited for
+/// the build lock.
+pub fn build_for_query(root: &Path, context_dir: &Path) -> Result<Option<usize>, String> {
+    let waiting_since = std::time::Instant::now();
+    let _build_lock = loop {
+        match acquire_build_lock(context_dir).map_err(|e| e.to_string())? {
+            Some(lock) => break lock,
+            None if waiting_since.elapsed() < FIRST_BUILD_WAIT => {}
+            None => return Err(IN_FLIGHT.to_string()),
+        }
+    };
+    // The process that held the lock may have built the index.
+    if context_dir.join(".graph").join("wiring.json").is_file() {
+        return Ok(None);
+    }
+    let args = BuildArgs::plain(root);
+    let (skip_gitignore, skip_ignore) = skip_ignore_edits(&args);
+    let built = build_repo_locked(
+        root,
+        context_dir,
+        &args,
+        Vec::new(),
+        skip_gitignore,
+        skip_ignore,
+        false,
+    )?;
+    for error in &built.errors {
+        ui::print_error(&error.to_string());
+    }
+    Ok(Some(built.files))
 }
 
 /// What the build summary says.
@@ -446,11 +635,32 @@ fn build_repo(
     // lock held waits up to `lock::LOCK_WAIT_MS`, then gives up.
     let _build_lock = acquire_build_lock(context_dir)
         .map_err(|e| e.to_string())?
-        .ok_or_else(|| {
-            "a graph rebuild is already in flight \u{2014} wait, then run sieve build again"
-                .to_string()
-        })?;
+        .ok_or_else(|| IN_FLIGHT.to_string())?;
+    build_repo_locked(
+        root,
+        context_dir,
+        args,
+        only_dirs,
+        skip_gitignore,
+        skip_ignore,
+        progress,
+    )
+}
 
+/// The text of a build that cannot get the build lock.
+const IN_FLIGHT: &str =
+    "a graph rebuild is already in flight \u{2014} wait, then run sieve build again";
+
+/// The body of [`build_repo`]. The caller holds the build lock.
+fn build_repo_locked(
+    root: &Path,
+    context_dir: &Path,
+    args: &BuildArgs,
+    only_dirs: Vec<String>,
+    skip_gitignore: bool,
+    skip_ignore: bool,
+    progress: bool,
+) -> Result<Built, String> {
     // `build_graph_cached` walks the repo, excludes the context dir, and
     // reads and hashes every claimed file exactly once. The CLI reuses
     // that walk order and those prints instead of reading the repo again.
@@ -599,7 +809,12 @@ fn run_workspace(
         let child_root = root.join(child);
         let follow = args.follow_patch();
         if !args.include_dir.is_empty() || !follow.is_empty() {
-            patch_build_config(&child_root, &args.include_dir, &follow)?;
+            patch_build_config(
+                &child_root,
+                &args.include_dir,
+                &follow,
+                &ExcludeEdit::default(),
+            )?;
         }
         let built = build_repo(
             &child_root,
@@ -1003,8 +1218,10 @@ mod tests {
         .expect("seed config");
         std::fs::write(dir.join(".gitignore"), "/sieve/\n").expect("seed gitignore");
 
-        patch_build_config(&dir, &["dist".to_string()], &[]).expect("patch");
-        patch_build_config(&dir, &["dist".to_string(), "out".to_string()], &[]).expect("patch");
+        let none = ExcludeEdit::default();
+        patch_build_config(&dir, &["dist".to_string()], &[], &none).expect("patch");
+        patch_build_config(&dir, &["dist".to_string(), "out".to_string()], &[], &none)
+            .expect("patch");
 
         let config: serde_json::Value =
             serde_json::from_slice(&std::fs::read(dir.join(".sieve/config.json")).expect("read"))
@@ -1042,6 +1259,7 @@ mod tests {
             &dir,
             &["vendor".to_string()],
             &[("followNestedRepos", true)],
+            &ExcludeEdit::default(),
         )
         .expect("patch");
 
@@ -1064,7 +1282,13 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join(".sieve")).expect("mkdir");
         std::fs::write(dir.join(".sieve/config.json"), seed).expect("seed config");
-        patch_build_config(&dir, &[], &[("followSubmodules", true)]).expect("patch");
+        patch_build_config(
+            &dir,
+            &[],
+            &[("followSubmodules", true)],
+            &ExcludeEdit::default(),
+        )
+        .expect("patch");
         let written = std::fs::read_to_string(dir.join(".sieve/config.json")).expect("read");
         let _ = std::fs::remove_dir_all(&dir);
         written
@@ -1107,6 +1331,8 @@ mod tests {
             no_follow_submodules: false,
             follow_nested_repos: false,
             no_follow_nested_repos: false,
+            exclude: Vec::new(),
+            no_exclude: Vec::new(),
             only_dir: Vec::new(),
             no_reuse: false,
         };

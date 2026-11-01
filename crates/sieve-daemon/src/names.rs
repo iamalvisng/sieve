@@ -74,7 +74,7 @@ pub fn tool_specs() -> Vec<ToolSpec> {
         (
             "sieve_map",
             "Token-budgeted repo orientation — directory clusters, per-directory hubs, and global hotspots computed purely from the symbol graph ($0, no LLM). Use this to get oriented in an unfamiliar repo before diving into files.",
-            r#"{"type":"object","properties":{"max_dirs":{"type":"number","description":"max directory entries shown, rest counted into dropped (default 16)"}}}"#,
+            r#"{"type":"object","properties":{"max_dirs":{"type":"number","description":"max directory entries shown, rest counted into dropped (default 16)"},"in":{"type":"string","description":"map only files at or under this repo-relative path prefix, e.g. server/src"}}}"#,
         ),
     ];
     let mut specs: Vec<ToolSpec> = raw

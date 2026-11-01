@@ -342,8 +342,33 @@ fn normalize_path_prefix(prefix: &str) -> String {
 
 /// Segment-aware prefix match, mirroring `pathUnderPrefix`
 ///: an empty prefix matches every path.
-fn path_under_prefix(path: &str, prefix: &str) -> bool {
+pub(crate) fn path_under_prefix(path: &str, prefix: &str) -> bool {
     prefix.is_empty() || path == prefix || path.starts_with(&format!("{prefix}/"))
+}
+
+/// Normalizes a `--in` prefix and checks that the graph holds a node under it.
+/// An empty prefix (from a bare `/`) means "match everything", the same as no
+/// `--in` at all: it never errors, even on an empty graph.
+pub(crate) fn checked_prefix(graph: &Graph, raw: &str) -> Result<String, AskError> {
+    let normalized = normalize_path_prefix(raw);
+    let indexed = normalized.is_empty()
+        || graph
+            .nodes
+            .iter()
+            .any(|n| path_under_prefix(&n.path, &normalized));
+    if indexed {
+        return Ok(normalized);
+    }
+    let scopes = graph
+        .meta
+        .scopes
+        .iter()
+        .map(|s| scope_label(&s.prefix))
+        .collect();
+    Err(AskError::PrefixNotIndexed {
+        prefix: normalized,
+        scopes,
+    })
 }
 
 /// The word `ask` prints for a node's kind in a hit title.
@@ -756,35 +781,11 @@ fn ask_inner(
     want_ranking: bool,
     warm: Option<&WarmKey>,
 ) -> Result<(AskResult, Option<Ranking>), AskError> {
-    let prefix = match &opts.in_prefix {
-        Some(raw) => {
-            let normalized = normalize_path_prefix(raw);
-            // An empty prefix (from a bare `/`) means "match everything",
-            // the same as no `--in` at all — never an indexed check, never
-            // an error, even on an empty graph (`assertPrefixIndexed`'s
-            // `!prefix` short-circuit).
-            if !normalized.is_empty() {
-                let indexed = graph
-                    .nodes
-                    .iter()
-                    .any(|n| path_under_prefix(&n.path, &normalized));
-                if !indexed {
-                    let scopes: Vec<String> = graph
-                        .meta
-                        .scopes
-                        .iter()
-                        .map(|s| scope_label(&s.prefix))
-                        .collect();
-                    return Err(AskError::PrefixNotIndexed {
-                        prefix: normalized,
-                        scopes,
-                    });
-                }
-            }
-            Some(normalized)
-        }
-        None => None,
-    };
+    let prefix = opts
+        .in_prefix
+        .as_deref()
+        .map(|raw| checked_prefix(graph, raw))
+        .transpose()?;
 
     // Structural mode runs first, before any lexical scoring. A genuine
     // structural result returns immediately; a fallthrough note carries

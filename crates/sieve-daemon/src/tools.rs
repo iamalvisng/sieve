@@ -24,7 +24,7 @@ use sieve_query::callers::{
 use sieve_query::grep::{
     format_grep_result, grep_graph_cached, zero_hit_note, GrepError, GrepOptions, DEFAULT_MAX_HITS,
 };
-use sieve_query::map::{build_repo_map, format_repo_map, MapOptions, RepoMap};
+use sieve_query::map::{build_repo_map_in, format_repo_map, MapOptions, RepoMap};
 use sieve_query::skeleton::{format_skeleton, skeleton};
 use sieve_query::workspace::{
     coverage_note, federate_ask, federate_callers, federate_grep, federate_map, load_children,
@@ -46,6 +46,18 @@ pub fn set_why_handler(handler: WhyHandler) {
     if let Ok(mut slot) = WHY_HANDLER.lock() {
         *slot = Some(handler);
     }
+}
+
+/// A function that every tool call runs first. An `Err` is the text of the
+/// tool error the call returns, with no further work.
+pub type CallGate = fn() -> Result<(), String>;
+
+static CALL_GATE: std::sync::OnceLock<CallGate> = std::sync::OnceLock::new();
+
+/// Sets the call gate. The CLI crate uses it to hold a call until the first
+/// index build ends, and to return the build error. The first call wins.
+pub fn set_call_gate(gate: CallGate) {
+    let _ = CALL_GATE.set(gate);
 }
 
 /// `sieve_why`: runs the handler. It never runs `gh`.
@@ -152,6 +164,9 @@ fn reload_if_dropped(
 /// the refresh-note prefix. Returns the result text and whether it is an
 /// error.
 pub fn call(name: &str, args: &Value, root: &Path, context_dir: &Path) -> (String, bool) {
+    if let Some(Err(text)) = CALL_GATE.get().map(|gate| gate()) {
+        return (text, true);
+    }
     // The warm graph lasts for this call only; `load_graph` reads it.
     let _clear = crate::warm::ClearOnDrop;
     let canonical = canonical_tool_name(name);
@@ -887,7 +902,10 @@ fn repo_map(args: &Value, context_dir: &Path) -> (String, bool) {
         opts.max_dirs = n as usize;
     }
 
-    let map = build_repo_map(&graph, &opts);
+    let map = match build_repo_map_in(&graph, &opts, str_arg(args, "in")) {
+        Ok(map) => map,
+        Err(e) => return (e.to_string(), true),
+    };
     // Strip-then-restore the trailing newline before measuring the
     // savings pack; same rounding-boundary fix as `file_api`
     //.

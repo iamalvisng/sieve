@@ -55,6 +55,7 @@ pub fn walk_repo_stat(root: &Path) -> std::io::Result<Vec<WalkEntry>> {
 /// [`walk_repo_stat`] with the git program named, so a test can run with git missing.
 fn walk_repo_stat_with(root: &Path, git: &OsStr) -> std::io::Result<Vec<WalkEntry>> {
     let includes = read_include_dirs(root);
+    let excludes = read_exclude_dirs(root);
     let follow_submodules = read_config_flag(root, "followSubmodules");
     let follow_nested = read_config_flag(root, "followNestedRepos");
     let follow = follow_submodules || follow_nested;
@@ -92,7 +93,7 @@ fn walk_repo_stat_with(root: &Path, git: &OsStr) -> std::io::Result<Vec<WalkEntr
         }
     };
 
-    files.retain(|rel| !has_skipped_component(rel, &includes));
+    files.retain(|rel| !has_skipped_component(rel, &includes) && !is_excluded(rel, &excludes));
     let mut entries: Vec<WalkEntry> = files
         .into_iter()
         .filter_map(|rel| under_size_cap(root, &rel).map(|stat| WalkEntry { rel, stat }))
@@ -279,6 +280,22 @@ fn read_config_flag(root: &Path, key: &str) -> bool {
 /// `<root>/.<product>/config.json`. A name in the list leaves `SKIP_DIRS` for
 /// this repo's walks. A missing or unreadable file gives an empty list.
 pub fn read_include_dirs(root: &Path) -> Vec<String> {
+    read_string_list(root, "includeDirs")
+}
+
+/// Reads the persisted `build --exclude` paths for `root`. Each path is
+/// relative to `root`. A missing or unreadable file gives an empty list.
+pub fn read_exclude_dirs(root: &Path) -> Vec<String> {
+    read_string_list(root, "excludeDirs")
+}
+
+/// True when `rel` is one of `excludes` or lies under one of them.
+pub fn is_excluded(rel: &Path, excludes: &[String]) -> bool {
+    excludes.iter().any(|path| rel.starts_with(path))
+}
+
+/// Reads one string array of `<root>/.<product>/config.json`.
+fn read_string_list(root: &Path, key: &str) -> Vec<String> {
     let path = root
         .join(crate::product().home_dir_name())
         .join("config.json");
@@ -288,7 +305,7 @@ pub fn read_include_dirs(root: &Path) -> Vec<String> {
     let Ok(value) = serde_json::from_slice::<serde_json::Value>(&body) else {
         return Vec::new();
     };
-    value["includeDirs"]
+    value[key]
         .as_array()
         .map(|names| {
             names

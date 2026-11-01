@@ -8,20 +8,22 @@ A `[dir]` argument defaults to the nearest ancestor folder with a `sieve/` index
 
 ```
 $ sieve build .
-sieve sifted vite-new in 1.6 s
-1,583 files → 4,866 symbols · 10,055 links
-astro · javascript · jsx · svelte · tsx · typescript · vue
+sieve sifted vite-docs in 1.7 s
+1,634 files → 5,025 symbols · 10,493 links
+astro · javascript · jsx · shell · svelte · tsx · typescript · vue
 index in ./sieve · git-ignored · stays on this machine
 ```
 
-Flags: `-e`, `--no-reuse`, `--lsp`, `--include-dir`, `--only-dir`, `--no-gitignore`,
+Flags: `-e`, `--no-reuse`, `--lsp`, `--include-dir`, `--exclude`, `--no-exclude`, `--only-dir`, `--no-gitignore`,
 `--no-ignore`, and the follow flags. See [Configuration](configuration.md).
 
-## ask
+## query
+
+`ask` is an alias.
 
 ```
 $ sieve query "how does the dev server handle hot module replacement"
-ask  how does the dev server handle hot module replacement · 8 hits
+query  how does the dev server handle hot module replacement · 8 hits
 
 1  [packages/vite/] createServerModuleRunner  fn  packages/vite/src/node/ssr/runtime/serverModuleRunner.ts:143-160
    function createServerModuleRunner( environment: DevEnvironment, options: ServerModuleRunnerOptions = {}, ): ModuleRunner
@@ -29,8 +31,10 @@ ask  how does the dev server handle hot module replacement · 8 hits
 2  [packages/vite/] handleHMRUpdate  fn  packages/vite/src/node/server/hmr.ts:411-679
    async function handleHMRUpdate( type: 'create' | 'delete' | 'update', file: string, server: ViteDevServer, ): Promise<void>
 
-3  [packages/vite/] _createServer  fn  packages/vite/src/node/server/index.ts:513-1148
+3  [packages/vite/] _createServer  fn  packages/vite/src/node/server/index.ts:511-1159
+   async function _createServer( inlineConfig: ResolvedConfig | InlineConfig | undefined = {}, options: { listen: boolean previousEnvironments?: Record<string, DevEnvironment> previousShortcutsState?: ShortcutsState<ViteDevServer> restartState?: ServerRestartState }, ): Promise<ViteDevServer>
 ...
+🎯 8 ranked hits
 ```
 
 Flags: `-n/--limit`, `--source`, `--full`, `--in <path>`, `--json`, `--no-refresh`.
@@ -44,11 +48,11 @@ handleHMRUpdate  fn  packages/vite/src/node/server/hmr.ts:411-679
 ├─ testRestartDuringHotUpdate  fn  packages/vite/src/node/server/__tests__/hmr.spec.ts:6-40
 │  │  34: handleHMRUpdate(
 │  └─ hmr.spec.ts  file  packages/vite/src/node/server/__tests__/hmr.spec.ts:1-56
-└─ onHMRUpdate  fn  packages/vite/src/node/server/index.ts:908-915
-   │  913: await handleHMRUpdate(type, file, server)
-   ├─ onFileAddUnlink  fn  packages/vite/src/node/server/index.ts:917-953
-   └─ onFileChange  fn  packages/vite/src/node/server/index.ts:955-969
-[sieve] saved ≈ 20,282 tokens
+└─ onHMRUpdate  fn  packages/vite/src/node/server/index.ts:919-926
+   │  924: await handleHMRUpdate(type, file, server)
+   ├─ onFileAddUnlink  fn  packages/vite/src/node/server/index.ts:928-964
+   └─ onFileChange  fn  packages/vite/src/node/server/index.ts:966-980
+🎯 5 exact callers
 ```
 
 Each edge has a confidence, Extracted or Inferred. See
@@ -56,19 +60,22 @@ Each edge has a confidence, Extracted or Inferred. See
 
 Flags: `--direction <in|out>` (`out` lists callees), `-d/--depth <n|all>`, `--in`, `--json`.
 
-## grep
+## find
+
+`grep` is an alias.
 
 ```
 $ sieve find "handleHMRUpdate"
-grep "handleHMRUpdate" · 5 hits in 5 symbols across 3 files · searched 1583 files
+find "handleHMRUpdate" · 5 hits in 5 symbols across 3 files · searched 1634 files
 
 handleHMRUpdate  fn  packages/vite/src/node/server/hmr.ts:411-679  · 2 links in
   411: export async function handleHMRUpdate(
 
-_createServer.onHMRUpdate  fn  packages/vite/src/node/server/index.ts:908-915  · 2 links in
-  913: await handleHMRUpdate(type, file, server)
+_createServer.onHMRUpdate  fn  packages/vite/src/node/server/index.ts:919-926  · 2 links in
+  924: await handleHMRUpdate(type, file, server)
 
 ...
+🎯 5 hits in 5 symbols
 ```
 
 Flags: `-i/--ignore-case`, `--fixed`, `--in <path>`, `--json`, `--no-refresh`.
@@ -77,39 +84,44 @@ Flags: `-i/--ignore-case`, `--fixed`, `--in <path>`, `--json`, `--no-refresh`.
 
 ```
 $ sieve map
-map · 1583 files · 3283 symbols · 10055 links · javascript, jsx, tsx, typescript
+map · 1634 files · 3391 symbols · 10493 links · astro, javascript, jsx, shell, svelte, tsx, typescript, vue
 
 ## playground/environment-react-ssr/
-playground/environment-react-ssr/vite.config.ts1 file · 8 symbols   hubs: importWithRetry (vite.config.ts, 2←), vitePluginSsrMiddleware (vite.config.ts, 1←)
-playground/environment-react-ssr/src/3 files · 4 symbols   hubs: importHtml (entry-server.tsx, 1←), main (entry-client.tsx, 1←)
-playground/environment-react-ssr/__tests__/1 file · 0 symbols
+playground/environment-react-ssr/vite.config.ts  1 file · 8 symbols   hubs: importWithRetry (vite.config.ts, 2←), vitePluginSsrMiddleware (vite.config.ts, 1←)
+playground/environment-react-ssr/src/  3 files · 4 symbols   hubs: importHtml (entry-server.tsx, 1←), main (entry-client.tsx, 1←)
+playground/environment-react-ssr/__tests__/  1 file · 2 symbols   hubs: addImport (environment-react-ssr.spec.ts, 1←)
 
 ## playground/optimize-missing-deps/
-playground/optimize-missing-deps/__test__/2 files · 2 symbols
-playground/optimize-missing-deps/server.js1 file · 2 symbols   hubs: createServer (server.js, 1←), resolve (server.js, 1←)
+playground/optimize-missing-deps/__test__/  2 files · 2 symbols
+playground/optimize-missing-deps/server.js  1 file · 2 symbols   hubs: createServer (server.js, 1←), resolve (server.js, 1←)
 ...
 ```
 
-Flags: `--max-dirs <n>` (default 16), `--json`, `--no-refresh`.
+Flags: `--max-dirs <n>` (default 16), `--in <path>` (map only that path
+prefix, like `sieve query --in`), `--json`, `--no-refresh`.
 
-## skeleton
+## symbols
+
+`skeleton` is an alias.
 
 ```
 $ sieve symbols packages/vite/src/node/server/index.ts
-packages/vite/src/node/server/hmr.ts · 42 symbols
-    48-56  WsOptions  iface
-    58-88  HmrOptions  iface
-    90-97  HotUpdateOptions  iface
-   99-105  HmrContext  iface
-  107-111  PropagationBoundary  iface
-  113-115  HotChannelClient  iface
-  117-120  HotChannelListener  type  <T extends string = string> = ( data: InferCustomEventPayload<T>, client: HotChannelClient, ) => void
+packages/vite/src/node/server/index.ts · 48 symbols
+  119-216  ServerOptions  iface  extends CommonServerOptions
+  218-239  ResolvedServerOptions  iface  extends Omit< RequiredExceptFor< ServerOptions, | 'host' | 'https' | 'proxy' | 'hmr' | 'ws' | 'watch' | 'origin' | 'hotUpdateEnvironments' >, 'fs' | 'middlewareMode' | 'sourcemapIgnoreList' | 'forwardConsole' >
+  241-268  FileSystemServeOptions  iface
+  270-273  ServerHook  type  ( this: MinimalPluginContextWithoutEnvironment, server: ViteDevServer, ) => (() => void) | void | Promise<(() => void) | void>
+  275-282  CloseServerHookContext  iface
+  284-287  CloseServerHook  type  ( this: MinimalPluginContextWithoutEnvironment, context: CloseServerHookContext, ) => void | Promise<void>
 ...
+🎯 48 signatures
 ```
 
 Flags: `--json`, `--no-refresh`. The argument is a repo-relative path or a unique file name.
 
-## blast
+## impact
+
+`blast` is an alias.
 
 This sample ran after one edited line in `handleHMRUpdate` (`hmr.ts`).
 
@@ -117,12 +129,12 @@ This sample ran after one edited line in `handleHMRUpdate` (`hmr.ts`).
 $ sieve impact
 your diff changes handleHMRUpdate · 1 symbol in 2 files · 1 of 1 reached by a test · working tree vs HEAD
 3 callers affected within 2 hops
-└─ onHMRUpdate  fn  packages/vite/src/node/server/index.ts:908-915
-   ├─ onFileAddUnlink  fn  packages/vite/src/node/server/index.ts:917-953
-   └─ onFileChange  fn  packages/vite/src/node/server/index.ts:955-969
+└─ onHMRUpdate  fn  packages/vite/src/node/server/index.ts:919-926
+   ├─ onFileAddUnlink  fn  packages/vite/src/node/server/index.ts:928-964
+   └─ onFileChange  fn  packages/vite/src/node/server/index.ts:966-980
 1 test suite also references this code (not listed)
 tests for handleHMRUpdate were not updated
-ask for review  翠 (80 commits, 11d ago) · btea (4 commits, 28d ago)
+ask for review  翠 (2 commits, 2d ago)
 not indexed  1 file: .gitignore
 ```
 

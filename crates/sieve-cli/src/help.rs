@@ -135,6 +135,12 @@ Options:
                               tools); persisted, so a later build (and the
                               hooks/refresh path) include it without the flag;
                               dot-dirs are never overridable (default: [])
+  --exclude <path>            leave a repo-relative folder or file out of the
+                              index — repeatable; persisted, so a later build
+                              and the automatic refreshes keep it out. At a
+                              workspace root it skips a child repo by name
+  --no-exclude <path>         take a path back out of the persisted --exclude
+                              list — repeatable; the next build indexes it again
   --only-dir <path>           only index files under this repo-relative path —
                               repeatable; the file walk honors it. Recorded in
                               the graph fingerprint so a later build (and the
@@ -349,6 +355,8 @@ Arguments:
 Options:
   --max-dirs <n>  max directory entries shown, rest counted into dropped
                   (default 16)
+  --in <path>     map only the files under this path prefix (segment-aware,
+                  like query)
   --json          output as JSON
   --no-refresh    skip the freshness check — answer from the graph as-is
   -h, --help      display help for command

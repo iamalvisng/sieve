@@ -7,7 +7,7 @@ use clap::Args;
 use serde::Serialize;
 
 use sieve_core::workspace;
-use sieve_query::map::{build_repo_map, format_repo_map, map_saved_paths, MapOptions};
+use sieve_query::map::{build_repo_map_in, format_repo_map, map_saved_paths, MapOptions};
 use sieve_savings::savings_for;
 
 use crate::query;
@@ -22,6 +22,10 @@ pub struct MapArgs {
     /// The most directories to report.
     #[arg(long = "max-dirs", value_name = "n", allow_hyphen_values = true)]
     pub max_dirs: Option<String>,
+
+    /// Maps only the files under this path prefix.
+    #[arg(long = "in", value_name = "path")]
+    pub in_prefix: Option<String>,
 
     /// Prints the result as JSON, instead of the plain-text report.
     #[arg(long)]
@@ -91,8 +95,16 @@ pub fn run(args: &MapArgs, dir_override: Option<&Path>) -> Result<(), String> {
 
     let (root, context_dir) =
         query::run_prelude(args.dir.as_deref(), dir_override, args.no_refresh)?;
-    if !args.json && workspace::read(&context_dir).is_some() {
-        return run_workspace(&root, &context_dir, max_dirs);
+    if workspace::read(&context_dir).is_some() {
+        if args.in_prefix.is_some() {
+            return Err(format!(
+                "--in maps one repo \u{2014} run {} map --in inside a child repo",
+                sieve_core::product().name
+            ));
+        }
+        if !args.json {
+            return run_workspace(&root, &context_dir, max_dirs);
+        }
     }
     let graph = query::read_wiring_named(&context_dir)?;
 
@@ -100,7 +112,8 @@ pub fn run(args: &MapArgs, dir_override: Option<&Path>) -> Result<(), String> {
         max_dirs: max_dirs.unwrap_or(MapOptions::default().max_dirs),
         ..MapOptions::default()
     };
-    let map = build_repo_map(&graph, &opts);
+    let map =
+        build_repo_map_in(&graph, &opts, args.in_prefix.as_deref()).map_err(|e| e.to_string())?;
 
     if args.json {
         print_json(&graph, &map);

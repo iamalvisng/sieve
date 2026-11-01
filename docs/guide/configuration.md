@@ -16,6 +16,7 @@ The index lives in `<repo>/sieve/`. Two things change that folder:
 to `.gitignore`. The file holds:
 
 - `includeDirs`: folders you add with `--include-dir`.
+- `excludeDirs`: paths you leave out with `--exclude`.
 - Follow flags: your last choice for submodules and nested repos.
 - `mascot`: the pane mascot. See [Claude Code](claude-code.md).
 
@@ -28,6 +29,15 @@ Build options that you set persist for later builds and for automatic refreshes:
 
 - `--include-dir <name>` adds a folder that the walk skips by default.
   Dot folders are never added.
+- `--exclude <path>` leaves a folder or file out of the index. The path is
+  relative to the repo root. Repeat the flag for more paths. A change under an
+  excluded path never starts a refresh. A path outside the root is an error.
+  The match is case-sensitive, so `Playground` does not exclude `playground`.
+- `--no-exclude <path>` takes a path back out of that list. The next build
+  indexes it again.
+- At a workspace root, `--exclude <child>` skips a child repo by its name.
+  A child repo keeps its own `.sieve/config.json`, so run `--exclude` inside
+  the child to leave out a folder of that child.
 - `--only-dir <path>` indexes only files under that path.
 - `--follow-submodules` and `--follow-nested-repos` include more code.
 - `--no-follow-submodules` and `--no-follow-nested-repos` turn them off (the default).

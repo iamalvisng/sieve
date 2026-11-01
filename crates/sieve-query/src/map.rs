@@ -7,9 +7,11 @@ use std::path::Path;
 
 use serde::Serialize;
 use sieve_core::collate::collate;
+use sieve_core::lang::generic_lang_of;
 use sieve_core::wiring::Scope;
 use sieve_core::{Graph, Kind, Node};
 
+use crate::ask::{checked_prefix, path_under_prefix, AskError};
 use crate::relations::compute_in_degree;
 
 /// A single group must not exceed this share of all file nodes, or it is
@@ -291,6 +293,59 @@ fn compute_dir_entries(
     let dropped = dir_entries.len().saturating_sub(max_dirs);
     dir_entries.truncate(max_dirs);
     (dir_entries, dropped)
+}
+
+/// Like [`build_repo_map`], limited to the nodes under `in_prefix`. The prefix
+/// follows the `--in` rules of `query`: a bad prefix gives the same error.
+pub fn build_repo_map_in(
+    graph: &Graph,
+    opts: &MapOptions,
+    in_prefix: Option<&str>,
+) -> Result<RepoMap, AskError> {
+    let prefix = in_prefix
+        .map(|raw| checked_prefix(graph, raw))
+        .transpose()?
+        .filter(|p| !p.is_empty());
+    Ok(match prefix {
+        Some(prefix) => build_repo_map(&scoped_graph(graph, &prefix), opts),
+        None => build_repo_map(graph, opts),
+    })
+}
+
+/// The part of `graph` under `prefix`: its nodes, the edges that start there,
+/// the scopes that still own a node, and the breadth-tier languages of its files.
+fn scoped_graph(graph: &Graph, prefix: &str) -> Graph {
+    let nodes: Vec<Node> = graph
+        .nodes
+        .iter()
+        .filter(|n| path_under_prefix(&n.path, prefix))
+        .cloned()
+        .collect();
+    let ids: std::collections::HashSet<&str> = nodes.iter().map(|n| n.id.as_str()).collect();
+    let edges: Vec<_> = graph
+        .edges
+        .iter()
+        .filter(|e| ids.contains(e.source.as_str()))
+        .cloned()
+        .collect();
+    let owners: std::collections::HashSet<String> = nodes
+        .iter()
+        .map(|n| scope_of(&n.path, &graph.meta.scopes))
+        .collect();
+    let mut meta = graph.meta.clone();
+    meta.scopes.retain(|s| owners.contains(&s.prefix));
+    // The depth-tier labels come from the file paths; only the breadth tier
+    // needs this list.
+    let breadth: std::collections::BTreeSet<&str> = nodes
+        .iter()
+        .filter(|n| n.kind == Kind::File)
+        .filter_map(|n| generic_lang_of(&n.path))
+        .map(|l| l.name)
+        .collect();
+    meta.languages = breadth.into_iter().map(str::to_string).collect();
+    meta.node_count = nodes.len();
+    meta.edge_count = edges.len();
+    Graph { meta, nodes, edges }
 }
 
 /// Builds the repo map from an already-loaded [`Graph`].
@@ -689,6 +744,41 @@ mod tests {
     fn map_saved_paths_lists_every_file_node_path() {
         let graph = empty_graph(vec![file_node("a.ts"), file_node("b.ts")], Vec::new());
         assert_eq!(map_saved_paths(&graph), vec!["a.ts", "b.ts"]);
+    }
+
+    /// `--in` keeps only the paths under the prefix, by whole segment, and a
+    /// prefix with no node gives the same error as `query --in`.
+    #[test]
+    fn map_in_lists_only_paths_under_the_prefix() {
+        let mut graph = empty_graph(
+            vec![
+                file_node("packages/vite/a.ts"),
+                symbol_node("p#a", "a", Kind::Function, "packages/vite/a.ts", 1, 2),
+                file_node("packages/vite-extra/b.ts"),
+                file_node("playground/c.ts"),
+                file_node("playground/d.rs"),
+            ],
+            Vec::new(),
+        );
+        graph.meta.languages = vec!["rust".to_string(), "typescript".to_string()];
+        let map = build_repo_map_in(&graph, &MapOptions::default(), Some("./packages/vite/"))
+            .expect("prefix is indexed");
+        assert_eq!(map.totals.files, 1);
+        assert_eq!(map.totals.symbols, 1);
+        // The Rust file lies outside the prefix, so its label is not counted.
+        assert_eq!(map.totals.languages, ["typescript"]);
+        assert!(map.dirs.iter().all(|d| d.path.starts_with("packages/vite")));
+        assert!(map.dirs.iter().all(|d| !d.path.contains("vite-extra")));
+
+        let err = build_repo_map_in(&graph, &MapOptions::default(), Some("nowhere"))
+            .expect_err("nothing under nowhere");
+        assert!(err
+            .to_string()
+            .starts_with("nothing is indexed under nowhere/"));
+
+        let all = build_repo_map_in(&graph, &MapOptions::default(), Some("/")).expect("empty");
+        assert_eq!(all.totals.files, 4);
+        assert_eq!(all.totals.languages, ["rust", "typescript"]);
     }
 
     #[test]

@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-use crate::walk::{is_skipped_name, read_include_dirs};
+use crate::walk::{is_excluded, is_skipped_name, read_exclude_dirs, read_include_dirs};
 
 /// The file name of the workspace index inside the context dir.
 pub const WORKSPACE_FILE: &str = "workspace.json";
@@ -69,11 +69,13 @@ pub fn write(context_dir: &Path, children: &[String]) -> io::Result<PathBuf> {
 }
 
 /// Lists the direct child dirs of `root` that hold a `.git`, sorted. Skips a
-/// dot dir and a `SKIP_DIRS` name, less this repo's `includeDirs` A symlink is
-/// not a child: a directory check is false for a symlink, so this reads the
-/// entry's own file type, which never follows a link.
+/// dot dir and a `SKIP_DIRS` name, less this repo's `includeDirs`. Skips a
+/// child named in `excludeDirs`. A symlink is not a child: a directory check
+/// is false for a symlink, so this reads the entry's own file type, which
+/// never follows a link.
 pub fn discover_children(root: &Path) -> Vec<String> {
     let includes = read_include_dirs(root);
+    let excludes = read_exclude_dirs(root);
     let Ok(entries) = std::fs::read_dir(root) else {
         return Vec::new();
     };
@@ -81,6 +83,7 @@ pub fn discover_children(root: &Path) -> Vec<String> {
         .flatten()
         .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
         .filter(|e| !is_skipped_name(&e.file_name(), &includes))
+        .filter(|e| !is_excluded(Path::new(&e.file_name()), &excludes))
         .filter(|e| e.path().join(".git").exists())
         .map(|e| e.file_name().to_string_lossy().into_owned())
         .collect();

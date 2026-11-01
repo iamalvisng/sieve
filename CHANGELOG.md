@@ -5,6 +5,22 @@ All notable changes to this project are in this file.
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.6] - 2026-11-01
+
+This release builds the index on the first query and adds monorepo scoping.
+
+### Added
+
+- A query on a repo with no index builds the index, then answers. The answer is the same as `sieve build` followed by the query. Stderr shows `[sieve] built the index (N files, X.Xs)`. The old "run sieve build" stop stays for a folder that is not a git repo root, the home folder, `--no-refresh`, a workspace parent, `impact`, and when `SIEVE_NO_AUTO_BUILD` is set.
+- `sieve mcp` answers at once on a repo with no index and builds on a separate thread. A tool call waits for the build. A failed build returns its error to the call.
+- `sieve build --exclude <path>` keeps a folder or file out of the index. Sieve keeps the list in `.sieve/config.json`, so a refresh and the file watch never add the path back. `--no-exclude <path>` removes a path from the list. The match is case-sensitive.
+- `sieve map --in <path>` and the `in` value of the `sieve_map` MCP tool scope the map to one path, the same as `query`, `find` and `callers`.
+
+### Fixed
+
+- A hook never writes the session or stats file without the lock. Before, a hook that waited 200 ms gave up and wrote without the lock, so under load one hook could erase another hook's update.
+- The commands guide uses the current command names, and its samples match the current output.
+
 ## [0.2.5] - 2026-11-01
 
 This release makes the status line count only what it can prove.

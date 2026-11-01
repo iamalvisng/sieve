@@ -14,7 +14,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use sieve_core::walk::is_skipped_name;
+use sieve_core::walk::{is_excluded, is_skipped_name};
 
 use super::{Class, Filter};
 
@@ -167,9 +167,12 @@ impl Kq {
                 None => true,
                 Some(second) => second == "refs" || second == "info",
             },
-            Some(_) => rel
-                .components()
-                .all(|c| !is_skipped_name(c.as_os_str(), &self.filter.includes)),
+            Some(_) => {
+                !is_excluded(rel, &self.filter.excluded)
+                    && rel
+                        .components()
+                        .all(|c| !is_skipped_name(c.as_os_str(), &self.filter.includes))
+            }
         }
     }
 
@@ -470,6 +473,7 @@ mod tests {
             root: root.to_path_buf(),
             ctx: root.join(".sieve"),
             includes: Vec::new(),
+            excluded: Vec::new(),
             excludes: None,
         }
     }

@@ -20,6 +20,8 @@ const ROOT_LONG_FLAGS: &[&str] = &["--version", "--dir", "--help"];
 const SUB_FLAG_TEXT: &[(&str, &str, &str)] = &[
     ("build", "--extensions", "-e, --extensions <exts...>"),
     ("build", "--include-dir", "--include-dir <name>"),
+    ("build", "--exclude", "--exclude <path>"),
+    ("build", "--no-exclude", "--no-exclude <path>"),
     ("build", "--only-dir", "--only-dir <path>"),
     ("query", "--limit", "-n, --limit <n>"),
     ("query", "--in", "--in <path>"),
@@ -39,6 +41,7 @@ const SUB_FLAG_TEXT: &[(&str, &str, &str)] = &[
     ("impact", "--pr-author", "--pr-author <who...>"),
     ("find", "--in", "--in <path>"),
     ("map", "--max-dirs", "--max-dirs <n>"),
+    ("map", "--in", "--in <path>"),
     ("init", "--agents", "--agents <ids...>"),
     ("init", "--trail", "--trail <handoff>"),
 ];

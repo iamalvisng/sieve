@@ -10,6 +10,8 @@ Arguments:
 Options:
   --max-dirs <n>  max directory entries shown, rest counted into dropped
                   (default 16)
+  --in <path>     map only the files under this path prefix (segment-aware,
+                  like query)
   --json          output as JSON
   --no-refresh    skip the freshness check — answer from the graph as-is
   -h, --help      display help for command

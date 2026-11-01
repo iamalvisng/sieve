@@ -27,7 +27,9 @@ use sieve_core::fingerprint::{
     write_fingerprint, Fingerprint, Print,
 };
 use sieve_core::lock::{self, LockGuard};
-use sieve_core::walk::{is_skipped_name, read_include_dirs, SKIP_DIRS};
+use sieve_core::walk::{
+    is_excluded, is_skipped_name, read_exclude_dirs, read_include_dirs, SKIP_DIRS,
+};
 use sieve_core::wiring::Graph;
 use sieve_core::wiring::Node;
 use sieve_parse::cache::{cache_path, read_cache, write_cache, ExtractCache};
@@ -105,6 +107,8 @@ struct Filter {
     root: PathBuf,
     ctx: PathBuf,
     includes: Vec<String>,
+    /// Repo-relative paths the user left out of the index.
+    excluded: Vec<String>,
     excludes: Option<PathBuf>,
 }
 
@@ -137,6 +141,9 @@ impl Filter {
                 _ => false,
             };
             return if kept { Class::Source } else { Class::Ignore };
+        }
+        if is_excluded(rel, &self.excluded) {
+            return Class::Ignore;
         }
         let Some((last, dirs)) = names.split_last() else {
             return Class::Source;
@@ -638,6 +645,7 @@ fn check_and_watch(root: &Path, context_dir: &Path, tx: &Sender<Msg>) -> Ready {
         .unwrap_or_default();
     let filter = Filter {
         includes: read_include_dirs(root),
+        excluded: read_exclude_dirs(root),
         excludes: excludes_path(&configured),
         root: root_c,
         ctx: ctx_c,
@@ -724,6 +732,7 @@ impl Warm {
                 root: root.to_path_buf(),
                 ctx: context_dir.to_path_buf(),
                 includes: Vec::new(),
+                excluded: Vec::new(),
                 excludes: None,
             },
             tx,
@@ -906,6 +915,7 @@ impl Warm {
         self.watcher = None;
         self.kq = None;
         self.filter.includes = read_include_dirs(&self.root);
+        self.filter.excluded = read_exclude_dirs(&self.root);
         if self.shortcut_ok {
             self.kq = Kq::open(&self.filter, self.kq_limit);
         }
@@ -3071,6 +3081,7 @@ mod tests {
             root: PathBuf::from("/r"),
             ctx: PathBuf::from("/r/.sieve"),
             includes: Vec::new(),
+            excluded: vec!["playground".to_string()],
             excludes: Some(PathBuf::from("/h/ignore")),
         };
         let c = |p: &str| f.classify(Path::new(p));
@@ -3086,6 +3097,8 @@ mod tests {
         assert_eq!(c("/r/.git/info/exclude"), Class::Source);
         assert_eq!(c("/r/.gitignore"), Class::Source);
         assert_eq!(c("/r/src/a.ts"), Class::Source);
+        assert_eq!(c("/r/playground/app/a.ts"), Class::Ignore);
+        assert_eq!(c("/r/playground2/a.ts"), Class::Source);
         assert_eq!(c("/h/ignore"), Class::Source);
         assert_eq!(c("/elsewhere/x"), Class::Source);
     }

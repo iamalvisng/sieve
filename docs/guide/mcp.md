@@ -31,7 +31,7 @@ The server has seven tools.
 | `sieve_find` | `pattern` (required), `in`, `ignore_case`, `fixed` | Every match of a pattern. Like `sieve find`. |
 | `sieve_callers` | `symbol` (required), `direction`, `depth`, `in` | Callers or callees. Like `sieve callers`. |
 | `sieve_symbols` | `file` (required) | Signatures of one file. Like `sieve symbols`. |
-| `sieve_map` | `max_dirs` | Orientation. Like `sieve map`. |
+| `sieve_map` | `max_dirs`, `in` | Orientation. Like `sieve map`. |
 | `sieve_check` | none | Reports drift between the index and the code. |
 | `sieve_why` | `symbol` (required), `all` | The decision records for a symbol. |
 

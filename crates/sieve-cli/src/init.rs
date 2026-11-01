@@ -822,6 +822,8 @@ fn build_graph_if_missing(root: &Path, context_dir: &Path, no_build: bool) -> Re
         no_follow_submodules: false,
         follow_nested_repos: false,
         no_follow_nested_repos: false,
+        exclude: Vec::new(),
+        no_exclude: Vec::new(),
         only_dir: Vec::new(),
         no_reuse: false,
     };

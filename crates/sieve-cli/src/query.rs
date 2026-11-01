@@ -83,23 +83,90 @@ pub fn context_dir(root: &Path, dir_override: Option<&Path>, cwd: &Path) -> Path
     }
 }
 
-/// Runs the pre-query refresh: rebuilds the graph, and only the graph,
-/// when the fingerprint is missing or stale. At a workspace parent, the
-/// refresh walks each child instead. Prints
-/// the refresh note to stderr. Never fails a query: every error becomes
-/// a skip note instead.
-fn refresh_before(root: &Path, context_dir: &Path, no_refresh_flag: bool) {
+/// The refresh switches: the flag, then the environment.
+fn refresh_options(no_refresh_flag: bool) -> RefreshOptions {
     let p = product();
-    let opts = RefreshOptions {
+    RefreshOptions {
         disabled: no_refresh_flag || env_truthy(&p.env_var("NO_REFRESH")),
         force_hash: env::var(p.env_var("REFRESH")).as_deref() == Ok("hash"),
-    };
+    }
+}
+
+/// Runs the pre-query refresh: rebuilds the graph, and only the graph,
+/// when the fingerprint is missing or stale. At a workspace parent, the
+/// refresh walks each child instead. Prints the refresh note to stderr.
+/// A refresh error becomes a skip note. Only the first build of a repo
+/// with no index can fail the query.
+fn refresh_before(
+    root: &Path,
+    context_dir: &Path,
+    no_refresh_flag: bool,
+    first_build: bool,
+) -> Result<(), String> {
+    let opts = refresh_options(no_refresh_flag);
     let outcome = match workspace::read(context_dir) {
         Some(ws) => ensure_fresh_children(root, &ws.children, &opts),
         None => ensure_fresh_graph(root, context_dir, &opts),
     };
     if let Some(note) = refresh_note(&outcome) {
         eprintln!("{note}");
+    }
+    if first_build {
+        build_if_missing(root, context_dir, no_refresh_flag)?;
+    }
+    Ok(())
+}
+
+/// Builds the index when `root` is a repo root with none, then prints one
+/// note on stderr. Every other case is left alone, so the query prints its
+/// usual no-index line:
+/// - `root` has no `.git`, so it is not a repo root. A build there could
+///   index a whole folder tree, such as a scratch dir or a workspace parent.
+/// - `root` is the home folder, which is too large to index by surprise.
+/// - `SIEVE_NO_AUTO_BUILD` is set.
+///
+/// A refresh switch (`--no-refresh` or `SIEVE_NO_REFRESH`) also stops the
+/// build. A failed build returns the build error.
+pub fn build_if_missing(
+    root: &Path,
+    context_dir: &Path,
+    no_refresh_flag: bool,
+) -> Result<(), String> {
+    if !wants_build(root, context_dir, no_refresh_flag) {
+        return Ok(());
+    }
+    let started = std::time::Instant::now();
+    let Some(files) = crate::build::build_for_query(root, context_dir)? else {
+        return Ok(());
+    };
+    eprintln!(
+        "[{}] built the index ({files} {}, {})",
+        product().name,
+        if files == 1 { "file" } else { "files" },
+        crate::build::elapsed_text(started.elapsed()).replace(' ', "")
+    );
+    Ok(())
+}
+
+/// Whether a query at `root` builds the missing index. The cases in the
+/// list on [`build_if_missing`] answer no.
+pub fn wants_build(root: &Path, context_dir: &Path, no_refresh_flag: bool) -> bool {
+    !refresh_options(no_refresh_flag).disabled
+        && !context_dir.join(".graph").join("wiring.json").is_file()
+        && !workspace::workspace_path(context_dir).exists()
+        && root.join(".git").exists()
+        && !env_truthy(&product().env_var("NO_AUTO_BUILD"))
+        && !is_home(root)
+}
+
+/// Whether `dir` is the home folder.
+fn is_home(dir: &Path) -> bool {
+    let Some(home) = env::var_os("HOME") else {
+        return false;
+    };
+    match (std::fs::canonicalize(dir), std::fs::canonicalize(home)) {
+        (Ok(dir), Ok(home)) => dir == home,
+        _ => false,
     }
 }
 
@@ -112,6 +179,18 @@ pub fn run_prelude(
     dir_arg: Option<&Path>,
     dir_override: Option<&Path>,
     no_refresh_flag: bool,
+) -> Result<(PathBuf, PathBuf), String> {
+    run_prelude_with(dir_arg, dir_override, no_refresh_flag, true)
+}
+
+/// Like [`run_prelude`]. With `first_build` off, a repo with no index keeps
+/// the no-index stop. `blast` turns it off, because it reads a diff against
+/// an index that already exists.
+fn run_prelude_with(
+    dir_arg: Option<&Path>,
+    dir_override: Option<&Path>,
+    no_refresh_flag: bool,
+    first_build: bool,
 ) -> Result<(PathBuf, PathBuf), String> {
     let cwd = env::current_dir().map_err(|e| e.to_string())?;
     let root = query_root(dir_arg, dir_override, &cwd);
@@ -139,7 +218,7 @@ pub fn run_prelude(
         *slot = None;
     }
     let keep = sieve_parse::refresh::keep_rebuilt_graph(&root);
-    refresh_before(&root, &context_dir, no_refresh_flag);
+    refresh_before(&root, &context_dir, no_refresh_flag, first_build)?;
     if let Ok(mut slot) = KEEP.lock() {
         *slot = Some(keep);
     }
@@ -164,7 +243,7 @@ pub fn load_graph_named(
     dir_override: Option<&Path>,
     no_refresh_flag: bool,
 ) -> Result<(PathBuf, PathBuf, Graph), String> {
-    let (root, context_dir) = run_prelude(dir_arg, dir_override, no_refresh_flag)?;
+    let (root, context_dir) = run_prelude_with(dir_arg, dir_override, no_refresh_flag, false)?;
     let graph = read_wiring_named(&context_dir)?;
     Ok((root, context_dir, graph))
 }
