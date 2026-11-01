@@ -97,7 +97,7 @@ fn test_savings_sieve_tool_header_is_short_and_recorded() {
 
     // The hook still records the saving from the answer line.
     let stdin = format!(
-        r#"{{"session_id":"sess1","cwd":"{}","tool_name":"Bash","tool_response":{{"stdout":"🎯 1 signatures · ~100 tokens saved"}}}}"#,
+        r#"{{"session_id":"sess1","cwd":"{}","tool_name":"Bash","tool_input":{{"command":"sieve symbols a.ts"}},"tool_response":{{"stdout":"🎯 1 signatures · ~100 tokens saved"}}}}"#,
         copy.path.display()
     );
     run(
@@ -127,7 +127,7 @@ fn test_savings_stats_json_gives_session_today_and_seven_days() {
     fs::create_dir_all(&dir).expect("mkdir");
     fs::write(
         dir.join("a.json"),
-        r#"{"savingsFormula":2,"savedTokens":700,"savedByDay":{"2000-01-01":700}}"#,
+        r#"{"savingsFormula":3,"savedTokens":700,"savedByDay":{"2000-01-01":700}}"#,
     )
     .expect("write fixture");
     let out = run(&copy.path, &home.path, &["stats", "--json"], None);

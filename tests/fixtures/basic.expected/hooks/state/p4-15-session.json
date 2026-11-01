@@ -1,23 +1,10 @@
 {
   "lastQuery": null,
   "perAgentQuery": {},
-  "toolReads": 1,
+  "toolReads": 0,
   "sourceReads": 1,
-  "savedTokens": 100,
+  "savedTokens": 0,
   "injectedPointers": [],
   "nudges": 0,
-  "host": "claude-code",
-  "turnUsedSieve": true,
-  "savedByDay": {
-    "2026-10-05": 100
-  },
-  "savingsFormula": 2,
-  "lookupsPicked": 1,
-  "lookupsByDay": {
-    "2026-10-05": {
-      "picked": 1,
-      "routed": 0,
-      "passed": 0
-    }
-  }
+  "host": "claude-code"
 }

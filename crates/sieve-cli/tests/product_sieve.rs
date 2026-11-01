@@ -226,7 +226,7 @@ fn rename_table_cli_hook_tool_savings_sums_sieve_marker() {
     copy_dir(&fixture, &copy.path);
 
     let stdin = format!(
-        "{{\"session_id\":\"sess1\",\"cwd\":\"{}\",\"tool_name\":\"Bash\",\
+        "{{\"session_id\":\"sess1\",\"cwd\":\"{}\",\"tool_name\":\"Bash\",\"tool_input\":{{\"command\":\"sieve symbols a.ts\"}},\
          \"tool_response\":{{\"stdout\":\"\u{1f3af} 1 signatures \u{b7} ~100 tokens saved\"}}}}",
         copy.path.display()
     );

@@ -227,6 +227,8 @@ struct SieveView<'a> {
     ctx_pct: Option<i64>,
     /// The tokens this session saved. 0 means none yet.
     session: u64,
+    /// The Sieve tool calls of this session. 0 means none yet.
+    lookups: u64,
     today: u64,
     /// The seven mascot rows, or `None` for no mascot.
     mascot: Option<Vec<String>>,
@@ -523,16 +525,26 @@ fn session_stamp(session_dir: &Path) -> u64 {
     files.chain([nanos(session_dir)]).max().unwrap_or(0)
 }
 
-/// Returns the saved tokens (today, last 7 days, this session with its
-/// subagents) from a small cache file. The cache stays valid for the same
+/// The numbers the status line reads: tokens saved today, in the last 7
+/// days and in this session, and the session's Sieve lookups.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Savings {
+    today: u64,
+    week: u64,
+    session: u64,
+    lookups: u64,
+}
+
+/// Returns the [`Savings`] (the session counts its subagents) from a small
+/// cache file. The cache stays valid for the same
 /// session id while the session stamp is the same and under
 /// `SAVINGS_TTL_SECS` old. Else `compute` runs and the cache is rewritten.
 fn cached_savings(
     context_dir: &Path,
     now: u64,
     session_id: &str,
-    compute: impl FnOnce() -> (u64, u64, u64),
-) -> (u64, u64, u64) {
+    compute: impl FnOnce() -> Savings,
+) -> Savings {
     let stamp = session_stamp(&context_dir.join(".cache").join("session"));
     let path = context_dir.join(".cache").join("statusline-savings.json");
     let field = |v: &Value, k: &str| v.get(k).and_then(Value::as_u64);
@@ -543,29 +555,31 @@ fn cached_savings(
         .filter(|v| v.get("sid").and_then(Value::as_str) == Some(session_id))
         .filter(|v| field(v, "at").is_some_and(|at| now.saturating_sub(at) < SAVINGS_TTL_SECS))
         .and_then(|v| {
-            Some((
-                field(&v, "today")?,
-                field(&v, "week")?,
-                field(&v, "session")?,
-            ))
+            Some(Savings {
+                today: field(&v, "today")?,
+                week: field(&v, "week")?,
+                session: field(&v, "session")?,
+                lookups: field(&v, "lookups")?,
+            })
         });
-    if let Some(totals) = hit {
-        return totals;
+    if let Some(savings) = hit {
+        return savings;
     }
-    let (today, week, session) = compute();
+    let savings = compute();
     let body = serde_json::json!({
         "stamp": stamp, "at": now, "sid": session_id,
-        "today": today, "week": week, "session": session,
+        "today": savings.today, "week": savings.week,
+        "session": savings.session, "lookups": savings.lookups,
     });
     // A failed write only costs a recompute on the next run.
     let _ = std::fs::write(&path, body.to_string());
-    (today, week, session)
+    savings
 }
 
-/// Reads the saved tokens for today, for the last 7 days and for the
-/// session with its subagents. The day numbers come from `savings_report`,
+/// Reads the [`Savings`] for today, the last 7 days and the session with
+/// its subagents. The day numbers come from `savings_report`,
 /// the code behind `sieve stats --json`.
-fn read_savings(project_dir: &Path, now: u64, session_id: &str) -> (u64, u64, u64) {
+fn read_savings(project_dir: &Path, now: u64, session_id: &str) -> Savings {
     let context_dir = crate::stats::stats_context_dir(project_dir);
     cached_savings(&context_dir, now, session_id, || {
         let report = crate::stats::savings_report(
@@ -582,11 +596,13 @@ fn read_savings(project_dir: &Path, now: u64, session_id: &str) -> (u64, u64, u6
                 .and_then(crate::jsonv::Json::as_f64)
                 .unwrap_or(0.0) as u64
         };
-        (
-            tokens("today"),
-            tokens("last7daysTotal"),
-            hook::read_session_total(project_dir, session_id),
-        )
+        let session = hook::read_session_totals(project_dir, session_id);
+        Savings {
+            today: tokens("today"),
+            week: tokens("last7daysTotal"),
+            session: session.saved,
+            lookups: session.lookups,
+        }
     })
 }
 
@@ -696,12 +712,13 @@ fn render_sieve_at(
     depth: Depth,
 ) -> String {
     let name = read_mascot(&project_dir.join(product().home_dir_name()));
-    let (today, _week, session) = read_savings(project_dir, now, session_id);
+    let savings = read_savings(project_dir, now, session_id);
     render_sieve(&SieveView {
         stats,
         ctx_pct,
-        session,
-        today,
+        session: savings.session,
+        lookups: savings.lookups,
+        today: savings.today,
         mascot: mascot_for(&name, frame_for(now), depth),
         depth,
         cap_note: if stats.is_some_and(|s| s.capped) {
@@ -710,6 +727,26 @@ fn render_sieve_at(
             CAP_NOTE_PASS
         },
     })
+}
+
+/// The savings words of line 1: the lookups and the session tokens when
+/// they are not 0, then today's tokens.
+fn savings_text(v: &SieveView) -> String {
+    use std::fmt::Write;
+    // Writing to a `String` cannot fail, so the results are ignored.
+    let mut text = String::from("\u{1f3af} ");
+    match v.lookups {
+        0 => {}
+        1 => text.push_str("1 lookup \u{b7} "),
+        n => {
+            let _ = write!(text, "{n} lookups \u{b7} ");
+        }
+    }
+    if v.session > 0 {
+        let _ = write!(text, "~{} this session \u{b7} ", format_short(v.session));
+    }
+    let _ = write!(text, "~{} today", format_short(v.today));
+    text
 }
 
 /// Renders the sieve status line: 4 rows with a mascot, else the text rows only.
@@ -760,21 +797,7 @@ fn render_sieve(v: &SieveView) -> String {
                 String::new()
             };
             (
-                format!(
-                    "{head}{}",
-                    paint(
-                        GREEN,
-                        &if v.session > 0 {
-                            format!(
-                                "\u{1f3af} ~{} this session \u{b7} ~{} today",
-                                format_short(v.session),
-                                format_short(v.today)
-                            )
-                        } else {
-                            format!("\u{1f3af} ~{} today", format_short(v.today))
-                        }
-                    ),
-                ),
+                format!("{head}{}", paint(GREEN, &savings_text(v))),
                 format!("{cells2}{}{fresh}{cap_note}", paint(FG_DARK, &counts)),
             )
         }
@@ -815,6 +838,7 @@ mod tests {
             stats: Some(stats),
             ctx_pct: Some(54),
             session: 1_500,
+            lookups: 12,
             today: 61_700,
             mascot,
             depth: Depth::True,
@@ -862,7 +886,7 @@ mod tests {
         assert!(lines[0].contains('\u{2580}'), "{}", lines[0]);
         assert_eq!(
             cut(lines[0], w + 1),
-            "sieve \u{b7} \u{1f3af} ~1.5k this session \u{b7} ~61.7k today"
+            "sieve \u{b7} \u{1f3af} 12 lookups \u{b7} ~1.5k this session \u{b7} ~61.7k today"
         );
         assert_eq!(
             cut(lines[1], w + 1),
@@ -915,7 +939,7 @@ mod tests {
         assert!(!out.contains('\x1b'), "{out}");
         assert_eq!(
             out,
-            "sieve \u{b7} \u{1f3af} ~1.5k this session \u{b7} ~61.7k today\n\
+            "sieve \u{b7} \u{1f3af} 12 lookups \u{b7} ~1.5k this session \u{b7} ~61.7k today\n\
              752 symbols \u{b7} 2,017 links \u{b7} \u{2713} up to date\nctx 54%"
         );
     }
@@ -1133,6 +1157,38 @@ mod tests {
         clear_setup_cache(&ctx);
     }
 
+    fn savings(today: u64, week: u64, session: u64) -> Savings {
+        Savings {
+            today,
+            week,
+            session,
+            lookups: 3,
+        }
+    }
+
+    #[test]
+    fn test_statusline_lookup_count_is_singular_for_one_and_hidden_for_none() {
+        let stats = fixture_stats();
+        let first_line = |lookups, session| {
+            let out = render_sieve(&SieveView {
+                lookups,
+                session,
+                depth: Depth::Plain,
+                ..view_of(&stats, None)
+            });
+            out.lines().next().unwrap_or_default().to_string()
+        };
+        assert_eq!(
+            first_line(1, 1_500),
+            "sieve \u{b7} \u{1f3af} 1 lookup \u{b7} ~1.5k this session \u{b7} ~61.7k today"
+        );
+        assert_eq!(
+            first_line(2, 0),
+            "sieve \u{b7} \u{1f3af} 2 lookups \u{b7} ~61.7k today"
+        );
+        assert_eq!(first_line(0, 0), "sieve \u{b7} \u{1f3af} ~61.7k today");
+    }
+
     #[test]
     fn test_statusline_savings_cache_skips_the_session_files() {
         let ctx = scratch_dir("cache");
@@ -1142,22 +1198,40 @@ mod tests {
         let call = |now: u64| {
             cached_savings(&ctx, now, "s1", || {
                 reads.set(reads.get() + 1);
-                (reads.get() as u64, 9, 5)
+                savings(reads.get() as u64, 9, 5)
             })
         };
-        assert_eq!(call(100), (1, 9, 5));
+        assert_eq!(call(100), savings(1, 9, 5));
         assert_eq!(
             call(110),
-            (1, 9, 5),
+            savings(1, 9, 5),
             "no session change: the cache serves it"
         );
         assert_eq!(reads.get(), 1);
-        assert_eq!(call(131), (2, 9, 5), "the cache expires after 30 seconds");
+        assert_eq!(
+            call(131),
+            savings(2, 9, 5),
+            "the cache expires after 30 seconds"
+        );
         std::fs::write(session.join("a.json"), "{}").expect("write session");
-        assert_eq!(call(132), (3, 9, 5), "a new session file busts the cache");
+        assert_eq!(
+            call(132),
+            savings(3, 9, 5),
+            "a new session file busts the cache"
+        );
         assert_eq!(reads.get(), 3);
-        let other = cached_savings(&ctx, 132, "s2", || (0, 0, 8));
-        assert_eq!(other.2, 8, "another session id does not read the cache");
+        // The cache keeps `lookups`; an entry without the field recomputes.
+        let path = ctx.join(".cache").join("statusline-savings.json");
+        let text = std::fs::read_to_string(&path).expect("read cache");
+        assert!(text.contains("\"lookups\":3"), "{text}");
+        std::fs::write(&path, text.replace("\"lookups\":3,", "")).expect("write cache");
+        assert_eq!(call(133), savings(4, 9, 5), "an old entry is not served");
+        assert_eq!(call(134), savings(4, 9, 5), "the new entry is served");
+        let other = cached_savings(&ctx, 132, "s2", || savings(0, 0, 8));
+        assert_eq!(
+            other.session, 8,
+            "another session id does not read the cache"
+        );
         std::fs::remove_dir_all(&ctx).expect("remove dir");
     }
 

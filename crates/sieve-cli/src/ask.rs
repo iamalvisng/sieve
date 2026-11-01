@@ -112,8 +112,9 @@ pub fn run(args: &AskArgs, dir_override: Option<&Path>) -> Result<(), String> {
     Ok(())
 }
 
-/// The lean `--def` answer: the definition, then the answer line. The
-/// baseline is the top definition's whole file.
+/// The lean `--def` answer: the definition, then the answer line. The line
+/// prints no saving: the only true baseline is a scan of every indexed file,
+/// which costs more than the answer.
 fn render_def(
     graph: &sieve_core::wiring::Graph,
     root: &Path,
@@ -125,9 +126,7 @@ fn render_def(
     let Some(top) = def.nodes.first() else {
         return body;
     };
-    let baseline =
-        savings_for(graph, std::slice::from_ref(&top.path)).map_or(0, |s| s.baseline_chars);
-    append_line(&body, &def_line(&top.name, baseline, &body))
+    append_line(&body, &def_line(&top.name, 0, &body))
 }
 
 /// The workspace `ask`: each child answers, and the merged result

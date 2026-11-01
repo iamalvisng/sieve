@@ -25,14 +25,12 @@ use sieve_query::grep::{
     format_grep_result, grep_graph_cached, zero_hit_note, GrepError, GrepOptions, DEFAULT_MAX_HITS,
 };
 use sieve_query::map::{build_repo_map, format_repo_map, MapOptions, RepoMap};
-use sieve_query::skeleton::{format_skeleton, skeleton, skeleton_saved_paths};
+use sieve_query::skeleton::{format_skeleton, skeleton};
 use sieve_query::workspace::{
     coverage_note, federate_ask, federate_callers, federate_grep, federate_map, load_children,
     FederateAskOptions,
 };
-use sieve_savings::{
-    append_line, callers_line, hits_line, ranked_line, savings_for, signatures_line,
-};
+use sieve_savings::{append_line, callers_line, hits_line, ranked_line, signatures_line};
 
 use crate::names::canonical_tool_name;
 
@@ -694,15 +692,10 @@ fn file_api(args: &Value, context_dir: &Path) -> (String, bool) {
     // The answer line measures the body without its final newline.
     let rendered = format_skeleton(&r);
     let body = rendered.strip_suffix('\n').unwrap_or(&rendered);
-    let paths = skeleton_saved_paths(&r);
-    let baseline = graph
-        .as_ref()
-        .and_then(|g| savings_for(g, &paths))
-        .map_or(0, |s| s.baseline_chars);
     let text = if r.entries.is_empty() {
         format!("{body}\n")
     } else {
-        append_line(body, &signatures_line(r.entries.len(), baseline, body))
+        append_line(body, &signatures_line(r.entries.len(), 0, body))
     };
     let is_error = r.entries.is_empty() && r.note.is_some();
     (text, is_error)

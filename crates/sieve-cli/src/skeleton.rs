@@ -110,10 +110,7 @@ pub fn run(args: &SkeletonArgs, dir_override: Option<&Path>) -> Result<(), Strin
     // measured on the body without it.
     let rendered = format_skeleton(&result);
     let body = rendered.strip_suffix('\n').unwrap_or(&rendered);
-    let saved_paths = skeleton_saved_paths(&result);
-    let saved = savings_for(&graph, &saved_paths);
-    let baseline = saved.map_or(0, |s| s.baseline_chars);
-    let line = signatures_line(result.entries.len(), baseline, body);
+    let line = signatures_line(result.entries.len(), 0, body);
     print!("{}", append_line(body, &line));
     Ok(())
 }

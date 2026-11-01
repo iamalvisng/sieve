@@ -292,17 +292,14 @@ fn ask_stdout(root: &Path, args: &[&str]) -> String {
 /// body, the callers line, and the savings line last.
 #[test]
 fn test_ask_def_prints_the_lean_answer_and_the_savings_line_last() {
-    // The `askx` fixture holds a large file, so the savings line prints.
+    // `--def` prints no saving: its only true baseline costs a full scan.
     let temp = build_fixture("askx");
     let text = ask_stdout(&temp.path, &["bigwidget", "--def"]);
     assert!(text.starts_with("query  bigwidget \u{b7} def\n"), "{text}");
     assert!(text.contains("export function bigwidget"), "{text}");
     assert!(text.contains("callers: "), "{text}");
     let last = text.lines().last().expect("last line");
-    assert!(
-        last.starts_with("\u{1f3af} exact body of bigwidget \u{b7} ~"),
-        "{text}"
-    );
+    assert_eq!(last, "\u{1f3af} exact body of bigwidget", "{text}");
     assert_ne!(text, ask_stdout(&temp.path, &["bigwidget"]));
 }
 

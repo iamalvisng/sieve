@@ -123,7 +123,9 @@ pub fn callers_line(n: usize, baseline_chars: u64, body: &str) -> String {
 }
 
 /// The answer line of `skeleton` and `file_api`: `n` signatures, and the
-/// saving against the whole file of `baseline_chars`.
+/// saving against `baseline_chars`. The commands pass 0 and print no saving:
+/// the `grep -n` rows of the definition lines are about as long as the list,
+/// so the true saving is near 0.
 pub fn signatures_line(n: usize, baseline_chars: u64, body: &str) -> String {
     answer_line(
         &format!("{n} signatures"),
@@ -132,7 +134,9 @@ pub fn signatures_line(n: usize, baseline_chars: u64, body: &str) -> String {
 }
 
 /// The answer line of `ask --def`: the exact body of `name`, and the saving
-/// against the whole file of `baseline_chars`.
+/// against `baseline_chars`. The command passes 0 and prints no saving,
+/// because the only true baseline, the whole-word `grep -n` rows of `name`,
+/// costs a scan of every indexed file.
 pub fn def_line(name: &str, baseline_chars: u64, body: &str) -> String {
     answer_line(
         &format!("exact body of {name}"),

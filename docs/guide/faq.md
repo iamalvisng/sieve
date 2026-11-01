@@ -35,10 +35,19 @@ Only for named relative imports in TypeScript and JavaScript. On vite
 
 ## How many tokens does it save?
 
-Sieve prints an estimate after a query and `sieve stats` totals it. The
-estimate is the size of the whole files the answer names, minus the answer.
-It is not a measured saving in an agent session. See
-[Benchmarks](benchmarks.md) for the measured numbers.
+Sieve prints a saving on the answer line only when it can compare the
+answer with what an agent reads without Sieve, and `sieve stats` totals it:
+
+- `callers`: grep output for the same name, minus the answer.
+- `find`: the `grep -n` rows for the same hits, minus the answer.
+- `query`: the code the answer cut from a long symbol.
+- A Read that the hook skips: the lines that Read asked for.
+
+`query --def` and `symbols` print no saving. Their only true baseline is
+about the size of the answer, or costs a full scan. Most calls save little,
+and then the line shows no figure. The status line also counts lookups,
+which needs no estimate. See [Benchmarks](benchmarks.md) for the measured
+numbers.
 
 ## Should I commit `sieve/`?
 

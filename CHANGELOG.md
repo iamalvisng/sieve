@@ -5,6 +5,20 @@ All notable changes to this project are in this file.
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.5] - 2026-11-01
+
+This release makes the status line count only what it can prove.
+
+### Changed
+
+- The status line shows the session lookup count: `sieve · 🎯 N lookups · ~N this session · ~N today`. It counts the Sieve calls of the main session and its subagents.
+- A call counts as a lookup only when the tool or the command names Sieve. Before, another command whose output held a "tokens saved" line also counted.
+- Savings formula 3. The saved total starts again from 0, because the old figure overstated the saving:
+  - `query --def` and `symbols` compared the answer with a read of the whole file. Agents seldom read a whole file; they read line ranges. These two commands now print no saving.
+  - A Read that the hook skips counts only the lines it asked for, not the whole file.
+  - `callers`, `find` and a ranked `query` keep their baselines: grep output for the same hits, or code the answer cut.
+- The Apple Silicon Mac binary is built on macOS 15, because GitHub retires macOS 14.
+
 ## [0.2.4] - 2026-10-31
 
 This release makes a warm MCP `query` faster, fixes the Read hook, and makes the status line count subagent work.

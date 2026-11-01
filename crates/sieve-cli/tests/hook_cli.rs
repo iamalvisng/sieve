@@ -605,12 +605,12 @@ fn test_p4_54_cursor_post_tool_scores_each_tool_use() {
             r#"{"conversation_id":"c6","tool_name":"Shell","tool_input":{"cmd":"npx -y sieve map"},"tool_output":"nothing"}"#,
             Some(cursor_session(1, 0, 0, true)),
         ),
-        // `tool_response` stands in for `tool_output`, and a footer makes
-        // an `echo` a use of sieve.
+        // A footer in the output of a command that is not sieve makes it
+        // no use of sieve: nothing is recorded.
         (
             "c7",
             r#"{"conversation_id":"c7","tool_name":"Shell","tool_input":{"command":"echo hi"},"tool_response":{"stdout":"[sieve] tokens saved ≈ 1,100"}}"#,
-            Some(cursor_session(1, 0, 1100, true)),
+            None,
         ),
         // A Write tool is neither: no file.
         (
@@ -753,7 +753,7 @@ fn test_p4_54_cursor_keys_pick_in_golden_order() {
     let tmp = TempDir::new("hooks-cursor-keys");
     let copy = bare_copy(&tmp);
     // conversation_id wins over session_id; tool_output wins over tool_response.
-    let both = r#"{"conversation_id":"A","session_id":"B","tool_name":"Shell","tool_input":{"command":"echo"},"tool_output":"[sieve] tokens saved ≈ 10","tool_response":"[sieve] tokens saved ≈ 20"}"#;
+    let both = r#"{"conversation_id":"A","session_id":"B","tool_name":"Shell","tool_input":{"command":"sieve map"},"tool_output":"[sieve] tokens saved ≈ 10","tool_response":"[sieve] tokens saved ≈ 20"}"#;
     run_hook(&copy, "cursor-post-tool", both);
     assert_eq!(
         session_json(&copy, "A"),

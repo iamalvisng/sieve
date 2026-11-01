@@ -501,8 +501,8 @@ pub struct SessionState {
     )]
     pub saved_by_day: BTreeMap<String, u64>,
     /// The version of the formula that wrote `savedTokens` and `savedByDay`.
-    /// A file with no version, or an older one, holds the old whole-file
-    /// baseline numbers. The totals ignore them.
+    /// A file with no version, or an older one, holds numbers from an old
+    /// baseline. The totals ignore them.
     #[serde(
         rename = "savingsFormula",
         skip_serializing_if = "Option::is_none",
@@ -630,8 +630,9 @@ impl SessionState {
 
 /// The version of the saved-tokens formula. Version 1 is the old whole-file
 /// baseline, which also covers a file with no version. Version 2 is the
-/// answer-line formula.
-pub(crate) const SAVINGS_FORMULA: u64 = 2;
+/// answer-line formula. Version 3 counts a blocked Read by the lines it asked
+/// for, and `query --def` and `symbols` print no saving.
+pub(crate) const SAVINGS_FORMULA: u64 = 3;
 
 impl SessionState {
     /// Adds `n` saved tokens to the session total and to today's local-day
@@ -675,6 +676,18 @@ fn requested_lines(input: &Value) -> (usize, usize) {
     let start = get("offset").map_or(1, |n| (n as usize).max(1));
     let count = get("limit").map_or(READ_DEFAULT_LINES, |n| (n as usize).max(1));
     (start, start.saturating_add(count - 1))
+}
+
+/// The chars of the lines `req` names in `bytes`, newlines included. The
+/// count borrows the bytes: it skips UTF-8 continuation bytes.
+fn requested_chars(bytes: &[u8], req: (usize, usize)) -> u64 {
+    bytes
+        .split_inclusive(|b| *b == b'\n')
+        .skip(req.0 - 1)
+        .take(req.1 - req.0 + 1)
+        .flatten()
+        .filter(|b| **b & 0xC0 != 0x80)
+        .count() as u64
 }
 
 impl ReadRecord {
@@ -742,26 +755,37 @@ pub(crate) fn read_session(project_dir: &Path, id: &str) -> SessionState {
         .unwrap_or_default()
 }
 
-/// The tokens a session and its subagents saved by the current formula.
+/// What a session and its subagents add up to in their tally files.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct SessionTotals {
+    /// The tokens saved, by the current formula.
+    pub saved: u64,
+    /// The Sieve tool calls made.
+    pub lookups: u64,
+}
+
+/// The totals of a session and its subagents.
 ///
 /// A subagent keeps its own file, `<session>.<agent>.json`. The function
 /// reads the session dir once. It parses only a file whose name starts with
 /// the session stem, so a file of another session costs a name check.
-pub(crate) fn read_session_total(project_dir: &Path, id: &str) -> u64 {
-    session_total_in(&cache_dir(project_dir).join("session"), id)
+pub(crate) fn read_session_totals(project_dir: &Path, id: &str) -> SessionTotals {
+    session_totals_in(&cache_dir(project_dir).join("session"), id)
 }
 
-/// [`read_session_total`] for an explicit session directory.
-pub(crate) fn session_total_in(dir: &Path, id: &str) -> u64 {
+/// [`read_session_totals`] for an explicit session directory.
+pub(crate) fn session_totals_in(dir: &Path, id: &str) -> SessionTotals {
     #[derive(serde::Deserialize)]
     struct Tally {
         #[serde(rename = "savedTokens", default)]
         saved_tokens: u64,
         #[serde(rename = "savingsFormula", default)]
         savings_formula: Option<u64>,
+        #[serde(rename = "toolReads", default)]
+        tool_reads: u64,
     }
     let stem = safe_session_stem(id);
-    let mut total = 0;
+    let mut totals = SessionTotals::default();
     for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
         let name = entry.file_name();
         let Some(rest) = name
@@ -778,11 +802,14 @@ pub(crate) fn session_total_in(dir: &Path, id: &str) -> u64 {
         let tally = std::fs::read(entry.path())
             .ok()
             .and_then(|b| serde_json::from_slice::<Tally>(&b).ok());
-        if let Some(t) = tally.filter(|t| t.savings_formula == Some(SAVINGS_FORMULA)) {
-            total += t.saved_tokens;
+        let Some(t) = tally else { continue };
+        // A call count has no formula; only the saved tokens do.
+        totals.lookups += t.tool_reads;
+        if t.savings_formula == Some(SAVINGS_FORMULA) {
+            totals.saved += t.saved_tokens;
         }
     }
-    total
+    totals
 }
 
 fn write_session(project_dir: &Path, id: &str, state: &SessionState) -> std::io::Result<()> {
@@ -1600,7 +1627,7 @@ fn handle_pre_read(input: &Value, project_dir: &Path) -> Option<String> {
         if record.covers(req) && !record.denied {
             record.denied = true;
             session.reads.insert(key.clone(), record);
-            session.add_saved(bytes.len() as u64 / 4);
+            session.add_saved(sieve_savings::to_tokens(requested_chars(&bytes, req)));
             return true;
         }
         // ponytail: the deny alternates by design, one deny per two reads. The
@@ -1899,24 +1926,21 @@ fn handle_tool_use(input: &Value, project_dir: &Path) {
     }
 }
 
-/// Classifies a tool use and, only when it could carry a footer, parses
-/// the savings out of its lazily built payload (`classifyAndScore`). A
-/// source read never prints a footer, so its payload is never built.
+/// Classifies a tool use and, for a Sieve call only, parses the savings out
+/// of its lazily built payload (`classifyAndScore`). The tool name or the
+/// command decides the kind. A savings line in the output of another
+/// command, such as `grep` over a doc, never makes it a Sieve call.
 fn classify_and_score(
     tool_name: &str,
     command: Option<&str>,
     payload: impl FnOnce() -> Value,
 ) -> (Option<&'static str>, u64) {
-    let mut kind = classify_tool_use(tool_name, command);
-    if kind == Some("source") {
+    let kind = classify_tool_use(tool_name, command);
+    if kind != Some("sieve") {
         return (kind, 0);
     }
     let blob = serde_json::to_string(&payload()).unwrap_or_default();
-    let saved = sum_savings_footers(&blob);
-    if saved > 0 {
-        kind = Some("sieve");
-    }
-    (kind, saved)
+    (kind, sum_savings_footers(&blob))
 }
 
 /// The first of `keys` in `input` that is neither absent nor `null`
@@ -2025,11 +2049,13 @@ fn is_sieve_mcp_tool(tool_name_lower: &str) -> bool {
         .flat_map(|s| s.split([':', '.', '/']))
         .last()
         .unwrap_or(tool_name_lower);
-    // Strips the active product's own `<name>_` prefix and matches the six
-    // bare tool suffixes by hand, instead of calling
+    // Strips the active product's own `<name>_` prefix and matches the bare
+    // tool suffixes by hand, instead of calling
     // `sieve_daemon::names::tool_names()` (six `String` allocations) once
     // per hook tool-use event.
-    const TOOL_BASES: [&str; 6] = ["query", "symbols", "check", "callers", "find", "map"];
+    const TOOL_BASES: [&str; 8] = [
+        "query", "symbols", "check", "callers", "find", "map", "why", "rename",
+    ];
     let is_named_tool = bare
         .strip_prefix(product().name)
         .and_then(|rest| rest.strip_prefix('_'))
@@ -2040,12 +2066,13 @@ fn is_sieve_mcp_tool(tool_name_lower: &str) -> bool {
 /// Whether a shell command line invokes the sieve CLI, any install shape.
 /// ponytail: a manual scan, not a regex (no `regex` crate here) — covers the
 /// shapes the goldens and the session examples name; a wilder invocation
-/// (`sieve-dev` behind three pipes) can still slip past.
+/// (`sieve` behind three pipes) can still slip past.
 pub(crate) fn command_invokes_sieve(command: &str) -> bool {
-    let c = command.trim();
-    for segment in c.split(['|', '&', ';']) {
+    shell_segments(command.trim()).into_iter().any(|segment| {
         let mut rest = segment.trim_start();
-        // Leading `NAME=value` words are an env prefix.
+        // Leading `NAME=value` words are an env prefix. A wrapper such as
+        // `env` or `time` is not stripped: the list of wrappers has no end,
+        // and a missed wrapper costs less than a wrong count.
         while let Some(word) = rest.split_whitespace().next() {
             let is_assign = word.split_once('=').is_some_and(|(k, _)| {
                 !k.is_empty() && k.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
@@ -2066,19 +2093,103 @@ pub(crate) fn command_invokes_sieve(command: &str) -> bool {
         if let Some(slash) = rest[..first_end].rfind('/') {
             rest = &rest[slash + 1..];
         }
-        for name in ["sieve-dev", "sieve"] {
-            if let Some(after) = rest.strip_prefix(name) {
-                let boundary = after
+        ["sieve-local", "sieve"].iter().any(|name| {
+            // The name must end the first word. A quote or a dot after it
+            // means the text only holds the word, as in `grep 'sieve'`.
+            rest.strip_prefix(name).is_some_and(|after| {
+                after
                     .chars()
                     .next()
-                    .is_none_or(|c| !(c.is_alphanumeric() || c == '_' || c == '-'));
-                if boundary {
-                    return true;
-                }
+                    .is_none_or(|c| c.is_whitespace() || c == ')')
+            })
+        })
+    })
+}
+
+/// Splits a shell line into the texts where a command can start. A new line,
+/// `;`, `|`, `&` and `(` split it, but only outside single and double quotes,
+/// so a quoted word or a multi-line commit message never starts a command.
+/// The body of a here-document is data: the split skips it up to its end word.
+fn shell_segments(command: &str) -> Vec<&str> {
+    let bytes = command.as_bytes();
+    let mut segments = Vec::new();
+    let (mut start, mut i) = (0, 0);
+    let mut quote: Option<u8> = None;
+    let mut heredoc: Option<(&str, bool)> = None;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if let Some(q) = quote {
+            if b == b'\\' && q == b'"' {
+                i += 1;
+            } else if b == q {
+                quote = None;
+            }
+        } else if b == b'\\' {
+            i += 1;
+        } else if b == b'\'' || b == b'"' {
+            quote = Some(b);
+        } else if bytes[i..].starts_with(b"<<") && !bytes[i..].starts_with(b"<<<") {
+            let (word, strip, end) = heredoc_word(command, i + 2);
+            heredoc = Some((word, strip));
+            i = end;
+            continue;
+        } else if matches!(b, b'\n' | b';' | b'|' | b'&' | b'(') {
+            segments.push(&command[start..i]);
+            start = i + 1;
+            if let (b'\n', Some((word, strip))) = (b, heredoc.take()) {
+                start = heredoc_end(command, start, word, strip);
+                i = start;
+                continue;
             }
         }
+        i += 1;
     }
-    false
+    segments.push(&command[start..]);
+    segments
+}
+
+/// Reads the end word of a here-document that opens at byte `from`, after the
+/// `<<`. It gives the word, whether `<<-` strips leading tabs, and the byte
+/// after the word.
+fn heredoc_word(command: &str, from: usize) -> (&str, bool, usize) {
+    let rest = &command[from..];
+    let (strip, rest) = rest.strip_prefix('-').map_or((false, rest), |r| (true, r));
+    let spaces = rest.len() - rest.trim_start_matches([' ', '\t']).len();
+    let word_from = from + usize::from(strip) + spaces;
+    let tail = &command[word_from..];
+    let (word, end) = match tail.chars().next() {
+        Some(q @ ('\'' | '"')) => {
+            let inner = &tail[1..];
+            let close = inner.find(q).unwrap_or(inner.len());
+            (&inner[..close], (close + 2).min(tail.len()))
+        }
+        _ => {
+            let n = tail
+                .find(|c: char| c.is_whitespace() || ";|&<>()".contains(c))
+                .unwrap_or(tail.len());
+            (&tail[..n], n)
+        }
+    };
+    (word, strip, word_from + end)
+}
+
+/// The byte where the command after a here-document starts: the byte after
+/// the line that holds `word`, or the end of `command`.
+fn heredoc_end(command: &str, from: usize, word: &str, strip: bool) -> usize {
+    let mut at = from;
+    for line in command[from..].split_inclusive('\n') {
+        at += line.len();
+        let text = line.trim_end_matches('\n');
+        if (if strip {
+            text.trim_start_matches('\t')
+        } else {
+            text
+        }) == word
+        {
+            return at;
+        }
+    }
+    command.len()
 }
 
 /// Sums the saved tokens of every answer line in `text`
@@ -2587,7 +2698,6 @@ mod tests {
             "SIEVE_DIR=x sieve callers run",
             "A=1 B=2 ./bin/sieve skeleton f.ts",
             "cd repo && sieve map",
-            "sieve-dev map",
         ] {
             assert!(command_invokes_sieve(yes), "{yes}");
         }
@@ -2598,6 +2708,7 @@ mod tests {
             "cat src/sieve.ts",
             "FOO=sieve ls",
             "ls ./sieve-tools/x",
+            "sieve-dev map",
         ] {
             assert!(!command_invokes_sieve(no), "{no}");
         }
@@ -3798,20 +3909,118 @@ mod tests {
     }
 
     #[test]
-    fn statusline_session_total_counts_subagent_files_only_of_that_session() {
+    fn statusline_session_totals_add_subagent_files_only_of_that_session() {
         let dir = TempDir::new("session-total");
-        let save = |id: &str, n: u64| {
+        let save = |id: &str, saved: u64, reads: u64| {
             update_session(&dir.path, id, |s| {
                 s.savings_formula = Some(SAVINGS_FORMULA);
-                s.saved_tokens = n;
+                s.saved_tokens = saved;
+                s.tool_reads = reads;
             });
         };
-        save("s1", 100);
-        save("s1.agentA", 20);
-        save("s1.agentB", 3);
-        save("s10", 5000);
-        save("s2.agentA", 7000);
-        assert_eq!(read_session_total(&dir.path, "s1"), 123);
+        save("s1", 100, 4);
+        save("s1.agentA", 20, 2);
+        save("s1.agentB", 3, 1);
+        save("s10", 5000, 50);
+        save("s2.agentA", 7000, 70);
+        // A file of an old formula still counts its calls, not its tokens.
+        update_session(&dir.path, "s1.agentC", |s| {
+            s.savings_formula = Some(SAVINGS_FORMULA + 1);
+            s.saved_tokens = 900;
+            s.tool_reads = 5;
+        });
+        assert_eq!(
+            read_session_totals(&dir.path, "s1"),
+            SessionTotals {
+                saved: 123,
+                lookups: 12
+            }
+        );
+    }
+
+    #[test]
+    fn command_invokes_sieve_reads_quotes_and_here_documents() {
+        let yes = [
+            "sieve map",
+            "(sieve map)",
+            "cd d && sieve callers f",
+            "make || sieve find x",
+            "ls\nsieve find x",
+            "X=1 sieve map",
+            ".claude/bin/sieve-local symbols a.rs",
+            "cat <<EOF > f\nbody\nEOF\nsieve find x",
+            "cat <<-'END'\n\tsieve find x\n\tEND\nsieve map",
+            "echo $(sieve find x)",
+        ];
+        for command in yes {
+            assert!(command_invokes_sieve(command), "{command:?}");
+        }
+        let no = [
+            // The body of a here-document is data.
+            "cat <<'EOF'\nsieve find x\nEOF",
+            "python3 - <<EOF\nsieve find x\nEOF",
+            // A quoted message holds new lines and the word, not a command.
+            "git commit -m \"line1\nsieve query y\"",
+            "git commit -m 'a; sieve find x'",
+            // A quoted alternation holds the word, not a command.
+            "grep -E 'a|sieve find'",
+            "grep -E \"a|sieve\" f",
+            // A wrapper is not stripped, so this is not counted.
+            "env X=1 sieve map",
+            "time sieve map",
+        ];
+        for command in no {
+            assert!(!command_invokes_sieve(command), "{command:?}");
+        }
+    }
+
+    #[test]
+    fn a_blocked_read_saves_only_the_lines_it_asked_for() {
+        let bytes = "ab\ncd\n\u{e9}f\ngh".as_bytes();
+        // Lines 2 and 3: `cd\n` and `\u{e9}f\n`, 6 chars though 7 bytes.
+        assert_eq!(requested_chars(bytes, (2, 3)), 6);
+        assert_eq!(requested_chars(bytes, (4, 2000)), 2);
+        assert_eq!(requested_chars(bytes, (9, 12)), 0);
+    }
+
+    #[test]
+    fn a_savings_line_in_a_foreign_output_is_no_lookup() {
+        let dir = TempDir::new("lookup-foreign");
+        let event = |tool: &str, command: &str| {
+            serde_json::json!({
+                "session_id": "s1", "tool_name": tool,
+                "tool_input": {"command": command},
+                "tool_response": {"stdout": "\u{1f3af} 1 exact callers \u{b7} ~2k tokens saved\n"},
+            })
+        };
+        handle_tool_use(&event("Bash", "grep -n saved docs.md"), &dir.path);
+        handle_tool_use(&event("Bash", "sieve find foo"), &dir.path);
+        handle_tool_use(&event("mcp__sieve__sieve_find", ""), &dir.path);
+        let session = read_session(&dir.path, "s1");
+        assert_eq!(session.tool_reads, 2);
+        assert_eq!(session.saved_tokens, 4_000, "the foreign line adds nothing");
+    }
+
+    #[test]
+    fn a_sieve_local_command_counts_as_a_sieve_call() {
+        for command in [
+            ".claude/bin/sieve-local find foo",
+            "cd /repo && ./.claude/bin/sieve-local callers bar",
+        ] {
+            assert!(command_invokes_sieve(command), "{command}");
+        }
+        assert!(!command_invokes_sieve("sieve-localx find foo"));
+        // A word inside quotes is not a command.
+        assert!(!command_invokes_sieve("ps | grep -E 'cargo|sieve' | head"));
+        // A subshell and a new line also start a command.
+        assert!(command_invokes_sieve("ls\n(sieve query foo 2>&1 | head)"));
+    }
+
+    #[test]
+    fn the_why_and_rename_tools_count_as_sieve_calls() {
+        for tool in ["mcp__sieve__sieve_why", "mcp__sieve__sieve_rename"] {
+            assert_eq!(classify_tool_use(tool, None), Some("sieve"), "{tool}");
+        }
     }
 
     #[test]

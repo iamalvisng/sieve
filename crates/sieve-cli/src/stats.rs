@@ -287,9 +287,9 @@ pub fn savings_report(
         Some(s) => (
             s.get("id").cloned().unwrap_or(Json::Null),
             // The session and its subagent files, as the status line shows.
-            s.get("id")
-                .and_then(Json::as_str)
-                .map_or(0.0, |id| crate::hook::session_total_in(&dir, id) as f64),
+            s.get("id").and_then(Json::as_str).map_or(0.0, |id| {
+                crate::hook::session_totals_in(&dir, id).saved as f64
+            }),
             dollars_saved(
                 num(s, "savedTokens"),
                 num(s, "inputCostMicros"),
@@ -495,15 +495,15 @@ mod tests {
         let now = 1_791_115_200u64;
         s.write(
             "a.json",
-            r#"{"savingsFormula":2,"savedTokens":3000,"savedByDay":{"2026-10-04":1000,"2026-10-02":2000},"inputCostMicros":5000000,"inputTokensBilled":1000000}"#,
+            r#"{"savingsFormula":3,"savedTokens":3000,"savedByDay":{"2026-10-04":1000,"2026-10-02":2000},"inputCostMicros":5000000,"inputTokensBilled":1000000}"#,
         );
         s.write(
             "b.json",
-            r#"{"savingsFormula":2,"savedTokens":500,"savedByDay":{"2026-10-04":500}}"#,
+            r#"{"savingsFormula":3,"savedTokens":500,"savedByDay":{"2026-10-04":500}}"#,
         );
         s.write(
             "c.json",
-            r#"{"savingsFormula":2,"savedTokens":9,"savedByDay":{"2026-09-01":9}}"#,
+            r#"{"savingsFormula":3,"savedTokens":9,"savedByDay":{"2026-09-01":9}}"#,
         );
         let latest = latest_session(&s.0);
         let report = Json::Obj(savings_report(&s.0.join("sieve"), latest.as_ref(), now, 0));
