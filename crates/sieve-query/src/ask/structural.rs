@@ -155,9 +155,10 @@ fn symbol_matches_indexed<'a>(
 }
 
 /// Resolves a query string to every matching node:
-/// exact/suffix name match, then the last dot-segment as a
-/// bare name, then a filename match against file nodes, then an optional
-/// `--in` path-prefix filter.
+/// exact/suffix name match, then a filename match against file nodes, then
+/// the last dot-segment as a bare name (skipped for a query with `/`), then
+/// an optional `--in` path-prefix filter. A file path must not resolve to a
+/// symbol named like its extension, so the file match comes first.
 pub(crate) fn resolve_symbol<'a>(
     graph: &'a Graph,
     query: &str,
@@ -181,19 +182,8 @@ pub(crate) fn resolve_symbol_with<'a>(
         None => symbol_matches(&graph.nodes, &lower_query),
     };
 
-    if matches.is_empty() && query.contains('.') {
-        if let Some(idx) = query.rfind('.') {
-            let last_segment = query[idx + 1..].to_lowercase();
-            if !last_segment.is_empty() {
-                matches = graph
-                    .nodes
-                    .iter()
-                    .filter(|n| n.kind != Kind::File && n.name.to_lowercase() == last_segment)
-                    .collect();
-            }
-        }
-    }
-
+    // The file match runs first: the extension of `a/b.ts` must not pick a
+    // symbol named `ts`.
     if matches.is_empty() && looks_like_filename {
         matches = graph
             .nodes
@@ -205,6 +195,20 @@ pub(crate) fn resolve_symbol_with<'a>(
                         || n.path.to_lowercase().ends_with(&format!("/{lower_query}")))
             })
             .collect();
+    }
+
+    // A query with `/` is a path, not a dotted symbol name, so it skips this step.
+    if matches.is_empty() && query.contains('.') && !query.contains('/') {
+        if let Some(idx) = query.rfind('.') {
+            let last_segment = query[idx + 1..].to_lowercase();
+            if !last_segment.is_empty() {
+                matches = graph
+                    .nodes
+                    .iter()
+                    .filter(|n| n.kind != Kind::File && n.name.to_lowercase() == last_segment)
+                    .collect();
+            }
+        }
     }
 
     if let Some(prefix) = in_prefix {
@@ -465,6 +469,25 @@ mod tests {
             nodes,
             edges,
         }
+    }
+
+    /// A file path resolves to its file, not to a symbol named like its
+    /// extension. A path that is not indexed resolves to nothing.
+    #[test]
+    fn file_path_query_does_not_resolve_to_extension_named_symbol() {
+        let g = graph(
+            vec![
+                node("a/b.ts", "b.ts", Kind::File, "a/b.ts", "1-1"),
+                node("c.rs#ts", "ts", Kind::Function, "c.rs", "1-2"),
+            ],
+            Vec::new(),
+        );
+        let hit = resolve_symbol(&g, "a/b.ts", None);
+        assert_eq!(hit.len(), 1);
+        assert_eq!(hit[0].kind, Kind::File);
+        assert!(resolve_symbol(&g, "x/missing.ts", None).is_empty());
+        // A dotted symbol query without `/` keeps the last-segment step.
+        assert_eq!(resolve_symbol(&g, "C.ts", None).len(), 1);
     }
 
     /// The intent regexes have no `u` flag, so `\b` and

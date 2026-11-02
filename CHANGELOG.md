@@ -5,6 +5,14 @@ All notable changes to this project are in this file.
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.8] - 2026-11-02
+
+This release fixes how a file path query finds its target.
+
+### Fixed
+
+- A query that is a file path now answers for that file. Before, Sieve matched the last part of the path first, so `crates/x/foo.ts` could answer for an unrelated function named `ts`. This affected `callers`, `impact`, `why`, `rename`, `query --def` and the matching MCP tools, for any file whose extension is also a symbol name. A path that holds `/` and is not in the index no longer matches a symbol by its last part.
+
 ## [0.2.7] - 2026-11-01
 
 This release makes the status line count MCP Sieve calls.

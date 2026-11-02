@@ -1446,6 +1446,23 @@ mod tests {
         assert_eq!(found[0].id, "src/x.ts#C~2.m");
     }
 
+    /// `callers` and `why` resolve a file path to the file node, not to a
+    /// symbol named like the extension. An unindexed path is "no symbol".
+    #[test]
+    fn resolve_symbol_file_path_beats_extension_named_symbol() {
+        let g = graph(
+            vec![
+                node("a/b.ts", "b.ts", Kind::File, "a/b.ts", "L1-L1"),
+                node("c.rs#ts", "ts", Kind::Function, "c.rs", "L1-L2"),
+            ],
+            Vec::new(),
+        );
+        let found = resolve_symbol(&g, "a/b.ts", None).expect("resolves");
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].kind, Kind::File);
+        assert!(resolve_symbol(&g, "x/missing.ts", None).is_err());
+    }
+
     #[test]
     fn resolve_symbol_errors_with_the_no_symbol_text_on_zero_matches() {
         let g = graph(Vec::new(), Vec::new());
