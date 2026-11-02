@@ -5,6 +5,21 @@ All notable changes to this project are in this file.
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.9] - 2026-11-02
+
+This release sets up Sieve in OpenCode with one command.
+
+### Added
+
+- `sieve init -y` writes the Sieve MCP entry to `opencode.json` when OpenCode is installed (`~/.config/opencode/`) or when the repo holds `opencode.json`, `opencode.jsonc` or `.opencode/`. The merge keeps every other key. `sieve init` without `-y` already did this when OpenCode was installed.
+- `sieve init` writes an OpenCode footer plugin to `.opencode/plugins/sieve/` and adds the folder to `.gitignore`. The footer shows the Sieve status line. If you edit a plugin file, `init` and `uninstall` leave it unchanged.
+- `sieve statusline --format plain` prints the status line as one line, with no colour and no art.
+
+### Changed
+
+- `sieve statusline` reads no stdin when stdin is a terminal, so a run by hand does not wait for input.
+- If `opencode.json` is not strict JSON, or the repo holds only `opencode.jsonc`, `init` prints the entry to add and does not rewrite the file.
+
 ## [0.2.8] - 2026-11-02
 
 This release fixes how a file path query finds its target.

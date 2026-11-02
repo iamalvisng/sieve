@@ -1,9 +1,9 @@
 //! `sieve statusline`: the Claude Code statusline.
 
-use std::io::Read as _;
+use std::io::{IsTerminal as _, Read as _};
 use std::path::Path;
 
-use clap::Args;
+use clap::{Args, ValueEnum};
 use serde_json::Value;
 use sieve_core::product::product;
 use sieve_core::wiring::{Graph, SummaryState};
@@ -11,10 +11,20 @@ use sieve_core::wiring::{Graph, SummaryState};
 use crate::hook::{self, SessionState, Stats};
 use crate::hosts;
 
-/// Flags for `sieve statusline`. Takes no flags: every input arrives on
-/// stdin as JSON.
+/// The output forms of `sieve statusline`.
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Format {
+    /// One line with no color code and no art, for a host footer.
+    Plain,
+}
+
+/// Flags for `sieve statusline`. The input arrives on stdin as JSON.
 #[derive(Args, Debug)]
-pub struct StatuslineArgs {}
+pub struct StatuslineArgs {
+    /// Output form. Without it, the colored multi-line status line.
+    #[arg(long, value_enum)]
+    pub format: Option<Format>,
+}
 
 const INDIGO: &str = "\x1b[38;2;84;111;255m";
 const MUTED: &str = "\x1b[38;5;244m";
@@ -27,9 +37,13 @@ fn color(code: &str, s: &str) -> String {
 
 /// Runs `sieve statusline`: reads the canned status JSON, renders one or
 /// two lines, no trailing newline.
-pub fn run(_args: &StatuslineArgs, _dir_override: Option<&Path>) -> Result<(), String> {
+pub fn run(args: &StatuslineArgs, _dir_override: Option<&Path>) -> Result<(), String> {
+    let plain = args.format == Some(Format::Plain);
     let mut raw = String::new();
-    let _ = std::io::stdin().read_to_string(&mut raw);
+    // A terminal has no input to read. Reading it would wait for a key.
+    if !std::io::stdin().is_terminal() {
+        let _ = std::io::stdin().read_to_string(&mut raw);
+    }
     let input: Value =
         serde_json::from_str(&raw).unwrap_or_else(|_| Value::Object(Default::default()));
 
@@ -40,10 +54,12 @@ pub fn run(_args: &StatuslineArgs, _dir_override: Option<&Path>) -> Result<(), S
         .filter(|s| !s.is_empty())
         .unwrap_or("default");
 
+    // The plain form has no subagent view: that view is colored.
     if let Some(agent) = input
         .get("agent")
         .and_then(|a| a.get("name"))
         .and_then(Value::as_str)
+        .filter(|_| !plain)
     {
         let session = hook::read_session(&project_dir, session_id);
         print!("{}", render_subagent(agent, &session));
@@ -56,11 +72,19 @@ pub fn run(_args: &StatuslineArgs, _dir_override: Option<&Path>) -> Result<(), S
         .and_then(|c| c.get("used_percentage"))
         .and_then(Value::as_f64)
         .map(|p| p.round() as i64);
-    print!(
-        "{}",
-        render_sieve_now(stats.as_ref(), &project_dir, ctx_pct, session_id)
-    );
+    let text = render_sieve_now(stats.as_ref(), &project_dir, ctx_pct, session_id, plain);
+    if plain {
+        println!("{}", plain_line(&text));
+    } else {
+        print!("{text}");
+    }
     Ok(())
+}
+
+/// Joins the text rows of an uncolored render into one line.
+fn plain_line(text: &str) -> String {
+    let rows: Vec<&str> = text.lines().filter(|row| !row.is_empty()).collect();
+    rows.join(" \u{b7} ")
 }
 
 fn statusline_project_dir(input: &Value) -> std::path::PathBuf {
@@ -612,11 +636,17 @@ fn render_sieve_now(
     project_dir: &Path,
     ctx_pct: Option<i64>,
     session_id: &str,
+    plain: bool,
 ) -> String {
-    let depth = depth_from(
-        std::env::var("NO_COLOR").ok().as_deref(),
-        std::env::var("COLORTERM").ok().as_deref(),
-    );
+    // The plain form takes the `NO_COLOR` path: no color code, no mascot.
+    let depth = if plain {
+        Depth::Plain
+    } else {
+        depth_from(
+            std::env::var("NO_COLOR").ok().as_deref(),
+            std::env::var("COLORTERM").ok().as_deref(),
+        )
+    };
     let now = crate::telemetry::now_secs();
     let text = render_sieve_at(stats, project_dir, ctx_pct, session_id, now, depth);
     let note = setup_note(project_dir, now);
@@ -1413,5 +1443,34 @@ mod tests {
             "{without}"
         );
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_statusline_plain_form_is_one_line_with_no_color_or_art() {
+        let stats = fixture_stats();
+        let line = plain_line(&view(&stats, None, false));
+        assert_eq!(
+            line,
+            "sieve \u{b7} \u{1f3af} 12 lookups \u{b7} ~1.5k this session \u{b7} ~61.7k today \
+             \u{b7} 752 symbols \u{b7} 2,017 links \u{b7} \u{2713} up to date \u{b7} ctx 54%"
+        );
+        let art = |c: char| {
+            ('\u{2580}'..='\u{259f}').contains(&c) || ('\u{2800}'..='\u{28ff}').contains(&c)
+        };
+        assert!(!line.contains('\x1b') && !line.contains('\n') && !line.chars().any(art));
+    }
+
+    #[test]
+    fn test_statusline_default_render_at_a_fixed_frame_is_stable() {
+        let out = view(&fixture_stats(), mascot_rows("sieve", 0, Depth::True), true);
+        assert_eq!(
+            out,
+            concat!(
+            "\u{1b}[38;2;154;165;200m▀\u{1b}[0m\u{1b}[38;2;154;165;200m▄\u{1b}[0m\u{1b}[38;2;213;219;239m\u{1b}[48;2;213;219;239m▀\u{1b}[0m\u{1b}[38;2;213;219;239m\u{1b}[48;2;86;95;137m▀\u{1b}[0m\u{1b}[38;2;213;219;239m\u{1b}[48;2;86;95;137m▀\u{1b}[0m\u{1b}[38;2;213;219;239m\u{1b}[48;2;86;95;137m▀\u{1b}[0m\u{1b}[38;2;213;219;239m\u{1b}[48;2;86;95;137m▀\u{1b}[0m\u{1b}[38;2;213;219;239m\u{1b}[48;2;86;95;137m▀\u{1b}[0m\u{1b}[38;2;213;219;239m\u{1b}[48;2;86;95;137m▀\u{1b}[0m\u{1b}[38;2;213;219;239m\u{1b}[48;2;86;95;137m▀\u{1b}[0m\u{1b}[38;2;213;219;239m\u{1b}[48;2;86;95;137m▀\u{1b}[0m\u{1b}[38;2;213;219;239m\u{1b}[48;2;213;219;239m▀\u{1b}[0m\u{1b}[38;2;154;165;200m\u{1b}[48;2;154;165;200m▀\u{1b}[0m⠀⠀⠀⠀\u{1b}[38;2;232;184;109msieve\u{1b}[0m\u{1b}[38;2;86;95;137m · \u{1b}[0m\u{1b}[38;2;158;206;106m🎯 12 lookups · ~1.5k this session · ~61.7k today\u{1b}[0m\n",
+            "⠀⠀\u{1b}[38;2;154;165;200m\u{1b}[48;2;154;165;200m▀\u{1b}[0m\u{1b}[38;2;226;230;243m\u{1b}[48;2;226;230;243m▀\u{1b}[0m\u{1b}[38;2;180;188;217m\u{1b}[48;2;59;66;97m▀\u{1b}[0m\u{1b}[38;2;59;66;97m\u{1b}[48;2;180;188;217m▀\u{1b}[0m\u{1b}[38;2;180;188;217m\u{1b}[48;2;59;66;97m▀\u{1b}[0m\u{1b}[38;2;59;66;97m\u{1b}[48;2;180;188;217m▀\u{1b}[0m\u{1b}[38;2;180;188;217m\u{1b}[48;2;59;66;97m▀\u{1b}[0m\u{1b}[38;2;59;66;97m\u{1b}[48;2;180;188;217m▀\u{1b}[0m\u{1b}[38;2;180;188;217m\u{1b}[48;2;59;66;97m▀\u{1b}[0m\u{1b}[38;2;154;165;200m\u{1b}[48;2;154;165;200m▀\u{1b}[0m⠀⠀⠀⠀⠀\u{1b}[38;2;154;165;206m752 symbols · 2,017 links · \u{1b}[0m\u{1b}[38;2;115;218;202m✓ up to date\u{1b}[0m\n",
+            "⠀⠀⠀\u{1b}[38;2;154;165;200m▀\u{1b}[0m\u{1b}[38;2;180;188;217m\u{1b}[48;2;154;165;200m▀\u{1b}[0m\u{1b}[38;2;59;66;97m\u{1b}[48;2;238;240;246m▀\u{1b}[0m\u{1b}[38;2;180;188;217m\u{1b}[48;2;180;188;217m▀\u{1b}[0m\u{1b}[38;2;59;66;97m\u{1b}[48;2;238;240;246m▀\u{1b}[0m\u{1b}[38;2;180;188;217m\u{1b}[48;2;180;188;217m▀\u{1b}[0m\u{1b}[38;2;59;66;97m\u{1b}[48;2;154;165;200m▀\u{1b}[0m\u{1b}[38;2;154;165;200m▀\u{1b}[0m⠀⠀⠀⠀⠀⠀\u{1b}[38;2;154;165;206mctx 54%\u{1b}[0m\n",
+            "⠀⠀⠀\u{1b}[38;2;238;240;246m▄\u{1b}[0m⠀⠀\u{1b}[38;2;238;240;246m▀\u{1b}[0m⠀⠀\u{1b}[38;2;238;240;246m▄\u{1b}[0m⠀⠀\u{1b}[38;2;238;240;246m▄\u{1b}[0m⠀⠀⠀",
+            )
+        );
     }
 }

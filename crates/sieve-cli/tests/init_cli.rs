@@ -2340,6 +2340,8 @@ const GOLDEN_UNINSTALL_REPORT: &str = "agents:
   ~ would remove: {R}/AGENTS.md (fenced sieve section)
   ~ would remove: {H}/.codex/config.toml [machine-wide] ([mcp_servers.sieve])
   ~ would remove: {R}/opencode.json (mcp.sieve)
+  - would remove: {R}/.opencode/plugins/sieve/index.ts (OpenCode footer plugin — deleted)
+  - would remove: {R}/.opencode/plugins/sieve/tui.tsx (OpenCode footer plugin — deleted)
   - would remove: {H}/.codex/hooks.json [machine-wide] (SessionStart / UserPromptSubmit / PostToolUse / Stop — deleted)
 
 adal:

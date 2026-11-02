@@ -359,14 +359,33 @@ fn wire_target(
                     skipped_global = true;
                 }
             }
-            if let Some(path) = hosts::opencode_mcp_path(root, &home) {
+            // An `opencode.jsonc` may hold comments. Sieve leaves it and
+            // prints the entry to add. A strict-JSON `opencode.json` that
+            // fails to parse gets the same hint.
+            let jsonc =
+                hosts::opencode_jsonc_path(root).filter(|_| !root.join("opencode.json").is_file());
+            if let Some(path) = jsonc.or_else(|| hosts::opencode_mcp_path(root, &home)) {
                 let action = merge_opencode_json(&path).map_err(|e| e.to_string())?;
-                say!(
-                    out,
-                    "✓ mcp opencode: {} ({})",
-                    path.display(),
-                    action.word()
-                );
+                if action == WriteAction::SkippedUnparseable {
+                    let why = if path.extension().is_some_and(|e| e == "jsonc") {
+                        "is JSONC and sieve does not rewrite it"
+                    } else {
+                        "left unchanged (not strict JSON; it may hold a comment)"
+                    };
+                    say!(
+                        out,
+                        "⚠ mcp opencode: {} {why} — add under \"mcp\": {}",
+                        path.display(),
+                        hosts::opencode_hint_entry()
+                    );
+                } else {
+                    say!(
+                        out,
+                        "✓ mcp opencode: {} ({})",
+                        path.display(),
+                        action.word()
+                    );
+                }
             }
         }
         let targets = json_mcp_targets();
@@ -411,6 +430,32 @@ fn wire_target(
             .filter(|t| t.id == "antigravity" || t.id == "kiro")
         {
             write_json_target(target, out)?;
+        }
+    }
+
+    // The OpenCode footer plugin is a statusline, so `--no-statusline`
+    // skips it. It is not an MCP file, so `--no-mcp` does not.
+    if selected.contains(&"agents")
+        && !no_statusline
+        && hosts::opencode_detected(root, &home_dir()?)
+    {
+        for (path, content) in hosts::opencode_plugin_files(root) {
+            match hosts::write_plugin_file(&path, &content).map_err(|e| e.to_string())? {
+                Some(action) => say!(
+                    out,
+                    "✓ opencode plugin: {} ({})",
+                    path.display(),
+                    action.word()
+                ),
+                None => say!(
+                    out,
+                    "⚠ opencode plugin: {} left unchanged (edited)",
+                    path.display()
+                ),
+            }
+        }
+        if !env_truthy(&product().env_var("NO_GITIGNORE")) {
+            hosts::ensure_plugin_ignored(root).map_err(|e| e.to_string())?;
         }
     }
 
@@ -615,6 +660,9 @@ fn retract_unselected(root: &Path, selected: &[&str], global: bool, verbose: boo
                     prune_empty_dirs(path.parent(), top);
                 }
             }
+            Ok(Retract::Edited) => {
+                eprintln!("\u{26a0} {} left unchanged (edited)", path.display());
+            }
             Ok(_) => {}
             Err(e) => eprintln!("\u{26a0} could not retract {}: {e}", path.display()),
         }
@@ -646,6 +694,11 @@ fn retract_unselected(root: &Path, selected: &[&str], global: bool, verbose: boo
         {
             run("agents", p, "mcp.sieve", &|p, apply| {
                 hosts::strip_mcp_json(p, "mcp", apply)
+            });
+        }
+        for (path, _) in hosts::opencode_plugin_files(root) {
+            run("agents", path, "OpenCode footer plugin", &|p, apply| {
+                hosts::remove_plugin_file(root, p, apply)
             });
         }
     }
@@ -981,6 +1034,11 @@ fn plan_writes(
             }
             if let Some(path) = hosts::opencode_mcp_path(root, home) {
                 out.push(w(path, false, MCP_PURPOSE));
+            }
+        }
+        if host.id == "agents" && !args.no_statusline && hosts::opencode_detected(root, home) {
+            for (path, _) in hosts::opencode_plugin_files(root) {
+                out.push(w(path, false, "the OpenCode footer line"));
             }
         }
         match host.id {
@@ -1715,9 +1773,12 @@ fn detect_hosts(home: &Path, repo: &Path, repo_only: bool) -> Vec<String> {
             .into_iter()
             .map(|h| h.id)
             .filter(|id| {
-                markers(id)
-                    .iter()
-                    .any(|(_, p)| p.is_dir() || (*id == "copilot" && p.is_file()))
+                // OpenCode marks `agents` under `--yes` too: its config folder
+                // under `HOME`, or its files in the repo.
+                (*id == "agents" && hosts::opencode_detected(repo, home))
+                    || markers(id)
+                        .iter()
+                        .any(|(_, p)| p.is_dir() || (*id == "copilot" && p.is_file()))
             })
             .map(str::to_string),
     );

@@ -194,6 +194,7 @@ fn format_retractions(ui: &Ui, outcomes: &[Outcome], apply: bool) -> String {
                     " \u{2014} not valid JSON, left untouched (remove the sieve entry by hand)"
                         .to_string(),
                 ),
+                Retract::Edited => ("\u{26a0}", " \u{2014} left unchanged (edited)".to_string()),
                 Retract::Deleted => ("-", format!(" ({} \u{2014} deleted)", o.what)),
                 _ => ("~", format!(" ({})", o.what)),
             };
@@ -267,6 +268,11 @@ fn targets(root: &Path, home: &Path, global: bool, cache: bool) -> Vec<Target> {
     if let Some(path) = hosts::opencode_mcp_path(root, home) {
         let run = mcp_json(&path, "mcp");
         add("agents", path, "mcp.sieve", false, run);
+    }
+    for (path, _) in hosts::opencode_plugin_files(root) {
+        let (repo, file) = (root.to_path_buf(), path.clone());
+        let run: Run = Box::new(move |apply| hosts::remove_plugin_file(&repo, &file, apply));
+        add("agents", path, "OpenCode footer plugin", false, run);
     }
     let json_targets = json_mcp_targets();
     let json_target = |id: &str| json_targets.iter().find(|t| t.id == id);
