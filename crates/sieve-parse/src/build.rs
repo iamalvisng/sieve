@@ -578,6 +578,9 @@ pub struct BuildReport {
     /// Every raw edge of the build, in claimed order. Empty unless
     /// [`BuildOptions::keep_raw`] is set.
     pub raw: Vec<RawEdge>,
+    /// The comment bag of each claimed file that has comment tokens, by file
+    /// path. The `why` topic pass reads it, so it never reads the files again.
+    pub comment_bags: BTreeMap<String, sieve_core::askindex::Bag>,
 }
 
 /// Builds the symbol graph the way [`build_graph`] does, but replays a
@@ -695,14 +698,28 @@ pub fn build_graph_cached_with(
     context_dir: &Path,
     opts: &mut BuildOptions,
 ) -> std::io::Result<BuildReport> {
+    build_guarded(root, context_dir, opts, None)
+}
+
+/// The build, with an optional memory reader for the guard. A test passes
+/// a reader; `None` reads the real process memory.
+fn build_guarded(
+    root: &Path,
+    context_dir: &Path,
+    opts: &mut BuildOptions,
+    memory_reader: Option<fn() -> Option<u64>>,
+) -> std::io::Result<BuildReport> {
     let mut timer = crate::timing::Timer::start();
     let stamp = extractor_stamp();
     let cache_file = cache_path(context_dir, &stamp);
     let mut files = collect_files(root, context_dir, opts.walked.take())?;
     files.retain(|rel| under_only_dirs(&to_slash(rel), &opts.only_dirs));
     timer.lap("walk");
-    // The memory guard runs before the cache read.
-    crate::guard::check(claimed_count(&files), !opts.no_reuse && cache_file.exists())?;
+    // The guard records the memory held now, then checks the growth after
+    // the cache load, every 64 files and before the cache write. A
+    // read-only build writes no marker.
+    let marker_dir = (!opts.read_only).then_some(context_dir);
+    let guard = crate::guard::Guard::start(marker_dir, claimed_count(&files), memory_reader);
     // A thread hashes the claimed files while the cache parses. The prior
     // wiring is read later, after the old cache is gone, to keep the peak
     // memory the guard projects.
@@ -728,6 +745,8 @@ pub fn build_graph_cached_with(
         Ok::<_, std::io::Error>((cache, pre))
     })?;
     timer.lap("read cache");
+    // The cache load adds memory before the loop starts.
+    guard.check()?;
     let total = if opts.progress.is_some() {
         files
             .iter()
@@ -748,7 +767,10 @@ pub fn build_graph_cached_with(
     let mut errors: Vec<String> = Vec::new();
     let [mut t_stat, mut t_read, mut t_hash, mut t_parse] = [std::time::Duration::ZERO; 4];
 
-    for rel in &files {
+    for (n, rel) in files.iter().enumerate() {
+        if n > 0 && n % 64 == 0 {
+            guard.check()?;
+        }
         let id = to_slash(rel);
         let Some(label) = claim_label(rel, &id) else {
             if is_manifest(rel) {
@@ -763,6 +785,7 @@ pub fn build_graph_cached_with(
                         nodes: Vec::new(),
                         raw_edges: Vec::new(),
                         error: None,
+                        comment_bag: Vec::new(),
                     };
                     new_files.insert(id, entry);
                 }
@@ -806,6 +829,7 @@ pub fn build_graph_cached_with(
             nodes: Vec::new(),
             raw_edges: Vec::new(),
             error,
+            comment_bag: Vec::new(),
         };
         let t0 = std::time::Instant::now();
         let read = fs::read(&abs);
@@ -846,6 +870,7 @@ pub fn build_graph_cached_with(
         parsed += 1;
         let mut entry_nodes = vec![file_node];
         entry_nodes.extend(symbols);
+        let comment_bag = sieve_core::askindex::comment_bag(&id, &text);
         new_files.insert(
             id,
             CacheEntry {
@@ -855,11 +880,15 @@ pub fn build_graph_cached_with(
                 nodes: entry_nodes,
                 raw_edges: edges,
                 error: None,
+                comment_bag,
             },
         );
         languages.insert(label);
     }
 
+    // Stop before the cache write. A stopped build writes only the marker
+    // file under the context dir.
+    guard.check()?;
     drop(old_cache);
     // The old cache is gone, so the prior wiring reads now, while the
     // cache writes and the edges link. The peak holds the same two sets.
@@ -900,10 +929,14 @@ pub fn build_graph_cached_with(
         .collect();
     let mut nodes = Vec::new();
     let mut raw_edges = Vec::new();
+    let mut comment_bags = BTreeMap::new();
     for id in &claimed_ids {
         if let Some(entry) = new_cache.files.get_mut(id) {
             nodes.append(&mut entry.nodes);
             raw_edges.append(&mut entry.raw_edges);
+            if !entry.comment_bag.is_empty() {
+                comment_bags.insert(id.clone(), std::mem::take(&mut entry.comment_bag));
+            }
         }
     }
     drop(new_cache);
@@ -923,6 +956,9 @@ pub fn build_graph_cached_with(
                 .map_err(|_| std::io::Error::other("the prior wiring thread failed"))
         },
     )?;
+    if !opts.read_only {
+        crate::guard::clear_marker(context_dir);
+    }
 
     Ok(BuildReport {
         graph,
@@ -933,6 +969,7 @@ pub fn build_graph_cached_with(
         prints,
         errors,
         raw: if opts.keep_raw { raw_edges } else { Vec::new() },
+        comment_bags,
     })
 }
 
@@ -1018,6 +1055,7 @@ pub fn fresh_entry(
             nodes: Vec::new(),
             raw_edges: Vec::new(),
             error: None,
+            comment_bag: Vec::new(),
         }));
     }
     let Some((size, mtime_ms)) = stat_print(root, id).ok() else {
@@ -1031,6 +1069,7 @@ pub fn fresh_entry(
         nodes: Vec::new(),
         raw_edges: Vec::new(),
         error,
+        comment_bag: Vec::new(),
     };
     let bytes = match fs::read(&abs) {
         Ok(bytes) => bytes,
@@ -1057,6 +1096,7 @@ pub fn fresh_entry(
         nodes,
         raw_edges: edges,
         error: None,
+        comment_bag: sieve_core::askindex::comment_bag(id, &text),
     }))
 }
 
@@ -2316,28 +2356,39 @@ mod tests {
         assert!(prefixes.contains("packages/a"), "prefixes: {prefixes:?}");
     }
 
-    /// The guard counts claimed files only, not json beside them.
+    /// The guard stops a build in the middle of the file loop. The stop
+    /// writes only the marker file under the context dir.
     #[test]
-    fn test_s0_guard_counts_only_claimed_files() {
-        let dir = TempDir::new("s0-claimed");
-        for i in 0..10 {
-            write_functions(&dir.path, &format!("src/f{i}.ts"), 1);
-            write_file(&dir.path, &format!("src/d{i}.json"), "{}");
+    fn a_stop_in_the_file_loop_writes_only_the_marker() {
+        use std::sync::atomic::AtomicUsize;
+        static CALLS: AtomicUsize = AtomicUsize::new(0);
+        // Calls 0 and 1 are the start and the cache load. Call 2 is the
+        // check at file 64, and it reads far over any ceiling.
+        fn reader() -> Option<u64> {
+            let n = CALLS.fetch_add(1, Ordering::SeqCst);
+            Some(if n < 2 { 0 } else { 100_000_000_000 })
         }
-        let files = collect_files(&dir.path, &dir.path.join("sieve"), None).expect("walk");
-        assert_eq!(files.len(), 20);
-        let count = claimed_count(&files);
-        assert_eq!(count, 10);
-        let refused = crate::guard::check_against(count, false, 1_000_000)
-            .expect_err("1 MB ceiling must refuse");
-        assert_eq!(
-            refused.projected,
-            crate::guard::projected_peak_bytes(10, false)
-        );
-        assert_ne!(
-            refused.projected,
-            crate::guard::projected_peak_bytes(20, false)
-        );
+        let dir = TempDir::new("guard-loop");
+        for i in 0..70 {
+            write_functions(&dir.path, &format!("src/f{i}.ts"), 1);
+        }
+        let context = dir.path.join("sieve");
+        let err = build_guarded(
+            &dir.path,
+            &context,
+            &mut BuildOptions::default(),
+            Some(reader),
+        )
+        .err()
+        .expect("the build stops");
+        assert!(err.to_string().contains("build stopped"), "{err}");
+        assert_eq!(CALLS.load(Ordering::SeqCst), 3, "the stop came at file 64");
+        let names: Vec<_> = fs::read_dir(&context)
+            .expect("context dir")
+            .flatten()
+            .map(|e| e.file_name())
+            .collect();
+        assert_eq!(names, vec![std::ffi::OsString::from("build-stopped")]);
     }
 
     /// `only_dirs` keeps the files under the prefix and drops the

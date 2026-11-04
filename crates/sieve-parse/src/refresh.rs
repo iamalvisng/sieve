@@ -6,13 +6,14 @@
 //! depend on the `sieve-cli` binary crate. This module holds the one
 //! definition; both callers switch to it in a later task.
 
+use std::collections::BTreeMap;
 use std::env;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 
-use sieve_core::askindex::{ask_index_path, build_ask_index, write_ask_index};
+use sieve_core::askindex::{ask_index_path, build_ask_index, write_ask_index, Bag};
 use sieve_core::fingerprint::{
     clear_racy_state, fingerprint_mtime_ms, fingerprint_path, probe_drift_racy, probe_drift_walk,
     read_fingerprint, write_fingerprint, Drift, Fingerprint, Print,
@@ -88,6 +89,35 @@ pub(crate) fn acquire_refresh_lock(context_dir: &Path) -> std::io::Result<Option
         Ok(Some(RefreshLock::Waited(context_dir.to_path_buf())))
     } else {
         Ok(None)
+    }
+}
+
+/// The comment bag of each file, by path, borrowed from the build result or
+/// from the cache a warm writer holds.
+pub type CommentBags<'a> = BTreeMap<&'a str, &'a Bag>;
+
+/// What a refresh hands to the topic writer after it wrote a graph: the graph
+/// and the comment bags of its files. `None` means no graph was written. The
+/// writer then checks only whether the decision docs changed.
+pub type TopicInput<'a, 'b> = Option<(&'a Graph, &'a CommentBags<'b>)>;
+
+/// The function that writes the topic sidecar of `sieve why`. It takes the
+/// repo root, the context dir and the [`TopicInput`].
+pub type TopicWriter = fn(&Path, &Path, TopicInput<'_, '_>);
+
+static TOPIC_WRITER: OnceLock<TopicWriter> = OnceLock::new();
+
+/// Registers the topic writer. The `sieve-cli` binary calls it at start,
+/// because this crate cannot depend on the crate that owns the decision
+/// docs. A second call changes nothing.
+pub fn set_topic_writer(writer: TopicWriter) {
+    let _ = TOPIC_WRITER.set(writer);
+}
+
+/// Runs the registered topic writer. It does nothing when no writer is set.
+pub fn run_topic_writer(root: &Path, context_dir: &Path, input: TopicInput<'_, '_>) {
+    if let Some(writer) = TOPIC_WRITER.get() {
+        writer(root, context_dir, input);
     }
 }
 
@@ -293,14 +323,12 @@ fn rebuild_inner(
 ) -> io::Result<(RebuildReport, Option<Kept>)> {
     // The last build's `--only-dir` whitelist rides in the fingerprint, so
     // a refresh walks the same set.
+    // A stopped build is not tried again until the ceiling rises. The
+    // marker check comes first, so a skip reads no fingerprint.
+    crate::guard::skip_if_stopped(context_dir)?;
     let stamp = crate::extractor_stamp();
     let path = fingerprint_path(context_dir, &stamp);
     let fp = read_fingerprint(&path, &stamp);
-    // The warm guard runs on the fingerprint file count, before the old
-    // cache is parsed.
-    if let Some(fp) = &fp {
-        crate::guard::check(fp.files.len(), true)?;
-    }
     let only_dirs = fp.and_then(|fp| fp.only_dirs).unwrap_or_default();
     let mut opts = BuildOptions {
         only_dirs: only_dirs.clone(),
@@ -339,6 +367,16 @@ fn rebuild_inner(
     };
     write_fingerprint(&path, &fingerprint)?;
     timer.lap("write fingerprint");
+    // The topic sidecar carries the stamp of the wiring just written. It
+    // follows the fingerprint, so a failed write only leaves it stale.
+    let bags: CommentBags<'_> = report
+        .comment_bags
+        .iter()
+        .map(|(id, bag)| (id.as_str(), bag))
+        .collect();
+    run_topic_writer(root, context_dir, Some((&report.graph, &bags)));
+    drop(bags);
+    timer.lap("write topics");
     // Keep the graph only when the whole write succeeded, with the record it
     // was written under.
     let keeping = KEEPING
@@ -421,6 +459,9 @@ pub fn ensure_fresh_graph(
             clear_racy_under_lock(context_dir, &fp_path, &stamp, fp, racy.latest_mtime_ms);
             timer.lap("clear racy state");
         }
+        // No code file changed, but a decision doc may have. The writer
+        // checks the doc stamps and rewrites its sidecar only then.
+        run_topic_writer(root, context_dir, None);
         return RefreshOutcome::default();
     }
 

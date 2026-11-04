@@ -5,6 +5,22 @@ All notable changes to this project are in this file.
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.10] - 2026-11-04
+
+This release makes `sieve why` find the decisions behind a file, and lets your agent link decision records to code.
+
+### Added
+
+- `sieve why <file>` lists the records that point at symbols inside the file, and names the symbol on each row. It also reads the error logs beside the decision docs. `sieve why <path>:<line>` walks up to the symbol that holds the line.
+- A record can name the record it replaces with a line `- **Supersedes:** <old heading>`. `sieve why` then marks the old record as SUPERSEDED.
+- `sieve why --link` proposes candidate code files for one decision record. Your agent reads them and keeps the right ones with `--keep <numbers> --expect <link id>`. Sieve calls no model. The kept links go to `.sieve-links.json` in the repo root, so you can commit them. `sieve why` shows them as "agent link". `--page 2` and `--page 3` show more candidates when the agent kept 3 or more files of a page. A link can also name a folder of at most 20 files. `sieve why --check` reports a linked folder that grew or is gone.
+- Measured quality of `--link`, with a blind judge: precision 0.82 and recall 0.48 on the Sieve repo; precision 0.76 and recall 0.42 on two outside repos. So about 4 of 5 kept links are right, and about half of the right files are found.
+- An inferred tier: when no record links to a file, `sieve why` can show at most two records that share rare terms with the file, marked "inferred from shared terms". It is off by default. Turn it on with `"whyInferred": true` in `.sieve/config.json`.
+
+### Changed
+
+- The build memory guard reads the real memory of the build, not an estimate from the file count. The estimate refused some large repos that need much less memory, and it guessed low on others. A build now stops when its memory growth passes the ceiling (the smaller of 1.5 GB and 20% of RAM, or `SIEVE_BUILD_CEILING_BYTES`). A stopped build writes only a marker file. Automatic refreshes then skip the build at once, until you raise the ceiling or run `sieve build` by hand.
+
 ## [0.2.9] - 2026-11-02
 
 This release sets up Sieve in OpenCode with one command.

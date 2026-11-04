@@ -44,6 +44,15 @@ fn text(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
 }
 
+/// The hook text without the link note. The note shows once per session, so
+/// these tests, which read the hint, drop that line.
+fn without_link_note(note: &str) -> String {
+    note.lines()
+        .filter(|l| !l.contains("no confirmed code link"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 #[test]
 fn test_f6_build_writes_the_sidecar_and_why_answers() {
     let temp = project("f6-why");
@@ -89,9 +98,11 @@ fn test_f6_post_read_hint_is_one_short_line_with_in_repo_text() {
     );
     let out = run(&temp.path, &["hook", "post-read"], Some(&stdin));
     let v: serde_json::Value = serde_json::from_slice(&out.stdout).expect("hook json");
-    let note = v["hookSpecificOutput"]["additionalContext"]
-        .as_str()
-        .expect("note");
+    let note = without_link_note(
+        v["hookSpecificOutput"]["additionalContext"]
+            .as_str()
+            .expect("note"),
+    );
     assert!(note.starts_with("sieve: "), "{note}");
     assert!(note.contains("sieve why "), "{note}");
     assert!(!note.contains('\n'));
@@ -277,7 +288,7 @@ fn mask_shas(s: &str) -> String {
 // proof does not cover yet, so the call is Inferred and gives no test row.
 const ROWS_GOLDEN: &str = "build_repo  fn  src/lib.rs:1-9
 decision  docs/decisions/LEDGER.md:3  2026-10-01, build takes a lock
-          link: Code anchor
+          link: Code anchor  [2026-10-01]
 comment  src/lib.rs:2  SAFETY: the lock is held here.
 comment  src/lib.rs:6  NOTE: never log token=[redacted]
 history  introduced  <sha> 2026-01-01  commit subject (untrusted): add build_repo
@@ -413,4 +424,257 @@ fn test_f6_check_outside_a_repo_prints_one_line_and_no_sha_line() {
     let body = text(&run(&temp.path, &["why", "--check"], None).stdout);
     assert!(body.contains("sha not found: abc1234"), "{body}");
     assert!(!body.contains("not a git repo"), "{body}");
+}
+
+// ---------------------------------------------------------------------------
+// The inferred tier
+// ---------------------------------------------------------------------------
+
+/// A source file whose comment shares words with the record "mosaic rule".
+const WIDGET: &str = "// common zebra quartz mosaic\npub fn widget() {}\n";
+
+/// A ledger of 150 plain records and then the `(heading, body)` records. The
+/// plain records all hold the word "common". A score stands out only against
+/// many scored records, so the record file is long.
+fn topic_ledger(records: &[(&str, &str)]) -> String {
+    let mut s = String::from("# Ledger\n\n");
+    for i in 0..150 {
+        let (m, d) = (1 + i / 28, 1 + i % 28);
+        s.push_str(&format!(
+            "## 2026-{m:02}-{d:02}, plain {i}\n\n- **Date:** 2026-{m:02}-{d:02}\n- **Decision:** common routine {i}.\n\n"
+        ));
+    }
+    for (heading, body) in records {
+        s.push_str(&format!(
+            "## {heading}\n\n- **Date:** {}\n{body}\n\n",
+            &heading[..10]
+        ));
+    }
+    s
+}
+
+/// The 1-based line of the heading `heading` in `ledger`.
+fn heading_line(ledger: &str, heading: &str) -> usize {
+    let want = format!("## {heading}");
+    ledger.lines().position(|l| l == want).expect("heading") + 1
+}
+
+/// Turns the inferred tier on for the project at `path`.
+fn enable_inferred(path: &Path) {
+    fs::create_dir_all(path.join(".sieve")).expect("mkdir config");
+    fs::write(path.join(".sieve/config.json"), r#"{"whyInferred":true}"#).expect("write config");
+}
+
+/// A built project with `WIDGET` and a ledger made from `records`. The
+/// inferred tier is on.
+fn topic_project(label: &str, records: &[(&str, &str)]) -> TempDir {
+    topic_project_with(label, records, true)
+}
+
+/// Like `topic_project`, with the inferred tier on or off.
+fn topic_project_with(label: &str, records: &[(&str, &str)], inferred: bool) -> TempDir {
+    let temp = TempDir::new(label);
+    if inferred {
+        enable_inferred(&temp.path);
+    }
+    fs::create_dir_all(temp.path.join("src")).expect("mkdir src");
+    fs::create_dir_all(temp.path.join("docs/decisions")).expect("mkdir docs");
+    fs::write(temp.path.join("src/widget.rs"), WIDGET).expect("write src");
+    fs::write(
+        temp.path.join("docs/decisions/LEDGER.md"),
+        topic_ledger(records),
+    )
+    .expect("write ledger");
+    let built = run(&temp.path, &["build"], None);
+    assert!(built.status.success(), "{}", text(&built.stderr));
+    temp
+}
+
+const MOSAIC: (&str, &str) = (
+    "2026-11-01, mosaic rule",
+    "- **Decision:** zebra quartz mosaic, zebra quartz mosaic.",
+);
+const FALCON: (&str, &str) = (
+    "2026-11-02, falcon rule",
+    "- **Decision:** falcon walnut copper, falcon walnut copper.",
+);
+
+/// The additional context of the post-read hook for a Read of `rel`, or an
+/// empty string when the hook prints nothing.
+fn hint_for(temp: &TempDir, rel: &str) -> String {
+    let file = fs::canonicalize(temp.path.join(rel)).expect("canon");
+    let stdin = format!(
+        r#"{{"session_id":"s1","tool_name":"Read","tool_input":{{"file_path":"{}"}}}}"#,
+        file.display()
+    );
+    let out = run(&temp.path, &["hook", "post-read"], Some(&stdin));
+    let body = text(&out.stdout);
+    if body.trim().is_empty() {
+        return String::new();
+    }
+    let v: serde_json::Value = serde_json::from_str(&body).expect("hook json");
+    without_link_note(
+        v["hookSpecificOutput"]["additionalContext"]
+            .as_str()
+            .unwrap_or_default(),
+    )
+}
+
+#[test]
+fn test_inferred_row_follows_the_exact_rows_and_keeps_them() {
+    let anchored = (
+        "2026-11-03, anchored rule",
+        "- **Code:** `src/widget.rs#widget`\n- **Decision:** The widget waits.",
+    );
+    let temp = topic_project("infer-rows", &[MOSAIC, anchored]);
+    let ledger = topic_ledger(&[MOSAIC, anchored]);
+    let out = run(&temp.path, &["why", "src/widget.rs", "--no-refresh"], None);
+    let body = text(&out.stdout);
+    let exact = body.find("anchored rule").expect("exact row");
+    let inferred = body
+        .find(&format!(
+            "inferred  docs/decisions/LEDGER.md:{}  2026-11-01, mosaic rule",
+            heading_line(&ledger, MOSAIC.0)
+        ))
+        .unwrap_or_else(|| panic!("{body}"));
+    assert!(exact < inferred, "{body}");
+    assert!(
+        body.contains("link: inferred from shared terms (not a recorded link)"),
+        "{body}"
+    );
+    // The anchored record is exact, so it is never also inferred.
+    assert_eq!(body.matches("anchored rule").count(), 1, "{body}");
+    assert_eq!(body.matches("inferred  ").count(), 1, "{body}");
+
+    let json = run(
+        &temp.path,
+        &["why", "src/widget.rs", "--json", "--no-refresh"],
+        None,
+    );
+    let v: serde_json::Value = serde_json::from_slice(&json.stdout).expect("json");
+    let rows = v["symbols"][0]["decisions"].as_array().expect("rows");
+    assert_eq!(rows[0]["level"], "anchor");
+    assert_eq!(rows[rows.len() - 1]["level"], "inferred");
+
+    // A `path:line` outside any symbol gets the file rows. A symbol does not.
+    let line = text(
+        &run(
+            &temp.path,
+            &["why", "src/widget.rs:1", "--no-refresh"],
+            None,
+        )
+        .stdout,
+    );
+    assert!(
+        line.contains("inferred  docs/decisions/LEDGER.md:"),
+        "{line}"
+    );
+    let sym = text(&run(&temp.path, &["why", "widget", "--no-refresh"], None).stdout);
+    assert!(!sym.contains("inferred  "), "{sym}");
+    // The file has an exact row, so the hook keeps the anchor hint.
+    let hint = hint_for(&temp, "src/widget.rs");
+    assert!(hint.starts_with("sieve: widget has a decision"), "{hint}");
+}
+
+#[test]
+fn test_inferred_tier_follows_a_comment_edit_and_a_ledger_append() {
+    let temp = topic_project("infer-fresh", &[MOSAIC, FALCON]);
+    let ledger = topic_ledger(&[MOSAIC, FALCON]);
+    let line_of = |l: &str, h: &str| format!("LEDGER.md:{}, ", heading_line(l, h));
+
+    // The first hint names the record that the comment words match.
+    let hint = hint_for(&temp, "src/widget.rs");
+    assert!(hint.contains(&line_of(&ledger, MOSAIC.0)), "{hint}");
+    assert!(
+        hint.starts_with("sieve: widget.rs has an inferred record ("),
+        "{hint}"
+    );
+    assert!(
+        !hint.contains('\n') && hint.chars().count() <= 160,
+        "{hint}"
+    );
+
+    // A comment edit that matches the other record. A query refreshes the
+    // graph, and the hint then names the other record.
+    let edited = WIDGET.replace("zebra quartz mosaic", "falcon walnut copper");
+    fs::write(temp.path.join("src/widget.rs"), edited).expect("write");
+    let q = run(&temp.path, &["why", "widget"], None);
+    assert!(q.status.success(), "{}", text(&q.stderr));
+    let hint = hint_for(&temp, "src/widget.rs");
+    assert!(hint.contains(&line_of(&ledger, FALCON.0)), "{hint}");
+
+    // A new record that shares the words. The stamp of the record file changes, so the
+    // hook prints no inferred hint until the next query.
+    let newer = (
+        "2026-11-05, falcon follow-up",
+        "- **Decision:** falcon walnut copper, falcon walnut copper.",
+    );
+    let more = topic_ledger(&[MOSAIC, FALCON, newer]);
+    fs::write(temp.path.join("docs/decisions/LEDGER.md"), &more).expect("write");
+    assert_eq!(hint_for(&temp, "src/widget.rs"), "");
+    // A `why` call rebuilds the sidecars of a stale stamp.
+    let body = text(&run(&temp.path, &["why", "src/widget.rs", "--no-refresh"], None).stdout);
+    assert!(body.contains("falcon follow-up"), "{body}");
+    assert!(body.contains("2026-11-02, falcon rule"), "{body}");
+    assert!(!body.contains("mosaic rule"), "{body}");
+    // Newest date first.
+    assert!(
+        body.find("falcon follow-up") < body.find("falcon rule"),
+        "{body}"
+    );
+    let hint = hint_for(&temp, "src/widget.rs");
+    assert!(hint.contains(&line_of(&more, newer.0)), "{hint}");
+}
+
+#[test]
+fn test_a_record_doc_edit_is_seen_by_the_refresh_without_a_why_call() {
+    let temp = topic_project("infer-refresh-docs", &[MOSAIC]);
+    let topics = temp.path.join("sieve/.cache/why-topics.json");
+    let before = fs::read(&topics).expect("topics");
+    let more = topic_ledger(&[MOSAIC, FALCON]);
+    fs::write(temp.path.join("docs/decisions/LEDGER.md"), more).expect("write");
+    // `find` is no `why` call: only the refresh can rewrite the topic file.
+    let found = run(&temp.path, &["find", "widget"], None);
+    assert!(found.status.success(), "{}", text(&found.stderr));
+    assert_ne!(before, fs::read(&topics).expect("topics"));
+}
+
+#[test]
+fn test_a_repo_with_few_records_has_no_inferred_row() {
+    let temp = project("infer-few");
+    enable_inferred(&temp.path);
+    run(&temp.path, &["build"], None);
+    let body = text(&run(&temp.path, &["why", "src/lib.rs"], None).stdout);
+    assert!(!body.contains("inferred"), "{body}");
+    let topics = fs::read_to_string(temp.path.join("sieve/.cache/why-topics.json")).expect("file");
+    assert!(topics.contains(r#""files":[]"#), "{topics}");
+}
+
+#[test]
+fn test_the_inferred_tier_is_off_without_the_config_switch() {
+    // 150 records, one of them matches the widget comment words.
+    let filler: Vec<(String, String)> = (0..149)
+        .map(|i| {
+            (
+                format!("2026-01-01, filler {i}"),
+                "- **Decision:** common.".to_string(),
+            )
+        })
+        .collect();
+    let mut records: Vec<(&str, &str)> = filler
+        .iter()
+        .map(|(h, b)| (h.as_str(), b.as_str()))
+        .collect();
+    records.push(MOSAIC);
+    let temp = topic_project_with("infer-off", &records, false);
+    let body = text(&run(&temp.path, &["why", "src/widget.rs"], None).stdout);
+    assert!(!body.contains("inferred"), "{body}");
+    assert!(!body.contains("no recorded link"), "{body}");
+    assert_eq!(hint_for(&temp, "src/widget.rs"), "");
+    assert!(!temp.path.join("sieve/.cache/why-topics.json").exists());
+    // The same repo with the switch on shows a row, so the off case is not
+    // passing on empty data.
+    enable_inferred(&temp.path);
+    let body = text(&run(&temp.path, &["why", "src/widget.rs"], None).stdout);
+    assert!(body.contains("inferred  "), "{body}");
 }

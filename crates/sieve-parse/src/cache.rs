@@ -10,12 +10,14 @@ use std::time::SystemTime;
 
 use serde::{Deserialize, Serialize};
 
+use sieve_core::askindex::Bag;
 use sieve_core::Node;
 
 use crate::extract::RawEdge;
 
-/// The version this build writes and expects to read back.
-pub const CACHE_VERSION: u32 = 29;
+/// The version this build writes and expects to read back. Version 30
+/// added the comment bag to each file entry.
+pub const CACHE_VERSION: u32 = 30;
 
 /// The most recent extract cache files Sieve keeps per context directory.
 const KEPT_CACHES: usize = 2;
@@ -33,6 +35,11 @@ pub struct CacheEntry {
     pub raw_edges: Vec<RawEdge>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub error: Option<String>,
+    /// The counted tokens of the comments of the file. `sieve why` matches
+    /// them to the decision records, so the cache keeps them and a warm
+    /// build never reads the file for them.
+    #[serde(rename = "commentBag", skip_serializing_if = "Vec::is_empty", default)]
+    pub comment_bag: Bag,
 }
 
 /// The extraction cache for one build: a version, an extractor stamp, and
@@ -70,6 +77,39 @@ pub fn read_cache(path: &Path, stamp: &str) -> ExtractCache {
         return empty();
     }
     cache
+}
+
+/// Reads the comment bag of every file from the extract cache of the
+/// current extractor, and nothing else. A caller that holds no build result
+/// uses it. It gives `None` when the cache is missing or does not match, so
+/// the caller never works from bags of another extractor. A file with no
+/// comment tokens has no key.
+pub fn read_comment_bags(context_dir: &Path) -> Option<BTreeMap<String, Bag>> {
+    /// The cache fields that this read keeps. Serde skips the rest.
+    #[derive(Deserialize)]
+    struct Lean {
+        version: u32,
+        extractor: String,
+        files: BTreeMap<String, LeanFile>,
+    }
+    #[derive(Deserialize)]
+    struct LeanFile {
+        #[serde(rename = "commentBag", default)]
+        comment_bag: Bag,
+    }
+    let stamp = crate::extractor_stamp();
+    let bytes = fs::read(cache_path(context_dir, &stamp)).ok()?;
+    let lean: Lean = serde_json::from_slice(&bytes).ok()?;
+    if lean.version != CACHE_VERSION || lean.extractor != stamp {
+        return None;
+    }
+    Some(
+        lean.files
+            .into_iter()
+            .filter(|(_, f)| !f.comment_bag.is_empty())
+            .map(|(id, f)| (id, f.comment_bag))
+            .collect(),
+    )
 }
 
 /// Writes an extract cache atomically, then prunes old cache files.
@@ -216,6 +256,7 @@ mod tests {
                 nodes: Vec::new(),
                 raw_edges: Vec::new(),
                 error: None,
+                comment_bag: vec![("note".to_string(), 2)],
             },
         );
         ExtractCache {
@@ -246,6 +287,27 @@ mod tests {
         write_cache(&path, &cache).expect("write cache");
         let back = read_cache(&path, "stamp1");
         assert_eq!(back, cache);
+    }
+
+    #[test]
+    fn read_comment_bags_keeps_the_bags_of_the_current_extractor_only() {
+        let dir = TempDir::new("bags");
+        let stamp = crate::extractor_stamp();
+        let mut cache = sample_cache(&stamp);
+        let mut bare = cache.files["a.ts"].clone();
+        bare.comment_bag.clear();
+        cache.files.insert("b.ts".to_string(), bare);
+        write_cache(&cache_path(&dir.path, &stamp), &cache).expect("write cache");
+        let got = read_comment_bags(&dir.path).expect("bags");
+        assert_eq!(got.len(), 1);
+        assert_eq!(got["a.ts"], vec![("note".to_string(), 2)]);
+        // A cache of another version gives no bags at all.
+        let old = ExtractCache {
+            version: CACHE_VERSION - 1,
+            ..cache
+        };
+        write_cache(&cache_path(&dir.path, &stamp), &old).expect("write cache");
+        assert!(read_comment_bags(&dir.path).is_none());
     }
 
     #[test]

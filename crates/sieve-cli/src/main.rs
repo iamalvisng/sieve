@@ -39,6 +39,8 @@ mod version;
 mod viz;
 mod viz_serve;
 mod why;
+mod why_infer;
+mod why_link;
 mod why_rows;
 
 /// The `--dir` flag's help text, branded with the active product's name
@@ -495,6 +497,9 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    // The refresh lives in `sieve-parse`, which cannot see the decision docs.
+    // It calls this writer after it writes a graph.
+    sieve_parse::set_topic_writer(why_infer::write_topics_for);
     match run(cli) {
         Ok(()) => ExitCode::SUCCESS,
         Err(message) => {

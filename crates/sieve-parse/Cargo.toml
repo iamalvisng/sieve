@@ -9,6 +9,7 @@ sieve-core = { path = "../sieve-core" }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 sha2 = "0.10"
+libc = "0.2"
 # tree-sitter 0.25 loads ABI 13 to 15, so this covers both the 0.23-ABI-14
 # grammar crates below and the breadth-tier crates that build ABI 15.
 tree-sitter = "0.25"

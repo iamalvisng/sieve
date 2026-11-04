@@ -19,6 +19,8 @@ to `.gitignore`. The file holds:
 - `excludeDirs`: paths you leave out with `--exclude`.
 - Follow flags: your last choice for submodules and nested repos.
 - `mascot`: the pane mascot. See [Claude Code](claude-code.md).
+- `whyInferred`: set it to `true` by hand to turn on the inferred rows of
+  `sieve why`. See [Commands](commands.md#why).
 
 Sieve keeps every other key in the file. If the file is not a JSON object,
 Sieve leaves it as it is and prints a warning.

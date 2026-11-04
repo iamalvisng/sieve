@@ -17,10 +17,11 @@ use sieve_core::wiring::{Graph, Kind, Node};
 use sieve_query::callers::resolve_symbol;
 
 use crate::query;
+use crate::why_infer::{load_topics, topics_with_stamp, TopicRefs, TopicRow};
 use crate::why_rows::{span_rows, GitFn, TYPE_CAP};
 
 /// The sidecar layout version. A reader drops a sidecar with another value.
-const SIDECAR_VERSION: u32 = 3;
+const SIDECAR_VERSION: u32 = 4;
 /// Decision docs above this total size are not read.
 const DOC_CAP_BYTES: u64 = 5 * 1024 * 1024;
 /// The time limit for the one L0 git call per sha.
@@ -37,8 +38,15 @@ const DEFAULT_ROWS: usize = 10;
 const DIFF_ROWS: usize = 40;
 /// The hint limit in characters. 40 tokens at 4 characters each.
 const HINT_MAX_CHARS: usize = 160;
-/// The link level names: anchor, commit, path.
-const LEVELS: [&str; 3] = ["anchor", "commit", "path"];
+/// The link level names: anchor, commit, path, agent, folder.
+const LEVELS: [&str; 5] = ["anchor", "commit", "path", "agent", "folder"];
+/// The level of a link that an agent confirmed with `sieve why --link`.
+const AGENT_LEVEL: u8 = 3;
+/// The level of a link that an agent confirmed for a whole folder. It ranks
+/// after every file link.
+const FOLDER_LEVEL: u8 = 4;
+/// What an inferred row says about its link. It is not a recorded link.
+const INFERRED_VIA: &str = "inferred from shared terms (not a recorded link)";
 
 /// Flags for `sieve why`.
 #[derive(Args, Debug)]
@@ -78,6 +86,26 @@ pub struct WhyArgs {
     /// Skips the pre-query graph refresh.
     #[arg(long = "no-refresh")]
     pub no_refresh: bool,
+
+    /// Proposes candidate code files for one decision record, for your agent
+    /// to confirm. With no record key, it takes the next unlinked record.
+    /// The positional argument is then the record key, `<doc>#<heading>`.
+    #[arg(long)]
+    pub link: bool,
+
+    /// With `--link`: the numbers of the candidates to keep, such as `3,7,12`,
+    /// or `none`. Needs `--expect`.
+    #[arg(long, value_name = "numbers")]
+    pub keep: Option<String>,
+
+    /// With `--link`: the link id of the proposal that you read.
+    #[arg(long, value_name = "link id")]
+    pub expect: Option<String>,
+
+    /// With `--link` and a record key: the page of candidates, 1 to 3. The
+    /// next page is due when you keep 3 or more files of a page.
+    #[arg(long, value_name = "page", requires = "link")]
+    pub page: Option<usize>,
 }
 
 /// One decision doc entry, as the sidecar stores it.
@@ -93,6 +121,10 @@ pub struct EntryRec {
     pub date: String,
     /// True when the entry is SUPERSEDED.
     pub superseded: bool,
+    /// True when an agent confirmed the entry with `sieve why --link` and the
+    /// entry text has not changed since.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub linked: bool,
     /// The heading of the later entry that supersedes this one, if known.
     pub successor: Option<String>,
 }
@@ -102,13 +134,14 @@ pub struct EntryRec {
 pub struct LinkRec {
     /// The index into `entries`.
     pub entry: usize,
-    /// The link level: 0 anchor, 1 commit, 2 path.
+    /// The link level: 0 anchor, 1 commit, 2 path, 3 agent, 4 folder.
     pub level: u8,
     /// The node id. `None` is a file-level link.
     pub node: Option<String>,
     /// The code path.
     pub path: String,
-    /// The 1-based start line of the node. 0 for a file-level link.
+    /// The 1-based start line of the node. 0 for a file-level link. A folder
+    /// link holds the depth of its folder here, so a deeper folder ranks first.
     pub line: usize,
     /// The node name. Empty for a file-level link.
     pub name: String,
@@ -145,12 +178,12 @@ pub struct StaleRec {
 }
 
 /// One entry with its text. The sidecar does not store the text.
-struct RawEntry {
-    doc: String,
-    line: usize,
-    heading: String,
-    date: String,
-    text: String,
+pub(crate) struct RawEntry {
+    pub(crate) doc: String,
+    pub(crate) line: usize,
+    pub(crate) heading: String,
+    pub(crate) date: String,
+    pub(crate) text: String,
     status_superseded: bool,
 }
 
@@ -176,12 +209,34 @@ fn collect_md(root: &Path, rel: &str, depth: u32, out: &mut Vec<String>) {
     }
 }
 
-/// Finds the decision docs: `LEDGER.md`, `docs/decisions`, `docs/adr`,
-/// `adr`, and `ADR-*.md` in the root or in `docs`. Paths are relative and
-/// sorted.
-fn find_docs(root: &Path) -> Vec<String> {
+/// The folder that `.adr-dir` names, if it is a plain path inside the repo.
+fn adr_dir_setting(root: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(root.join(".adr-dir")).ok()?;
+    let dir = text.lines().map(str::trim).find(|l| !l.is_empty())?;
+    let dir = dir.trim_end_matches('/');
+    let plain = Path::new(dir)
+        .components()
+        .all(|c| matches!(c, std::path::Component::Normal(_)));
+    // A link inside the repo can point outside it: compare real paths.
+    let real = std::fs::canonicalize(root.join(dir)).ok()?;
+    let inside = real.starts_with(std::fs::canonicalize(root).ok()?);
+    (plain && inside).then(|| dir.to_string())
+}
+
+/// Finds the record docs: `LEDGER.md`, `ERRORS.md`, `docs/decisions`,
+/// `docs/adr`, `doc/adr`, `adr`, `docs/errors`, the folder in `.adr-dir`,
+/// and `ADR-*.md` in the root or in `docs`. Paths are relative and sorted.
+pub(crate) fn find_docs(root: &Path) -> Vec<String> {
     let mut out = Vec::new();
-    for dir in ["docs/decisions", "docs/adr", "adr"] {
+    let setting = adr_dir_setting(root);
+    let dirs = [
+        "docs/decisions",
+        "docs/adr",
+        "doc/adr",
+        "adr",
+        "docs/errors",
+    ];
+    for dir in dirs.into_iter().chain(setting.as_deref()) {
         collect_md(root, dir, 3, &mut out);
     }
     for dir in ["", "docs"] {
@@ -192,7 +247,8 @@ fn find_docs(root: &Path) -> Vec<String> {
             let name = item.file_name().to_string_lossy().into_owned();
             let lower = name.to_lowercase();
             let is_adr = lower.starts_with("adr-") && lower.ends_with(".md");
-            if (is_adr || (dir.is_empty() && name == "LEDGER.md")) && item.path().is_file() {
+            let is_log = name == "ERRORS.md" || (dir.is_empty() && name == "LEDGER.md");
+            if (is_adr || is_log) && item.path().is_file() {
                 out.push(if dir.is_empty() {
                     name
                 } else {
@@ -206,7 +262,7 @@ fn find_docs(root: &Path) -> Vec<String> {
     out
 }
 
-fn stat_part(path: &Path) -> String {
+pub(crate) fn stat_part(path: &Path) -> String {
     let Ok(meta) = std::fs::metadata(path) else {
         return "missing".to_string();
     };
@@ -220,11 +276,21 @@ fn stat_part(path: &Path) -> String {
 
 /// The stamp of the doc files and `wiring.json`. A change in any of them
 /// makes the sidecar stale.
-fn current_stamp(root: &Path, context_dir: &Path, docs: &[String]) -> String {
+pub(crate) fn current_stamp(root: &Path, context_dir: &Path, docs: &[String]) -> String {
     let mut parts: Vec<String> = docs
         .iter()
         .map(|d| format!("{d}:{}", stat_part(&root.join(d))))
         .collect();
+    // The link file counts as a doc, but only when it exists, so a repo with
+    // no link file keeps its stamp.
+    let links = root.join(crate::why_link::LINKS_FILE);
+    if links.is_file() {
+        parts.push(format!(
+            "{}:{}",
+            crate::why_link::LINKS_FILE,
+            stat_part(&links)
+        ));
+    }
     parts.push(format!(
         "wiring:{}",
         stat_part(&context_dir.join(".graph").join("wiring.json"))
@@ -260,56 +326,116 @@ fn has_superseded_status(text: &str) -> bool {
     })
 }
 
-/// Splits one doc into entries. A doc with dated `## ` headings gives one
-/// entry per such heading. Any other doc is one entry.
-fn parse_entries(doc: &str, text: &str) -> Vec<RawEntry> {
-    let lines: Vec<&str> = text.lines().collect();
-    let mut heads: Vec<(usize, &str)> = Vec::new();
-    let mut fenced = false;
-    for (i, l) in lines.iter().enumerate() {
-        if l.starts_with("```") {
-            fenced = !fenced;
-        }
-        if !fenced {
-            if let Some(h) = l.strip_prefix("## ") {
-                heads.push((i, h.trim()));
-            }
-        }
-    }
+/// True when the 10 bytes of `s` read `YYYY-MM-DD`.
+fn is_date(s: &str) -> bool {
+    s.len() == 10
+        && s.bytes().enumerate().all(|(k, c)| match k {
+            4 | 7 => c == b'-',
+            _ => c.is_ascii_digit(),
+        })
+}
+
+/// The date of an entry heading: a leading `YYYY-MM-DD`, or a trailing one
+/// as in `[title, YYYY-MM-DD]`. A date inside the title text does not count.
+fn heading_date(heading: &str) -> Option<&str> {
+    let lead = heading.get(..10).filter(|d| is_date(d));
+    let tail = heading.trim_end_matches([']', ')', ' ']);
+    let tail = tail
+        .get(tail.len().checked_sub(10)?..)
+        .filter(|d| is_date(d));
+    lead.or(tail)
+}
+
+/// The heading level of a line (`## x` is 2) and its text.
+fn heading_of(line: &str) -> Option<(usize, &str)> {
+    let level = line.bytes().take_while(|&c| c == b'#').count();
+    let text = line[level..].strip_prefix(' ')?;
+    (1..=6).contains(&level).then_some((level, text.trim()))
+}
+
+/// The entries that start at the headings of `level`, each with its date.
+/// An entry runs to the next heading of the same or a higher level. An
+/// entry with no date is skipped, as is the undated template.
+fn entries_at(lines: &[&str], heads: &[(usize, usize, &str)], level: usize) -> Vec<RawEntry> {
     let date_field = |body: &str| {
         body.lines()
             .find(|l| l.contains("Date:"))
             .and_then(find_date)
     };
     let mut out = Vec::new();
-    for (k, (start, heading)) in heads.iter().enumerate() {
-        let end = heads.get(k + 1).map_or(lines.len(), |h| h.0);
-        let body = lines[*start..end].join("\n");
-        let Some(date) = find_date(heading).or_else(|| date_field(&body)) else {
+    for (k, &(start, lv, heading)) in heads.iter().enumerate() {
+        if lv != level {
+            continue;
+        }
+        let end = heads[k + 1..]
+            .iter()
+            .find(|h| h.1 <= level)
+            .map_or(lines.len(), |h| h.0);
+        let body = lines[start..end].join("\n");
+        let Some(date) = heading_date(heading)
+            .map(str::to_string)
+            .or_else(|| date_field(&body))
+        else {
             continue;
         };
         out.push(RawEntry {
-            doc: doc.to_string(),
+            doc: String::new(),
             line: start + 1,
-            heading: (*heading).to_string(),
+            heading: heading.to_string(),
             date,
             status_superseded: has_superseded_status(&body),
             text: body,
         });
     }
-    if out.is_empty() {
-        let heading = lines
+    out
+}
+
+/// Splits one doc into entries. A log has one dated heading per entry. The
+/// entry level is the heading level with the most dated entries. A doc with
+/// no dated heading is one entry, if it has a `Date:` line. Any other doc
+/// gives no entry.
+fn parse_entries(doc: &str, text: &str) -> Vec<RawEntry> {
+    let lines: Vec<&str> = text.lines().collect();
+    let mut heads: Vec<(usize, usize, &str)> = Vec::new();
+    let mut fenced = false;
+    for (i, l) in lines.iter().enumerate() {
+        if l.starts_with("```") {
+            fenced = !fenced;
+        }
+        if let Some((level, h)) = heading_of(l).filter(|_| !fenced) {
+            heads.push((i, level, h));
+        }
+    }
+    // The deepest level wins a tie: a `# title` holds the whole doc, so its
+    // `Date:` field is that of the first entry below it.
+    let best = (1..=6)
+        .map(|lv| entries_at(&lines, &heads, lv))
+        .max_by_key(Vec::len)
+        .unwrap_or_default();
+    let mut out = if best.is_empty() {
+        let date = lines
             .iter()
-            .find_map(|l| l.strip_prefix("# "))
-            .map_or_else(|| doc.to_string(), |h| h.trim().to_string());
-        out.push(RawEntry {
-            doc: doc.to_string(),
+            .find(|l| l.contains("Date:"))
+            .and_then(|l| find_date(l));
+        let heading = heads
+            .iter()
+            .find(|h| h.1 == 1)
+            .map_or_else(|| doc.to_string(), |h| h.2.to_string());
+        date.map(|date| RawEntry {
+            doc: String::new(),
             line: 1,
-            date: date_field(text).unwrap_or_default(),
+            date,
             status_superseded: has_superseded_status(text),
             heading,
             text: text.to_string(),
-        });
+        })
+        .into_iter()
+        .collect()
+    } else {
+        best
+    };
+    for e in &mut out {
+        e.doc = doc.to_string();
     }
     out
 }
@@ -321,7 +447,7 @@ fn parse_entries(doc: &str, text: &str) -> Vec<RawEntry> {
 /// Lowercases, turns an em dash, an en dash and a comma into a space, and
 /// collapses spaces. The compare then treats " — " and ", " as one
 /// separator.
-fn normalize(s: &str) -> String {
+pub(crate) fn normalize(s: &str) -> String {
     let mapped: String = s
         .to_lowercase()
         .chars()
@@ -343,6 +469,36 @@ fn find_successor(entries: &[RawEntry], norm_text: &[String], i: usize) -> Optio
     let head = normalize(&entries[i].heading);
     if head.is_empty() {
         return None;
+    }
+    // An explicit "Supersedes" line wins over the sentence rule. It names the
+    // old heading, with or without the leading date.
+    let undated = {
+        let (first, rest) = head.split_once(' ').unwrap_or((&head, ""));
+        if is_date(first) {
+            rest
+        } else {
+            head.as_str()
+        }
+    };
+    for (j, e) in entries.iter().enumerate() {
+        if j == i || e.date < entries[i].date {
+            continue;
+        }
+        // A line inside a fenced code block is an example, not a record.
+        let mut fenced = false;
+        let named = e.text.lines().any(|line| {
+            if line.starts_with("```") {
+                fenced = !fenced;
+            }
+            !fenced
+                && line.split_once("**Supersedes:**").is_some_and(|(_, name)| {
+                    let name = normalize(name);
+                    name == head || name == undated
+                })
+        });
+        if named {
+            return Some(j);
+        }
     }
     for (j, text) in norm_text.iter().enumerate() {
         if j == i || entries[j].date < entries[i].date {
@@ -430,13 +586,14 @@ fn code_spans_by_path(graph: &Graph) -> HashMap<&str, Vec<(usize, usize, usize)>
     by_path
 }
 
-/// The innermost node of `spans` that holds `line`.
-fn innermost(spans: &[(usize, usize, usize)], line: usize) -> Option<usize> {
-    spans
+/// The nodes of `spans` that hold `line`, the innermost first.
+fn enclosing(spans: &[(usize, usize, usize)], line: usize) -> Vec<usize> {
+    let mut held: Vec<_> = spans
         .iter()
         .filter(|(a, b, _)| *a <= line && line <= *b)
-        .min_by_key(|(a, b, _)| b - a)
-        .map(|s| s.2)
+        .collect();
+    held.sort_by_key(|(a, b, _)| b - a);
+    held.into_iter().map(|s| s.2).collect()
 }
 
 /// The candidate commit shas of `text`: 7 to 40 hex characters with a digit
@@ -736,7 +893,7 @@ fn diff_report(
     for (n, ls) in &by_node {
         rows.push(node_head(n).trim_end().to_string());
         rows.extend(ls.iter().flat_map(|l| {
-            row_text(refs, l)
+            row_text(refs, l, false)
                 .lines()
                 .map(String::from)
                 .collect::<Vec<_>>()
@@ -763,7 +920,7 @@ fn diff_report(
 
 /// Reads the decision docs under `root`. Gives `(path, text)` pairs. Stops
 /// at the size cap.
-fn read_docs(root: &Path, docs: &[String]) -> Vec<(String, String)> {
+pub(crate) fn read_docs(root: &Path, docs: &[String]) -> Vec<(String, String)> {
     let mut total = 0u64;
     let mut out = Vec::new();
     for d in docs {
@@ -780,7 +937,7 @@ fn read_docs(root: &Path, docs: &[String]) -> Vec<(String, String)> {
 }
 
 /// A link key: one link per entry and target. The lowest level wins.
-type LinkKey = (usize, String);
+pub(crate) type LinkKey = (usize, String);
 
 fn add_link(map: &mut BTreeMap<LinkKey, LinkRec>, rec: LinkRec) {
     let key = (
@@ -846,20 +1003,77 @@ fn code_items(text: &str) -> Vec<String> {
         .collect()
 }
 
-/// Makes the sidecar content from the docs and the graph. L0 runs `git show`
-/// for a sha that an entry names, under `root`. A `root` that is no repo
-/// gives no L0 link.
-pub fn link_docs(root: &Path, graph: &Graph, docs: &[(String, String)], stamp: String) -> WhyRefs {
+/// The graph lookups that the anchor and path rules share.
+pub(crate) struct LinkTargets<'a> {
+    by_id: HashMap<&'a str, &'a Node>,
+    file_paths: HashSet<&'a str>,
+}
+
+impl<'a> LinkTargets<'a> {
+    /// Indexes the nodes of `graph` by id, and the file paths.
+    pub(crate) fn new(graph: &'a Graph) -> Self {
+        LinkTargets {
+            by_id: graph.nodes.iter().map(|n| (n.id.as_str(), n)).collect(),
+            file_paths: graph
+                .nodes
+                .iter()
+                .filter(|n| n.kind == Kind::File)
+                .map(|n| n.path.as_str())
+                .collect(),
+        }
+    }
+}
+
+/// Adds the git-free links of entry `i`: the anchor links (level 0) and the
+/// full-path links (level 2). The sidecar build and the topic pass both use
+/// it, so both agree on which entries a file has as exact rows.
+pub(crate) fn add_static_links(
+    i: usize,
+    text: &str,
+    targets: &LinkTargets,
+    links: &mut BTreeMap<LinkKey, LinkRec>,
+    stale: &mut Vec<StaleRec>,
+) {
+    // Anchor: an id that the entry records. It links to that node.
+    for item in code_items(text) {
+        match targets.by_id.get(item.as_str()) {
+            Some(n) if n.kind == Kind::File => {
+                add_link(links, file_link(i, 0, &n.path, "Code anchor".to_string()));
+            }
+            Some(n) => add_link(links, node_link(i, 0, n, "Code anchor".to_string())),
+            None => stale.push(StaleRec { entry: i, id: item }),
+        }
+    }
+
+    // Path: the entry names a whole file in its text. Shown with --all.
+    for tok in text.split(|c: char| !(c.is_alphanumeric() || matches!(c, '_' | '.' | '/' | '-'))) {
+        if tok.contains('/') && targets.file_paths.contains(tok) {
+            add_link(links, file_link(i, 2, tok, "names the file".to_string()));
+        }
+    }
+}
+
+/// Parses the entries of the docs, sorted by doc and line. This is the entry
+/// order of the sidecar.
+pub(crate) fn raw_entries(docs: &[(String, String)]) -> Vec<RawEntry> {
     let mut raw: Vec<RawEntry> = docs
         .iter()
         .flat_map(|(path, text)| parse_entries(path, text))
         .collect();
     raw.sort_by(|a, b| (&a.doc, a.line).cmp(&(&b.doc, b.line)));
+    raw
+}
+
+/// Makes the sidecar content from the docs and the graph. L0 runs `git show`
+/// for a sha that an entry names, under `root`. A `root` that is no repo
+/// gives no L0 link.
+pub fn link_docs(root: &Path, graph: &Graph, docs: &[(String, String)], stamp: String) -> WhyRefs {
+    let raw = raw_entries(docs);
     let norm_text: Vec<String> = raw.iter().map(|e| normalize(&e.text)).collect();
     let successors: Vec<Option<usize>> = (0..raw.len())
         .map(|i| find_successor(&raw, &norm_text, i))
         .collect();
-    let entries: Vec<EntryRec> = raw
+    let mut entries: Vec<EntryRec> = raw
         .iter()
         .enumerate()
         .map(|(i, e)| EntryRec {
@@ -868,6 +1082,7 @@ pub fn link_docs(root: &Path, graph: &Graph, docs: &[(String, String)], stamp: S
             heading: e.heading.clone(),
             date: e.date.clone(),
             superseded: e.status_superseded || successors[i].is_some(),
+            linked: false,
             successor: successors[i].map(|j| raw[j].heading.clone()),
         })
         .collect();
@@ -875,42 +1090,11 @@ pub fn link_docs(root: &Path, graph: &Graph, docs: &[(String, String)], stamp: S
     let mut links: BTreeMap<LinkKey, LinkRec> = BTreeMap::new();
     let mut stale: Vec<StaleRec> = Vec::new();
     let mut missing_shas: Vec<StaleRec> = Vec::new();
-    let by_id: HashMap<&str, &Node> = graph.nodes.iter().map(|n| (n.id.as_str(), n)).collect();
-    let file_paths: HashSet<&str> = graph
-        .nodes
-        .iter()
-        .filter(|n| n.kind == Kind::File)
-        .map(|n| n.path.as_str())
-        .collect();
+    let targets = LinkTargets::new(graph);
     let mut git_calls = 0;
     let mut sha_cache: HashMap<String, Option<String>> = HashMap::new();
     for (i, e) in raw.iter().enumerate() {
-        // Anchor: an id that the entry records. It links to that node.
-        for item in code_items(&e.text) {
-            match by_id.get(item.as_str()) {
-                Some(n) if n.kind == Kind::File => {
-                    add_link(
-                        &mut links,
-                        file_link(i, 0, &n.path, "Code anchor".to_string()),
-                    );
-                }
-                Some(n) => add_link(&mut links, node_link(i, 0, n, "Code anchor".to_string())),
-                None => stale.push(StaleRec { entry: i, id: item }),
-            }
-        }
-
-        // Path: the entry names a whole file in its text. Shown with --all.
-        for tok in e
-            .text
-            .split(|c: char| !(c.is_alphanumeric() || matches!(c, '_' | '.' | '/' | '-')))
-        {
-            if tok.contains('/') && file_paths.contains(tok) {
-                add_link(
-                    &mut links,
-                    file_link(i, 2, tok, "names the file".to_string()),
-                );
-            }
-        }
+        add_static_links(i, &e.text, &targets, &mut links, &mut stale);
 
         // L0: a commit sha in the entry. The hunks of the commit give the
         // nodes. A commit with more than 20 nodes gives file links only.
@@ -937,6 +1121,53 @@ pub fn link_docs(root: &Path, graph: &Graph, docs: &[(String, String)], stamp: S
                 for idx in nodes {
                     add_link(&mut links, node_link(i, 1, &graph.nodes[idx], via.clone()));
                 }
+            }
+        }
+    }
+    // Agent links: the kept files of a record that an agent confirmed. A
+    // record whose text changed since then has no agent link.
+    let confirmations = crate::why_link::read_links(root);
+    let keys = crate::why_link::record_keys(&raw);
+    for (i, done) in crate::why_link::confirmed(&raw, &keys, &confirmations)
+        .into_iter()
+        .enumerate()
+    {
+        let Some(done) = done else { continue };
+        entries[i].linked = true;
+        for path in done
+            .kept
+            .iter()
+            .filter(|p| targets.file_paths.contains(p.as_str()))
+        {
+            let via = format!("agent link, confirmed {}", done.date);
+            add_link(&mut links, file_link(i, AGENT_LEVEL, path, via));
+        }
+        // A hand-edited sidecar cannot grow the work: read at most the
+        // number of folders that Sieve proposes. A folder with over the cap
+        // of files is ignored, as if never kept; `why --check` says why.
+        let mut folders: Vec<&str> = done
+            .folders
+            .iter()
+            .take(crate::why_link::FOLDER_CARDS)
+            .map(|f| f.path.as_str())
+            .collect();
+        folders.sort_by_key(|f| std::cmp::Reverse(f.matches('/').count()));
+        for dir in folders {
+            let prefix = format!("{dir}/");
+            let under: Vec<&str> = targets
+                .file_paths
+                .iter()
+                .copied()
+                .filter(|p| p.starts_with(&prefix))
+                .collect();
+            if under.len() > crate::why_link::FOLDER_MAX_FILES {
+                continue;
+            }
+            let via = format!("agent link, folder {dir}/, confirmed {}", done.date);
+            for path in under {
+                let mut rec = file_link(i, FOLDER_LEVEL, path, via.clone());
+                rec.line = dir.matches('/').count() + 1;
+                add_link(&mut links, rec);
             }
         }
     }
@@ -979,14 +1210,20 @@ pub fn write_after_build(root: &Path, context_dir: &Path, graph: &Graph) -> Resu
     write_sidecar(context_dir, &refs).map_err(|e| e.to_string())
 }
 
-/// Reads the sidecar when its stamp is current. It never builds and never
-/// runs git. The post-read hook uses it.
-fn fresh_sidecar(root: &Path, context_dir: &Path) -> Option<WhyRefs> {
-    let docs = find_docs(root);
-    let stamp = current_stamp(root, context_dir, &docs);
+/// Reads the sidecar when its stamp is `stamp`. It never builds and never
+/// runs git.
+fn sidecar_with_stamp(context_dir: &Path, stamp: &str) -> Option<WhyRefs> {
     let refs: WhyRefs =
         serde_json::from_slice(&std::fs::read(sidecar_path(context_dir)).ok()?).ok()?;
     (refs.version == SIDECAR_VERSION && refs.stamp == stamp).then_some(refs)
+}
+
+/// Reads the sidecar when its stamp is current. It never builds and never
+/// runs git.
+fn fresh_sidecar(root: &Path, context_dir: &Path) -> Option<WhyRefs> {
+    let docs = find_docs(root);
+    let stamp = current_stamp(root, context_dir, &docs);
+    sidecar_with_stamp(context_dir, &stamp)
 }
 
 /// Gives the current sidecar. Else it builds the links again from
@@ -1005,6 +1242,7 @@ fn load_refs(
     let graph = load_graph()?;
     let refs = link_docs(root, &graph, &read_docs(root, &docs), stamp);
     let _ = write_sidecar(context_dir, &refs);
+    let _ = crate::why_infer::write_topics(root, context_dir, &graph, None);
     Some(refs)
 }
 
@@ -1018,8 +1256,11 @@ fn ranked<'a>(refs: &'a WhyRefs, mut links: Vec<&'a LinkRec>) -> Vec<&'a LinkRec
     links.sort_by(|a, b| {
         let da = &refs.entries[a.entry].date;
         let db = &refs.entries[b.entry].date;
+        // A deeper folder first: a folder link holds its depth in `line`.
+        let depth = |l: &LinkRec| if l.level == FOLDER_LEVEL { l.line } else { 0 };
         (a.level, a.node.is_none())
             .cmp(&(b.level, b.node.is_none()))
+            .then(depth(b).cmp(&depth(a)))
             .then(db.cmp(da))
             .then(a.entry.cmp(&b.entry))
     });
@@ -1028,9 +1269,17 @@ fn ranked<'a>(refs: &'a WhyRefs, mut links: Vec<&'a LinkRec>) -> Vec<&'a LinkRec
 
 /// The links that answer for node `n`: its own links, then the file-level
 /// links of its file that the node does not already have. Only the anchor
-/// (level 0) shows by default. A commit link (level 1) and a path link
-/// (level 2) show only when `all` is set.
+/// (level 0) shows by default. A commit link (level 1) shows only when `all`
+/// is set.
+///
+/// A file query also answers for the file's nodes and for the entries that
+/// name the file by its full path. So a file shows the anchors inside it and
+/// the path mentions by default. Each entry shows once, with its strongest
+/// link.
 fn links_for<'a>(refs: &'a WhyRefs, n: &Node, all: bool) -> Vec<&'a LinkRec> {
+    if n.kind == Kind::File {
+        return file_links(refs, &n.path, all);
+    }
     let own: Vec<&LinkRec> = refs
         .links
         .iter()
@@ -1050,15 +1299,71 @@ fn links_for<'a>(refs: &'a WhyRefs, n: &Node, all: bool) -> Vec<&'a LinkRec> {
     ranked(refs, own.into_iter().chain(file_level).collect())
 }
 
-fn row_text(refs: &WhyRefs, l: &LinkRec) -> String {
+/// Picks the links to show for a node.
+type Pick = for<'a> fn(&'a WhyRefs, &Node, bool) -> Vec<&'a LinkRec>;
+
+/// The most file-level anchors a `path:line` answer shows when it falls
+/// back to the file.
+const LINE_FILE_ANCHORS: usize = 3;
+
+/// The links for a `path:line` query. A node answers with its own links
+/// only. A file answers with its file-level anchors and its agent links, at
+/// most `LINE_FILE_ANCHORS` even with `--all`, never a path mention.
+fn line_links<'a>(refs: &'a WhyRefs, n: &Node, all: bool) -> Vec<&'a LinkRec> {
+    let file = n.kind == Kind::File;
+    let own = refs.links.iter().filter(|l| {
+        if file {
+            l.node.is_none()
+                && l.path == n.path
+                && (l.level == 0 || l.level == AGENT_LEVEL || l.level == FOLDER_LEVEL)
+        } else {
+            l.node.as_deref() == Some(n.id.as_str()) && (all || l.level == 0)
+        }
+    });
+    let mut links = ranked(refs, own.collect());
+    if file {
+        links.truncate(LINE_FILE_ANCHORS);
+    }
+    links
+}
+
+/// The links of every node in `path`, and of the file itself, one per entry.
+/// The default keeps the anchors and the full-path mentions.
+fn file_links<'a>(refs: &'a WhyRefs, path: &str, all: bool) -> Vec<&'a LinkRec> {
+    let here = refs
+        .links
+        .iter()
+        .filter(|l| l.path == path && (all || l.level != 1));
+    let mut seen = HashSet::new();
+    ranked(refs, here.collect())
+        .into_iter()
+        .filter(|l| seen.insert(l.entry))
+        .collect()
+}
+
+/// One row of text for a link. `show_name` adds the node name to the link
+/// line, for a file answer where the rows come from several nodes.
+fn row_text(refs: &WhyRefs, l: &LinkRec, show_name: bool) -> String {
     let e = &refs.entries[l.entry];
-    let kind = if l.node.is_some() {
+    let kind = if l.level == AGENT_LEVEL || l.level == FOLDER_LEVEL {
+        "agent link"
+    } else if l.node.is_some() {
         "decision"
     } else {
         "file-level"
     };
+    let name = if show_name && l.node.is_some() {
+        format!(" ({})", l.name)
+    } else {
+        String::new()
+    };
+    let date = if e.date.is_empty() {
+        String::new()
+    } else {
+        format!("  [{}]", e.date)
+    };
     let mut s = format!(
-        "{kind}  {}:{}  {}\n          link: {}\n",
+        "{kind}  {}:{}  {}\n          link: {}{name}{date}\n",
         e.doc, e.line, e.heading, l.via
     );
     if e.superseded {
@@ -1086,18 +1391,34 @@ fn render_text(
     nodes: &[&Node],
     all: bool,
     ctx: Option<&Ctx>,
+    pick: Pick,
 ) -> String {
     let mut out = String::new();
+    let mut done = HashSet::new();
     for n in nodes {
         out.push_str(&node_head(n));
-        let links = links_for(refs, n, all);
-        if links.is_empty() {
-            out.push_str(&format!("no decision found for {}\n", n.name));
-        }
+        let links = pick(refs, n, all);
         // Decisions first, then comments, tests and history.
-        let mut rows: Vec<String> = links.iter().map(|l| row_text(refs, l)).collect();
+        let mut rows: Vec<String> = links
+            .iter()
+            .map(|l| row_text(refs, l, n.kind == Kind::File))
+            .collect();
+        rows.extend(
+            inferred_rows(ctx, refs, n, &links, &mut done)
+                .into_iter()
+                .map(inferred_text),
+        );
         let (more, hidden) = evidence(ctx, n, all);
         rows.extend(more);
+        if links.is_empty() {
+            // Other rows follow the line, so it must not say nothing was found.
+            let line = if rows.is_empty() {
+                "no decision found for"
+            } else {
+                "no recorded link for"
+            };
+            out.push_str(&format!("{line} {}\n", n.name));
+        }
         let cap = if all { rows.len() } else { DEFAULT_ROWS };
         let cut = rows.len().saturating_sub(cap) + hidden;
         for row in rows.iter().take(cap) {
@@ -1117,6 +1438,55 @@ struct Ctx<'a> {
     root: &'a Path,
     graph: &'a Graph,
     history: bool,
+    /// The inferred rows, when the repo has any.
+    topics: Option<&'a TopicRefs>,
+    /// The file of a `path:line` query. Its inferred rows follow the rows of
+    /// the line, whatever node answers.
+    line_path: Option<&'a str>,
+}
+
+/// The inferred rows to print after the exact rows of `n`: the rows of the
+/// file of a `path:line` query, or of a file node. A row that the exact rows
+/// already show is left out. `done` holds the files whose rows an earlier
+/// node of the same answer printed, so a file prints its rows once.
+fn inferred_rows<'a>(
+    ctx: Option<&'a Ctx>,
+    refs: &WhyRefs,
+    n: &Node,
+    exact: &[&LinkRec],
+    done: &mut HashSet<String>,
+) -> Vec<&'a TopicRow> {
+    let Some(c) = ctx else {
+        return Vec::new();
+    };
+    let path = c
+        .line_path
+        .or_else(|| (n.kind == Kind::File).then_some(n.path.as_str()));
+    let Some(file) = path.and_then(|p| c.topics?.file(p)) else {
+        return Vec::new();
+    };
+    if !done.insert(file.path.clone()) {
+        return Vec::new();
+    }
+    let shown: HashSet<(&str, usize)> = exact
+        .iter()
+        .map(|l| {
+            let e = &refs.entries[l.entry];
+            (e.doc.as_str(), e.line)
+        })
+        .collect();
+    file.rows
+        .iter()
+        .filter(|r| !shown.contains(&(r.doc.as_str(), r.line)))
+        .collect()
+}
+
+/// One text row for an inferred record.
+fn inferred_text(r: &TopicRow) -> String {
+    format!(
+        "inferred  {}:{}  {}\n          link: {INFERRED_VIA}\n",
+        r.doc, r.line, r.heading
+    )
 }
 
 /// The rows from the span of `n`, in output order, with the count of rows
@@ -1146,6 +1516,21 @@ fn evidence(ctx: Option<&Ctx>, n: &Node, all: bool) -> (Vec<String>, usize) {
     (out, hidden)
 }
 
+/// The JSON of one inferred record.
+fn inferred_json(r: &TopicRow) -> serde_json::Value {
+    serde_json::json!({
+        "doc": r.doc,
+        "line": r.line,
+        "date": r.date,
+        "heading": r.heading,
+        "level": "inferred",
+        "via": INFERRED_VIA,
+        "fileLevel": true,
+        "superseded": false,
+        "supersededBy": serde_json::Value::Null,
+    })
+}
+
 fn link_json(refs: &WhyRefs, l: &LinkRec) -> serde_json::Value {
     let e = &refs.entries[l.entry];
     serde_json::json!({
@@ -1167,13 +1552,22 @@ fn render_json(
     nodes: &[&Node],
     all: bool,
     ctx: Option<&Ctx>,
+    pick: Pick,
 ) -> serde_json::Value {
+    let mut done = HashSet::new();
     let symbols: Vec<serde_json::Value> = nodes
         .iter()
         .map(|n| {
-            let links = links_for(refs, n, all);
-            let cap = if all { links.len() } else { DEFAULT_ROWS };
-            let rows: Vec<_> = links.iter().take(cap).map(|l| link_json(refs, l)).collect();
+            let links = pick(refs, n, all);
+            let inferred = inferred_rows(ctx, refs, n, &links, &mut done);
+            let total = links.len() + inferred.len();
+            let cap = if all { total } else { DEFAULT_ROWS };
+            let rows: Vec<_> = links
+                .iter()
+                .map(|l| link_json(refs, l))
+                .chain(inferred.into_iter().map(inferred_json))
+                .take(cap)
+                .collect();
             serde_json::json!({
                 "id": n.id,
                 "name": n.name,
@@ -1181,7 +1575,7 @@ fn render_json(
                 "line": span_lines(&n.span).map_or(0, |s| s.0),
                 "decisions": rows,
                 "evidence": evidence(ctx, n, all).0,
-                "total": links.len(),
+                "total": total,
             })
         })
         .collect();
@@ -1298,9 +1692,21 @@ pub fn run(args: &WhyArgs, dir_override: Option<&Path>) -> Result<(), String> {
     if args.suggest && args.diff {
         return Err("--suggest and --diff do not combine: use one".to_string());
     }
+    if args.link && (args.suggest || args.diff || args.check) {
+        return Err("--link does not combine with --suggest, --diff or --check".to_string());
+    }
+    if !args.link && (args.keep.is_some() || args.expect.is_some()) {
+        return Err("--keep and --expect need --link".to_string());
+    }
+    if args.link {
+        crate::why_link::check_flags(args)?;
+    }
     let (root, context_dir) =
         query::run_prelude(args.dir.as_deref(), dir_override, args.no_refresh)?;
     let graph = query::read_wiring_named(&context_dir)?;
+    if args.link {
+        return crate::why_link::run(args, &root, &context_dir, &graph);
+    }
     if args.suggest {
         for id in suggest_ids(&root, &graph, args.symbol.as_deref())? {
             println!("{id}");
@@ -1328,15 +1734,28 @@ pub fn run(args: &WhyArgs, dir_override: Option<&Path>) -> Result<(), String> {
     if args.check {
         let in_repo = run_git(&root, &["rev-parse", "--git-dir"]).is_some();
         print!("{}", render_check(&refs, in_repo));
+        print!(
+            "{}",
+            crate::why_link::stale_block(&root, &context_dir, &graph)
+        );
         return Ok(());
     }
     let query = args
         .symbol
         .as_deref()
         .ok_or_else(|| "missing symbol: give a symbol, a path:line, or --check".to_string())?;
+    let topics = load_topics(&root, &context_dir, &graph);
     print!(
         "{}",
-        query_text(&refs, &graph, &root, query, args.all, args.json)?
+        query_text(
+            &refs,
+            &graph,
+            &root,
+            query,
+            args.all,
+            args.json,
+            topics.as_ref()
+        )?
     );
     Ok(())
 }
@@ -1351,19 +1770,20 @@ fn query_text(
     query: &str,
     all: bool,
     json: bool,
+    topics: Option<&TopicRefs>,
 ) -> Result<String, String> {
+    let mut note = String::new();
+    let mut pick: Pick = links_for;
+    let line_path = split_path_line(query).map(|(path, _)| path);
     let nodes: Vec<&Node> = match split_path_line(query) {
         Some((path, line)) => {
             if let Some(text) = render_reverse(refs, path, line) {
                 return Ok(text);
             }
-            let spans = spans_by_path(graph);
-            spans
-                .get(path)
-                .and_then(|s| innermost(s, line))
-                .map(|i| &graph.nodes[i])
-                .into_iter()
-                .collect()
+            let (chosen, said) = walk_up(refs, graph, path, line, all);
+            note = said;
+            pick = line_links;
+            chosen.into_iter().collect()
         }
         None => resolve_symbol(graph, query, None).map_err(|e| e.to_string())?,
     };
@@ -1374,13 +1794,67 @@ fn query_text(
         root,
         graph,
         history: true,
+        topics,
+        line_path,
     };
     if json {
-        let v = render_json(refs, query, &nodes, all, Some(&ctx));
+        let v = render_json(refs, query, &nodes, all, Some(&ctx), pick);
         let text = serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?;
         return Ok(format!("{text}\n"));
     }
-    Ok(render_text(refs, query, &nodes, all, Some(&ctx)))
+    Ok(note + &render_text(refs, query, &nodes, all, Some(&ctx), pick))
+}
+
+/// The node that answers for `path:line`: the innermost node that has a
+/// record, else the nearest enclosing node that has one, else the file. When
+/// no level has a record, the innermost node. The text says at which level
+/// the record links, or is empty when the innermost node answers.
+fn walk_up<'a>(
+    refs: &WhyRefs,
+    graph: &'a Graph,
+    path: &str,
+    line: usize,
+    all: bool,
+) -> (Option<&'a Node>, String) {
+    let spans = spans_by_path(graph);
+    let inner = spans
+        .get(path)
+        .map(|s| enclosing(s, line))
+        .unwrap_or_default();
+    let file = graph
+        .nodes
+        .iter()
+        .find(|n| n.kind == Kind::File && n.path == path);
+    let chain: Vec<&Node> = inner
+        .into_iter()
+        .map(|i| &graph.nodes[i])
+        .chain(file)
+        .collect();
+    let first = chain.first().copied();
+    let Some(hit) = chain
+        .iter()
+        .copied()
+        .find(|n| !line_links(refs, n, all).is_empty())
+    else {
+        return (first, String::new());
+    };
+    if first.is_some_and(|f| std::ptr::eq(f, hit)) {
+        return (first, String::new());
+    }
+    let level = if hit.kind == Kind::File {
+        format!("file (file-level anchors only, at most {LINE_FILE_ANCHORS})")
+    } else {
+        format!(
+            "enclosing {} {}",
+            format!("{:?}", hit.kind).to_lowercase(),
+            hit.name
+        )
+    };
+    let at = first.map_or(String::new(), |f| format!(" at {}", f.name));
+    (
+        Some(hit),
+        format!("no record{at}: the record links at the {level}\n"),
+    )
 }
 
 /// The MCP tool `sieve_why`. It gives the text that `sieve why <symbol>`
@@ -1391,7 +1865,8 @@ pub fn mcp_why(symbol: &str, all: bool, root: &Path, context_dir: &Path) -> (Str
     let result = query::read_wiring_named(context_dir).and_then(|graph| {
         let refs = load_refs(root, context_dir, || Some(graph.clone()))
             .ok_or_else(|| "no decision index".to_string())?;
-        query_text(&refs, &graph, root, symbol, all, false)
+        let topics = load_topics(root, context_dir, &graph);
+        query_text(&refs, &graph, root, symbol, all, false, topics.as_ref())
     });
     match result {
         Ok(text) => (text, false),
@@ -1403,22 +1878,74 @@ pub fn mcp_why(symbol: &str, all: bool, root: &Path, context_dir: &Path) -> (Str
 // The post-read hint
 // ---------------------------------------------------------------------------
 
-/// The one-line hint for a Read of `file_path`, or `None`. `range` is the
-/// read range as 1-based lines, or `None` for the whole file. The hint
-/// quotes only the in-repo decision doc. It needs a `Code:` anchor to a node
-/// of the read range. It reads the current sidecar only. It never
-/// builds the links and never runs git.
-pub fn read_hint(
+/// What a Read can add: the decision hint for the file, and the note that
+/// asks the agent to link the decision records.
+pub struct ReadNotes {
+    /// The decision hint for the read range, if any.
+    pub hint: Option<String>,
+    /// The link note, when it was asked for and a record has no confirmed link.
+    pub link_note: Option<String>,
+}
+
+/// The one-line hint for a Read of `file_path`, and, when `want_link_note` is
+/// set, the link note. `range` is the read range as 1-based lines, or `None`
+/// for the whole file. The hint quotes only the in-repo decision doc. It
+/// needs a `Code:` anchor to a node of the read range. The link note counts
+/// the sidecar entries that have no confirmed link. Both read the current
+/// sidecar once. Neither builds the links, reads a record doc or runs git.
+pub fn read_notes(
     project_dir: &Path,
     context_dir: &Path,
     file_path: &str,
     range: Option<(usize, usize)>,
-) -> Option<String> {
-    let abs = std::fs::canonicalize(file_path).ok()?;
-    let base = std::fs::canonicalize(project_dir).ok()?;
-    let rel = abs.strip_prefix(&base).ok()?.to_string_lossy().into_owned();
-    let refs = fresh_sidecar(project_dir, context_dir)?;
-    hint_from(&refs, &rel, range)
+    want_link_note: bool,
+) -> ReadNotes {
+    let rel = std::fs::canonicalize(file_path)
+        .ok()
+        .zip(std::fs::canonicalize(project_dir).ok())
+        .and_then(|(abs, base)| {
+            let rel = abs.strip_prefix(&base).ok()?;
+            Some(rel.to_string_lossy().into_owned())
+        });
+    if rel.is_none() && !want_link_note {
+        return ReadNotes {
+            hint: None,
+            link_note: None,
+        };
+    }
+    let docs = find_docs(project_dir);
+    let stamp = current_stamp(project_dir, context_dir, &docs);
+    let refs = sidecar_with_stamp(context_dir, &stamp);
+    let link_note = refs.as_ref().filter(|_| want_link_note).and_then(|r| {
+        let unlinked = r.entries.iter().filter(|e| !e.linked).count();
+        (unlinked > 0).then(|| crate::why_link::link_note(unlinked))
+    });
+    let hint = rel.and_then(|rel| {
+        let anchored = refs.as_ref().and_then(|r| hint_from(r, &rel, range));
+        // A file with no recorded link gets the first inferred record, from
+        // the topic sidecar. A stale topic sidecar gives nothing. An anchored
+        // hit pays no config read.
+        anchored.or_else(|| {
+            if !sieve_core::walk::read_why_inferred(project_dir) {
+                return None;
+            }
+            inferred_hint(&topics_with_stamp(context_dir, &stamp)?, &rel)
+        })
+    });
+    ReadNotes { hint, link_note }
+}
+
+/// The one-line hint for the first inferred record of `rel`, or `None` when
+/// the file has a recorded link, no inferred record, or the line is too long.
+fn inferred_hint(topics: &TopicRefs, rel: &str) -> Option<String> {
+    let file = topics.file(rel).filter(|f| !f.exact)?;
+    let row = file.rows.first()?;
+    let name = Path::new(rel).file_name()?.to_string_lossy();
+    let text = format!(
+        "sieve: {name} has an inferred record ({}:{}, {}). Run sieve why {rel}.",
+        row.doc, row.line, row.date
+    );
+    (text.chars().count() <= HINT_MAX_CHARS).then_some(text)
 }
 
 fn hint_from(refs: &WhyRefs, rel: &str, range: Option<(usize, usize)>) -> Option<String> {
@@ -1612,6 +2139,31 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_the_stamp_has_a_link_file_part_only_when_the_link_file_exists() {
+        let s = Scratch::new("stamp-link");
+        let ctx = s.0.join("sieve");
+        std::fs::write(s.0.join("a.md"), "x").expect("write");
+        let docs = vec!["a.md".to_string()];
+        // The stamp of a repo with no link file is the one from before the
+        // link feature: the docs, then the wiring.
+        let before = format!(
+            "a.md:{}|wiring:{}",
+            stat_part(&s.0.join("a.md")),
+            stat_part(&ctx.join(".graph").join("wiring.json"))
+        );
+        assert_eq!(current_stamp(&s.0, &ctx, &docs), before);
+        std::fs::write(s.0.join(".sieve-links.json"), "{\"version\":1}\n").expect("write");
+        let with = current_stamp(&s.0, &ctx, &docs);
+        assert_ne!(with, before);
+        assert!(
+            with.contains("|.sieve-links.json:") && with.contains("|wiring:"),
+            "{with}"
+        );
+        std::fs::remove_file(s.0.join(".sieve-links.json")).expect("remove");
+        assert_eq!(current_stamp(&s.0, &ctx, &docs), before);
+    }
+
     const LIB: &str = "crates/a/src/lib.rs";
 
     const LEDGER: &str = "# Ledger\n\n## Template\n\nnothing\n\n\
@@ -1733,6 +2285,164 @@ mod tests {
     }
 
     #[test]
+    fn test_why_file_lists_inner_anchors_and_path_mentions_once_each() {
+        let (g, refs) = fixture();
+        let file = g.nodes.iter().find(|n| n.name == "lib.rs").expect("file");
+        let shown = links_for(&refs, file, false);
+        let heads: Vec<&str> = shown
+            .iter()
+            .map(|l| refs.entries[l.entry].heading.as_str())
+            .collect();
+        // Anchors first (newest first), then the path mention. No repeat.
+        assert_eq!(
+            heads,
+            [
+                "2026-10-01, build takes a lock",
+                "2026-09-01, first rule",
+                "2026-10-03, prose rule"
+            ]
+        );
+        let text = render_text(
+            &refs,
+            "crates/a/src/lib.rs",
+            &[file],
+            false,
+            None,
+            links_for,
+        );
+        assert!(text.contains("link: Code anchor (build_repo)"), "{text}");
+        assert!(
+            text.contains("file-level  docs/decisions/LEDGER.md"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn test_why_line_walks_up_to_the_enclosing_node_then_the_file() {
+        let (g, refs) = fixture();
+        // Line 1 is in `build_repo`, which has a record: no note.
+        let (n, note) = walk_up(&refs, &g, LIB, 1, false);
+        assert_eq!(
+            (n.map(|n| n.name.as_str()), note.as_str()),
+            (Some("build_repo"), "")
+        );
+        // `plain` has no record and no file anchor: the path mention of the
+        // prose entry stays out, so the innermost node answers with no row.
+        let (n, note) = walk_up(&refs, &g, LIB, 3, false);
+        assert_eq!(
+            (n.map(|n| n.name.as_str()), note.as_str()),
+            (Some("plain"), "")
+        );
+        // Five file anchors: the file answers with the newest 3 and says so.
+        let mut doc = String::new();
+        for d in 1..=5 {
+            doc.push_str(&format!(
+                "## 2026-10-0{d}, rule {d}\n\n- **Date:** 2026-10-0{d}\n- **Code:** `{LIB}`\n\n"
+            ));
+        }
+        let docs = vec![("docs/decisions/LEDGER.md".to_string(), doc)];
+        let refs = link_docs(Path::new("/nonexistent"), &g, &docs, "s".into());
+        let (n, note) = walk_up(&refs, &g, LIB, 3, false);
+        let file = n.expect("file");
+        assert_eq!(file.name, "lib.rs");
+        assert_eq!(
+            note,
+            "no record at plain: the record links at the file (file-level anchors only, at most 3)\n"
+        );
+        let text = render_text(&refs, LIB, &[file], false, None, line_links);
+        assert!(text.contains("rule 5") && text.contains("rule 3"), "{text}");
+        assert!(!text.contains("rule 2"), "{text}");
+        assert!(text.contains("link: Code anchor  [2026-10-05]"), "{text}");
+    }
+
+    #[test]
+    fn test_why_entries_split_an_error_log_at_its_own_heading_level() {
+        let errors = "# What did not work\n\n## Template\n\n## [Task]\n\n\
+            ## [Audit of 2026-01-01 data, 2026-09-12]\n**What did not work:** a\n\n\
+            ## [Second, 2026-09-13]\nbody\n";
+        let heads = |text| {
+            parse_entries("E.md", text)
+                .into_iter()
+                .map(|e| (e.heading, e.date))
+                .collect::<Vec<_>>()
+        };
+        // The date in the middle of a title is no date.
+        assert_eq!(
+            heads(errors),
+            [
+                (
+                    "[Audit of 2026-01-01 data, 2026-09-12]".into(),
+                    "2026-09-12".into()
+                ),
+                ("[Second, 2026-09-13]".into(), "2026-09-13".into()),
+            ]
+        );
+        let deep = "# Log\n\n### First thing\n- **Date:** 2026-03-01\nx\n\n### Second thing\n- **Date:** 2026-03-02\ny\n";
+        let got = heads(deep);
+        assert_eq!(got.len(), 2, "{got:?}");
+        assert_eq!(got[1], ("Second thing".into(), "2026-03-02".into()));
+        // A log with no date gives no record, not one record for the file.
+        assert!(heads("# Log\n\n## one\n\n## two\n").is_empty());
+    }
+
+    #[test]
+    fn test_why_a_file_shows_an_entry_with_an_anchor_and_a_path_link_once() {
+        let g = fixture_graph();
+        let text = format!(
+            "## 2026-10-05, both\n\n- **Date:** 2026-10-05\n- **Code:** `{LIB}#walk`\n- The file {LIB} holds it.\n"
+        );
+        let docs = vec![("docs/decisions/LEDGER.md".to_string(), text)];
+        let refs = link_docs(Path::new("/nonexistent"), &g, &docs, "s".into());
+        assert_eq!(refs.links.len(), 2, "{:?}", refs.links);
+        let shown = file_links(&refs, LIB, false);
+        assert_eq!(shown.len(), 1);
+        assert_eq!((shown[0].level, shown[0].name.as_str()), (0, "walk"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_why_adr_dir_refuses_a_link_that_leaves_the_repo() {
+        let entry = "# Rec\n\n## 2026-10-01, a\n\nbody\n";
+        let outside = repo("adrout", &[("0001.md", entry)]);
+        let s = repo(
+            "adrlink",
+            &[(".adr-dir", "\n  records\n"), ("a/b.md", entry)],
+        );
+        std::os::unix::fs::symlink(&outside.0, s.0.join("records")).expect("link");
+        assert!(find_docs(&s.0).is_empty());
+        std::fs::remove_file(s.0.join("records")).expect("rm");
+        std::fs::create_dir(s.0.join("records")).expect("mkdir");
+        assert_eq!(adr_dir_setting(&s.0).as_deref(), Some("records"));
+    }
+
+    #[test]
+    fn test_why_find_docs_reads_error_logs_and_the_adr_dir_setting() {
+        let entry = "# Log\n\n## 2026-10-01, a\n\nbody\n";
+        let s = repo(
+            "finddocs",
+            &[
+                ("docs/errors/ERRORS.md", entry),
+                ("ERRORS.md", entry),
+                ("doc/adr/0001-x.md", entry),
+                ("records/0002-y.md", entry),
+                (".adr-dir", "records\n"),
+                ("src/other.md", entry),
+            ],
+        );
+        assert_eq!(
+            find_docs(&s.0),
+            [
+                "ERRORS.md",
+                "doc/adr/0001-x.md",
+                "docs/errors/ERRORS.md",
+                "records/0002-y.md"
+            ]
+        );
+        std::fs::write(s.0.join(".adr-dir"), "../outside").expect("write");
+        assert!(!find_docs(&s.0).contains(&"records/0002-y.md".to_string()));
+    }
+
+    #[test]
     fn test_f6_supersede_catches_the_reverse_with_a_dash_heading() {
         let (_g, refs) = fixture();
         assert!(refs.entries[0].superseded);
@@ -1763,6 +2473,25 @@ mod tests {
     }
 
     #[test]
+    fn test_f6_supersede_reads_a_supersedes_line() {
+        let a = "## 2026-10-01, old rule\n\n- **Date:** 2026-10-01\n- Text.\n";
+        let b = "## 2026-10-05, new rule\n\n- **Date:** 2026-10-05\n- **Supersedes:** 2026-10-01, old rule\n";
+        let c = "## 2026-10-06, other rule\n\n- **Date:** 2026-10-06\n- **Supersedes:** no such heading\n```\n- **Supersedes:** new rule\n```\n";
+        let docs = vec![("d.md".to_string(), format!("{a}\n{b}\n{c}"))];
+        let refs = link_docs(
+            Path::new("/nonexistent"),
+            &fixture_graph(),
+            &docs,
+            "s".into(),
+        );
+        let old = &refs.entries[0];
+        assert!(old.superseded);
+        assert_eq!(old.successor.as_deref(), Some("2026-10-05, new rule"));
+        assert!(!refs.entries[1].superseded);
+        assert!(!refs.entries[2].superseded);
+    }
+
+    #[test]
     fn test_f6_supersede_reads_an_adr_status_line() {
         let adr = "# Use X\n\nStatus: Superseded by ADR-9\n\nDate: 2026-01-02\n";
         let raw = parse_entries("adr/ADR-1.md", adr);
@@ -1790,11 +2519,13 @@ mod tests {
             .iter()
             .find(|n| n.name == "build_repo")
             .expect("node");
-        let out = render_text(&refs, "build_repo", &[n], false, None);
+        let out = render_text(&refs, "build_repo", &[n], false, None, links_for);
         assert!(out.starts_with("build_repo  fn  crates/a/src/lib.rs:1"));
         assert!(out.contains("build takes a lock"), "{out}");
         let walk = g.nodes.iter().find(|n| n.name == "walk").expect("node");
-        assert!(render_text(&refs, "walk", &[walk], false, None).contains("SUPERSEDED by"));
+        assert!(
+            render_text(&refs, "walk", &[walk], false, None, links_for).contains("SUPERSEDED by")
+        );
     }
 
     #[test]
@@ -1806,6 +2537,123 @@ mod tests {
         // `plain` has only a path link.
         assert_eq!(hint_from(&refs, LIB, Some((3, 3))), None);
         assert_eq!(hint_from(&refs, "crates/a/src/main.rs", None), None);
+    }
+
+    /// The topic row of the entry whose heading holds `heading`.
+    fn topic_row(refs: &WhyRefs, heading: &str) -> TopicRow {
+        let e = refs
+            .entries
+            .iter()
+            .find(|e| e.heading.contains(heading))
+            .expect("entry");
+        TopicRow {
+            doc: e.doc.clone(),
+            line: e.line,
+            heading: e.heading.clone(),
+            date: e.date.clone(),
+        }
+    }
+
+    fn topics_of(path: &str, exact: bool, rows: Vec<TopicRow>) -> TopicRefs {
+        TopicRefs {
+            version: 1,
+            stamp: "s".to_string(),
+            files: vec![crate::why_infer::TopicFile {
+                path: path.to_string(),
+                exact,
+                rows,
+            }],
+        }
+    }
+
+    fn ctx_with<'a>(g: &'a Graph, topics: &'a TopicRefs, line_path: Option<&'a str>) -> Ctx<'a> {
+        Ctx {
+            root: Path::new("/nonexistent"),
+            graph: g,
+            history: false,
+            topics: Some(topics),
+            line_path,
+        }
+    }
+
+    #[test]
+    fn test_inferred_rows_follow_the_exact_rows_of_a_file_and_never_repeat_one() {
+        let (g, refs) = fixture();
+        let second = topic_row(&refs, "second rule");
+        let lock = topic_row(&refs, "build takes a lock");
+        // `lock` is an exact row of the file, so it must not print twice.
+        let topics = topics_of(LIB, true, vec![second.clone(), lock]);
+        let ctx = ctx_with(&g, &topics, None);
+        let file = g
+            .nodes
+            .iter()
+            .find(|n| n.kind == Kind::File && n.path == LIB)
+            .expect("file");
+        let plain = render_text(&refs, LIB, &[file], false, None, links_for);
+        let with = render_text(&refs, LIB, &[file], false, Some(&ctx), links_for);
+        assert_eq!(with.matches("inferred  ").count(), 1, "{with}");
+        assert!(
+            with.contains("inferred from shared terms (not a recorded link)\n"),
+            "{with}"
+        );
+        // The exact rows keep their text and their order.
+        assert_eq!(with.replace(&inferred_text(&second), ""), plain);
+        assert!(with.starts_with(&plain), "{with}");
+    }
+
+    #[test]
+    fn test_inferred_rows_show_for_a_path_line_query_and_json_names_the_level() {
+        let (g, refs) = fixture();
+        let topics = topics_of(LIB, false, vec![topic_row(&refs, "second rule")]);
+        let ctx = ctx_with(&g, &topics, Some(LIB));
+        let plain = g.nodes.iter().find(|n| n.name == "plain").expect("node");
+        // The line answers with `plain`, a symbol with no recorded decision.
+        let text = render_text(&refs, "q", &[plain], false, Some(&ctx), line_links);
+        assert!(text.contains("no recorded link for plain"), "{text}");
+        assert!(!text.contains("no decision found"), "{text}");
+        assert!(
+            text.contains("inferred  docs/decisions/LEDGER.md:"),
+            "{text}"
+        );
+        // Two answering nodes print the file rows once.
+        let twice = render_text(&refs, "q", &[plain, plain], false, Some(&ctx), line_links);
+        assert_eq!(twice.matches("inferred  ").count(), 1, "{twice}");
+        let v2 = render_json(&refs, "q", &[plain, plain], false, Some(&ctx), line_links);
+        assert_eq!(v2["symbols"][1]["total"], 0);
+        // A symbol query for a symbol has no file, so it gets no inferred row.
+        let sym_ctx = ctx_with(&g, &topics, None);
+        let text = render_text(&refs, "q", &[plain], false, Some(&sym_ctx), links_for);
+        assert!(!text.contains("inferred"), "{text}");
+        let v = render_json(&refs, "q", &[plain], false, Some(&ctx), line_links);
+        let rows = &v["symbols"][0]["decisions"];
+        assert_eq!(rows[0]["level"], "inferred");
+        assert_eq!(v["symbols"][0]["total"], 1);
+    }
+
+    #[test]
+    fn test_inferred_hint_is_one_short_line_and_only_for_a_file_with_no_exact_row() {
+        let (_g, refs) = fixture();
+        let row = topic_row(&refs, "second rule");
+        let none = topics_of(LIB, false, vec![row.clone()]);
+        let hint = inferred_hint(&none, LIB).expect("hint");
+        assert!(
+            hint.starts_with("sieve: lib.rs has an inferred record (docs/decisions/LEDGER.md:"),
+            "{hint}"
+        );
+        assert!(hint.ends_with(&format!(". Run sieve why {LIB}.")), "{hint}");
+        assert!(!hint.contains('\n') && hint.chars().count() <= HINT_MAX_CHARS);
+        // A file with an exact row keeps its own hint rules.
+        assert_eq!(
+            inferred_hint(&topics_of(LIB, true, vec![row.clone()]), LIB),
+            None
+        );
+        assert_eq!(inferred_hint(&none, "crates/a/src/main.rs"), None);
+        // A line over the limit gives no hint.
+        let long = TopicRow {
+            doc: "d".repeat(200),
+            ..row
+        };
+        assert_eq!(inferred_hint(&topics_of(LIB, false, vec![long]), LIB), None);
     }
 
     #[test]
@@ -2117,7 +2965,7 @@ mod tests {
         let graph = sieve_parse::build_graph(&root, &scratch.0).expect("graph");
         let docs = find_docs(&root);
         let refs = link_docs(&root, &graph, &read_docs(&root, &docs), String::new());
-        let out = query_text(&refs, &graph, &root, &symbol, false, false).expect("answer");
+        let out = query_text(&refs, &graph, &root, &symbol, false, false, None).expect("answer");
         println!(
             "F6 ANSWER BEGIN\n{out}F6 ANSWER END chars={}",
             out.chars().count()
@@ -2311,15 +3159,17 @@ mod tests {
             root: &s.0,
             graph: &g,
             history: false,
+            topics: None,
+            line_path: None,
         };
         let n = &g.nodes[0];
-        let out = render_text(&refs, "busy", &[n], false, Some(&ctx));
+        let out = render_text(&refs, "busy", &[n], false, Some(&ctx), links_for);
         assert_eq!(out.matches("comment  ").count(), 3, "{out}");
         assert!(
             out.contains("more: 2 rows. sieve why busy --all\n"),
             "{out}"
         );
-        let all = render_text(&refs, "busy", &[n], true, Some(&ctx));
+        let all = render_text(&refs, "busy", &[n], true, Some(&ctx), links_for);
         assert_eq!(all.matches("comment  ").count(), 5, "{all}");
         assert!(!all.contains("more:"), "{all}");
     }
@@ -2637,6 +3487,10 @@ mod tests {
             suggest: true,
             diff: true,
             no_refresh: true,
+            link: false,
+            keep: None,
+            expect: None,
+            page: None,
         };
         let e = run(&args, None).expect_err("rejected");
         assert!(e.contains("do not combine"), "{e}");

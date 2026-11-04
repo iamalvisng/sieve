@@ -289,6 +289,12 @@ pub fn read_exclude_dirs(root: &Path) -> Vec<String> {
     read_string_list(root, "excludeDirs")
 }
 
+/// True when `<root>/.<product>/config.json` sets `"whyInferred": true`. The
+/// inferred tier of `why` is off without it.
+pub fn read_why_inferred(root: &Path) -> bool {
+    read_config_flag(root, "whyInferred")
+}
+
 /// True when `rel` is one of `excludes` or lies under one of them.
 pub fn is_excluded(rel: &Path, excludes: &[String]) -> bool {
     excludes.iter().any(|path| rel.starts_with(path))

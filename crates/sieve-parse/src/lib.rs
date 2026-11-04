@@ -42,7 +42,7 @@ pub use build::{
     fresh_entry, link_entries, link_entries_moving, read_at_link, walk_files, BuildOptions,
     BuildReport, Extractors, Moved, ScopeMemo,
 };
-pub use cache::{CacheEntry, ExtractCache};
+pub use cache::{read_comment_bags, CacheEntry, ExtractCache};
 pub use check::{
     behind_files, check_context, check_graph, check_graph_lookup, federated_check_text,
     format_check_report, format_graph_check_report, ContentDrift, ContextCheck, GraphCheck,
@@ -54,7 +54,8 @@ pub use generic::{generic_lang_of, GenericExtractor, GenericLang, GENERIC_LANGS}
 pub use lsp::{enrich_with_lsp, enrich_with_lsp_report, LspReport};
 pub use refresh::{
     ensure_fresh_graph, env_truthy, lookup_path, rebuild_graph_only, refresh_note,
-    write_wiring_and_lookup, RebuildReport, RefreshOptions, RefreshOutcome,
+    run_topic_writer, set_topic_writer, write_wiring_and_lookup, CommentBags, RebuildReport,
+    RefreshOptions, RefreshOutcome, TopicInput, TopicWriter,
 };
 pub use resolve::resolve_edges;
 pub use rust_tree::RustPackage;

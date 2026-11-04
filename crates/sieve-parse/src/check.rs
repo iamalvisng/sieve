@@ -101,20 +101,12 @@ pub struct ContextCheck {
 /// diffs the fresh nodes against the committed ones by `id` and
 /// `body_hash`, the same three-way split `checkGraph` runs.
 pub fn check_graph(root: &Path, context_dir: &Path) -> io::Result<GraphCheck> {
-    // The last build's `--only-dir` whitelist rides in the fingerprint
-    // . The warm guard runs on its file count, before the wiring is
-    // parsed.
+    // A stopped build is not tried again until the ceiling rises. The
+    // marker check comes first, so a skip reads no fingerprint.
+    crate::guard::skip_if_stopped(context_dir)?;
+    // The last build's `--only-dir` whitelist rides in the fingerprint.
     let stamp = crate::extractor_stamp();
     let fp = read_fingerprint(&fingerprint_path(context_dir, &stamp), &stamp);
-    // With no usable fingerprint, the walk gives the file count.
-    let file_count = match &fp {
-        Some(fp) => fp.files.len(),
-        // A walk error is not the guard's to report: the later read or build
-        // names it.
-        None => crate::build::collect_files(root, context_dir, None)
-            .map_or(0, |f| crate::build::claimed_count(&f)),
-    };
-    crate::guard::check(file_count, true)?;
     let wiring_path = context_dir.join(".graph").join("wiring.json");
     let Ok(bytes) = std::fs::read(&wiring_path) else {
         return Ok(GraphCheck {

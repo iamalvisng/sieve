@@ -725,6 +725,15 @@ fn build_repo_locked(
     if let Err(e) = crate::why::write_after_build(root, context_dir, graph) {
         errors.push(format!("why-refs: {e}"));
     }
+    // The topic sidecar of `why` follows it, from the bags of this build.
+    let bags: sieve_parse::CommentBags<'_> = report
+        .comment_bags
+        .iter()
+        .map(|(id, bag)| (id.as_str(), bag))
+        .collect();
+    if let Err(e) = crate::why_infer::write_topics(root, context_dir, graph, Some(&bags)) {
+        errors.push(format!("why-topics: {e}"));
+    }
 
     write_build_fingerprint(context_dir, report.prints, only_dirs, walk_started_ms)
         .map_err(|e| e.to_string())?;

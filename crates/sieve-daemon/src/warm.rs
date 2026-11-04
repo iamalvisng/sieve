@@ -222,6 +222,8 @@ struct Pending {
 /// A patch's disk writes with their own snapshot of the extraction cache, so
 /// the write needs nothing the next patch changes.
 struct Job {
+    /// The repo root, for the decision docs that the topic sidecar reads.
+    root: PathBuf,
     pending: Pending,
     /// The cache as the patch left it: the moved files hold no nodes yet.
     cache: ExtractCache,
@@ -401,6 +403,7 @@ fn write_job(ctx: &Path, job: Job) -> Option<(u64, SystemTime)> {
     #[cfg(test)]
     test_hook(ctx);
     let Job {
+        root,
         pending: p,
         mut cache,
     } = job;
@@ -427,6 +430,14 @@ fn write_job(ctx: &Path, job: Job) -> Option<(u64, SystemTime)> {
     let ask_ok = ask.is_ok_and(|index| write_ask_index(&ask_index_path(ctx), &index).is_ok());
     let ok = cache_ok && wiring.is_ok() && ask_ok && write_fingerprint(&fp_path, &p.record).is_ok();
     if ok {
+        // The topic sidecar of `sieve why` follows the wiring just written.
+        let bags: sieve_parse::CommentBags<'_> = cache
+            .files
+            .iter()
+            .filter(|(_, e)| !e.comment_bag.is_empty())
+            .map(|(id, e)| (id.as_str(), &e.comment_bag))
+            .collect();
+        sieve_parse::run_topic_writer(&root, ctx, Some((graph, &bags)));
         stat_id(&fp_path)
     } else {
         None
@@ -1261,6 +1272,7 @@ impl Warm {
             );
         }
         let job = Job {
+            root: self.root.clone(),
             pending: p,
             cache: snapshot,
         };

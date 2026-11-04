@@ -74,6 +74,95 @@ pub fn bag(tokens: &[String]) -> Bag {
     out
 }
 
+/// File extensions whose comments start with `//`.
+const SLASH_EXT: &[&str] = &[
+    "rs", "ts", "tsx", "js", "jsx", "mjs", "cjs", "go", "java", "kt", "kts", "swift", "c", "h",
+    "cc", "cpp", "cxx", "hpp", "hh", "cs", "scala", "dart", "zig", "sol", "groovy", "gradle",
+    "proto", "vue", "svelte",
+];
+
+/// File extensions whose comments start with `#`.
+const HASH_EXT: &[&str] = &[
+    "py", "pyi", "sh", "bash", "zsh", "fish", "rb", "toml", "yaml", "yml", "pl", "pm", "r", "nix",
+    "ex", "exs", "cmake", "mk", "conf", "cfg", "ini", "ps1", "jl", "cr", "tf", "hcl", "rake",
+    "gemspec",
+];
+
+/// File names whose comments start with `#`.
+const HASH_NAMES: &[&str] = &[
+    "makefile",
+    "dockerfile",
+    "gemfile",
+    "rakefile",
+    "justfile",
+    ".gitignore",
+    ".sieveignore",
+];
+
+/// Whether a file uses `//` comments, and whether it uses `#` comments. The
+/// file name and extension decide. A file of an unknown kind uses both.
+fn comment_markers(path: &str) -> (bool, bool) {
+    let base = path.rsplit('/').next().unwrap_or(path).to_lowercase();
+    let ext = base.rsplit_once('.').map_or("", |(_, e)| e);
+    if HASH_NAMES.contains(&base.as_str()) || HASH_EXT.contains(&ext) {
+        (false, true)
+    } else if SLASH_EXT.contains(&ext) {
+        (true, false)
+    } else {
+        (true, true)
+    }
+}
+
+/// The comment text of each line of `text`, from the first comment marker
+/// outside a double-quoted string to the end of the line.
+///
+/// The scan is lexical, so it stays cheap and needs no parse. A `//` counts
+/// only when the byte before it is not `:`, so a URL is no comment. A `#`
+/// counts only at the line start or after a space or a tab, and not before
+/// `[` or `!`, so a Rust attribute and a shebang are no comments. A quote
+/// after a backslash does not open or close a string.
+fn comment_lines<'a>(path: &str, text: &'a str) -> impl Iterator<Item = &'a str> {
+    let (slash, hash) = comment_markers(path);
+    text.split('\n').filter_map(move |line| {
+        let b = line.as_bytes();
+        let mut in_str = false;
+        for (i, &c) in b.iter().enumerate() {
+            let prev = i.checked_sub(1).map(|p| b[p]);
+            if c == b'"' && prev != Some(b'\\') {
+                in_str = !in_str;
+                continue;
+            }
+            if in_str {
+                continue;
+            }
+            let next = b.get(i + 1).copied();
+            if slash && c == b'/' && next == Some(b'/') && prev != Some(b':') {
+                return Some(&line[i..]);
+            }
+            if hash
+                && c == b'#'
+                && matches!(prev, None | Some(b' ' | b'\t'))
+                && !matches!(next, Some(b'[' | b'!'))
+            {
+                return Some(&line[i..]);
+            }
+        }
+        None
+    })
+}
+
+/// Counts the tokens of the comments of one source file. The topic index of
+/// `sieve why` reads this bag, so the build keeps it with the parse result
+/// and needs no second read of the file.
+pub fn comment_bag(path: &str, text: &str) -> Bag {
+    let mut joined = String::new();
+    for line in comment_lines(path, text) {
+        joined.push_str(line);
+        joined.push('\n');
+    }
+    bag(&tokenize(&joined))
+}
+
 /// Sums the counts in `bag`.
 fn bag_len(bag: &Bag) -> u32 {
     bag.iter().map(|(_, count)| count).sum()
@@ -295,6 +384,41 @@ mod tests {
     #[test]
     fn tokenize_splits_on_a_digit_to_uppercase_boundary_and_drops_short_tokens() {
         assert_eq!(tokenize("a1B c"), vec!["a1"]);
+    }
+
+    fn lines(path: &str, text: &str) -> Vec<String> {
+        comment_lines(path, text).map(str::to_string).collect()
+    }
+
+    #[test]
+    fn comment_lines_skip_an_attribute_a_string_and_a_url() {
+        let rs =
+            "let u = \"http://x // y\"; // real note\n#[derive(Debug)]\nfn f() {} /// doc words";
+        assert_eq!(lines("a.rs", rs), ["// real note", "/// doc words"]);
+        let ts = "fetch(url) // https://x.y keeps";
+        assert_eq!(lines("a.ts", ts), ["// https://x.y keeps"]);
+        assert!(lines("a.ts", "const u = 'https://x.y';").is_empty());
+    }
+
+    #[test]
+    fn comment_lines_read_hash_comments_by_file_kind() {
+        let py = "#!/usr/bin/env python\nx = \"#fff\"  # colour note\nurl = 1 # see https://a.b/c";
+        assert_eq!(lines("a.py", py), ["# colour note", "# see https://a.b/c"]);
+        // A Rust file has no `#` comment. A file of an unknown kind has both.
+        assert!(lines("a.rs", "x = 1 # no").is_empty());
+        assert_eq!(lines("notes.txt", "x # a\ny // b"), ["# a", "// b"]);
+        assert_eq!(lines("Makefile", "all: # build"), ["# build"]);
+    }
+
+    #[test]
+    fn comment_bag_counts_the_tokens_of_the_comments_only() {
+        let text = "let parseHeader = 1; // parse header, header again\nlet other = 2;";
+        let want: Bag = vec![
+            ("parse".to_string(), 1),
+            ("header".to_string(), 2),
+            ("again".to_string(), 1),
+        ];
+        assert_eq!(comment_bag("a.rs", text), want);
     }
 
     #[test]

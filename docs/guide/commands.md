@@ -158,8 +158,16 @@ no saved tokens yet — they appear after an agent session uses sieve
 ## why
 
 `sieve why <symbol>` shows the decision records that explain a symbol. Sieve
-reads these decision folders in your repo: `docs/decisions/`, `docs/adr/`,
-`adr/`, and `LEDGER.md`.
+reads these records in your repo: `docs/decisions/`, `docs/adr/`, `doc/adr/`,
+`adr/`, the folder in `.adr-dir`, `docs/errors/`, `LEDGER.md` and `ERRORS.md`.
+
+`sieve why <file>` lists each record that anchors a symbol in the file or names
+the file by its full path. Each record shows once, with its strongest link.
+`sieve why <path:line>` answers for the innermost symbol that has a record. If
+that symbol has none, Sieve walks up to the enclosing symbols and stops at the
+first one that has a record. At the file it shows at most 3 file-level anchors
+and no path mention. The note says at which level the record links. Each row
+shows the record date, newest first within one link strength.
 
 A record links to code with an anchor line. The line starts with `- **Code:**`
 and lists node ids in backticks. A record with a `Status:` line that says
@@ -185,8 +193,36 @@ decision  docs/adr/adr-0004-savings-header.md:1  ADR 0004: Each query result ope
 test  crates/sieve-savings/src/lib.rs:236  savings_line_names_the_given_product
 ```
 
-Flags: `--check` lists SUPERSEDED records that still link to code. `--all`
-shows every row, not the first 10. `--suggest`, `--diff`, `--json`.
+A newer record can also name the record it replaces with a line
+`- **Supersedes:** <old heading>`. The old record then shows as SUPERSEDED.
+
+Most records name no code. `sieve why --link` links them with the help of
+your coding agent. Sieve calls no model:
+
+1. `sieve why --link` takes the next unlinked record and prints numbered
+   candidate files and a link id. `sieve why --link '<doc>#<heading>'` takes
+   one record.
+2. The agent reads the record and the candidates, then keeps the right ones:
+   `sieve why --link '<doc>#<heading>' --keep 2,5 --expect <link id>`, or
+   `--keep none`.
+3. If the agent keeps 3 or more files of a page, `--page 2` and then
+   `--page 3` show more candidates.
+
+Sieve writes the kept links to `.sieve-links.json` in the repo root. Commit
+that file, so every clone gets the links. `sieve why` shows a kept link as
+"agent link". A candidate can be a folder of at most 20 files; `--check`
+reports a linked folder that grew or is gone. Measured with a blind judge,
+about 4 of 5 kept links are right, and about half of the right files are
+found (precision 0.82 and recall 0.48 on the Sieve repo, 0.76 and 0.42 on two
+outside repos).
+
+When no record links to a file, Sieve can show at most two records that share
+rare terms with it, marked "inferred from shared terms". This is off by
+default. Set `"whyInferred": true` in `.sieve/config.json` to turn it on.
+
+Flags: `--check` lists SUPERSEDED records that still link to code, and linked
+folders that changed. `--all` shows every row, not the first 10. `--link`,
+`--keep`, `--expect`, `--page`, `--suggest`, `--diff`, `--json`.
 
 ## Other commands
 

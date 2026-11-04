@@ -545,6 +545,10 @@ pub struct SessionState {
         skip_serializing_if = "BTreeMap::is_empty"
     )]
     pub lookup_pass_reasons: BTreeMap<String, u64>,
+    /// True once the post-read hook gave this session the note that asks the
+    /// agent to link the decision records. The note shows once per session.
+    #[serde(rename = "linkNoted", default, skip_serializing_if = "is_false")]
+    pub link_noted: bool,
 }
 
 /// The three lookup counts of one day.
@@ -1729,7 +1733,12 @@ fn handle_post_read(input: &Value, project_dir: &Path) -> Option<String> {
         .ok()?
         .to_string_lossy()
         .into_owned();
-    let note = update_session(project_dir, session_id, |session| {
+    // Only the main session gets the link note, and only once.
+    let is_main = input
+        .get("agent_id")
+        .and_then(Value::as_str)
+        .is_none_or(str::is_empty);
+    let (note, link_noted) = update_session(project_dir, session_id, |session| {
         let note = session.narrowed.remove(&key);
         // The host runs this hook only after a Read succeeds, so the lines
         // are delivered. A narrowed Read returned the narrowed range, not
@@ -1744,15 +1753,30 @@ fn handle_post_read(input: &Value, project_dir: &Path) -> Option<String> {
         if let Some(record) = session.reads.get_mut(&key) {
             record.add(lines);
         }
-        note
+        (note, session.link_noted)
     });
-    // One line when the read range holds a node with a decision link.
-    let hint = why_read_hint(input, project_dir, file_path);
-    let text = match (note, hint) {
-        (Some(n), Some(h)) => format!("{n}\n{h}"),
-        (Some(t), None) | (None, Some(t)) => t,
-        (None, None) => return None,
-    };
+    // One line when the read range holds a node with a decision link, and
+    // once per main session one line that asks for decision links.
+    let want_link = is_main && !link_noted;
+    let notes = why_read_notes(input, project_dir, file_path, want_link);
+    // The test and set is one locked update, so two parallel reads give the
+    // note once. A failed session write gives no note now, so the note never
+    // repeats because the flag was lost.
+    let link_note = notes.link_note.filter(|_| {
+        let (first, written) =
+            update_session_checked(project_dir, session_id, SESSION_LOCK_WAIT_MS, |s| {
+                !std::mem::replace(&mut s.link_noted, true)
+            });
+        first && written
+    });
+    let text = [note, notes.hint, link_note]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join("\n");
+    if text.is_empty() {
+        return None;
+    }
     context_json("PostToolUse", &text)
 }
 
@@ -1768,10 +1792,22 @@ fn read_range(input: &Value) -> Option<(usize, usize)> {
     Some((start, end))
 }
 
-/// The decision hint for a Read of `file_path`, or `None`.
-fn why_read_hint(input: &Value, project_dir: &Path, file_path: &str) -> Option<String> {
+/// The decision hint for a Read of `file_path`, and the link note when
+/// `want_link` is set.
+fn why_read_notes(
+    input: &Value,
+    project_dir: &Path,
+    file_path: &str,
+    want_link: bool,
+) -> crate::why::ReadNotes {
     let context_dir = resolve_context_dir(project_dir);
-    crate::why::read_hint(project_dir, &context_dir, file_path, read_range(input))
+    crate::why::read_notes(
+        project_dir,
+        &context_dir,
+        file_path,
+        read_range(input),
+        want_link,
+    )
 }
 
 // ---------------------------------------------------------------------------
