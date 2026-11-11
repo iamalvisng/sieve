@@ -2,7 +2,7 @@
 //!.
 
 use std::io::{BufRead, Write};
-use std::path::{Component, Path, PathBuf};
+use std::path::Path;
 
 use serde_json::Value;
 
@@ -142,12 +142,16 @@ fn handle_line<W: Write>(line: &str, session: &Session, out: &mut W) {
                 Some(Value::Number(n)) => tools::js_number_text(n.as_f64().unwrap_or(f64::NAN)),
                 Some(v) => v.to_string(),
             };
+            let client = params
+                .pointer("/clientInfo/name")
+                .and_then(Value::as_str)
+                .unwrap_or("");
             let result = format!(
                 "{{\"protocolVersion\":{},\"capabilities\":{{\"tools\":{{}}}},\"serverInfo\":{{\"name\":{},\"version\":{}}},\"instructions\":{}}}",
                 protocol_version,
                 json_str(server_name()),
                 json_str(session.version),
-                json_str(&names::instructions_with_upkeep(session.upkeep)),
+                json_str(&names::instructions_with_upkeep(session.upkeep, client)),
             );
             write_result_line(out, has_id, id.as_ref(), &result);
         }
@@ -225,7 +229,7 @@ fn advertised(root: &Path, context_dir: &Path, dir_override: bool) -> bool {
     if dir_override || has_index(context_dir) {
         return true;
     }
-    match main_worktree_root(root) {
+    match sieve_core::worktree::main_worktree_root(root) {
         Some(main) => has_index(&main.join(sieve_core::product().context_dir_name())),
         None => false,
     }
@@ -236,57 +240,6 @@ fn advertised(root: &Path, context_dir: &Path, dir_override: bool) -> bool {
 fn has_index(context_dir: &Path) -> bool {
     context_dir.join(".graph").join("wiring.json").exists()
         || sieve_core::workspace::workspace_path(context_dir).exists()
-}
-
-/// Resolves `.` and `..` segments the way Node's `path.resolve` does,
-/// with no filesystem read.
-fn normalize(path: &Path) -> PathBuf {
-    let mut out = PathBuf::new();
-    for part in path.components() {
-        match part {
-            Component::CurDir => {}
-            Component::ParentDir => {
-                out.pop();
-            }
-            other => out.push(other),
-        }
-    }
-    out
-}
-
-/// The main checkout of a linked `git worktree`, or `None` when `root`
-/// is not one (`mainWorktreeRoot`): `.git` is a file
-/// whose `gitdir:` line points under `<main>/.git/worktrees/`, and that
-/// dir's `commondir` names `<main>/.git`.
-fn main_worktree_root(root: &Path) -> Option<PathBuf> {
-    let dot = root.join(".git");
-    if std::fs::metadata(&dot).ok()?.is_dir() {
-        return None;
-    }
-    let text = std::fs::read_to_string(&dot).ok()?;
-    let line = text.split('\n').find(|l| l.starts_with("gitdir:"))?;
-    let target = line["gitdir:".len()..].trim();
-    if target.is_empty() {
-        return None;
-    }
-    let gitdir = normalize(&root.join(target));
-    if gitdir.parent()?.file_name()? != "worktrees" {
-        return None;
-    }
-    let rel = std::fs::read_to_string(gitdir.join("commondir")).ok()?;
-    let rel = rel.trim();
-    if rel.is_empty() {
-        return None;
-    }
-    let common = normalize(&gitdir.join(rel));
-    if common.file_name()? != ".git" || !common.is_dir() {
-        return None;
-    }
-    let main = common.parent()?.to_path_buf();
-    if normalize(&main) == normalize(root) {
-        return None;
-    }
-    Some(main)
 }
 
 /// JSON-encodes a string, matching `JSON.stringify`: only the characters
@@ -388,6 +341,26 @@ mod tests {
         );
     }
 
+    /// `initialize` picks the instructions text by the `clientInfo.name`.
+    #[test]
+    fn initialize_instructions_follow_the_client_name() {
+        let instructions = |params: &str| {
+            let line = format!(
+                "{{\"jsonrpc\":\"2.0\",\"id\":0,\"method\":\"initialize\",\"params\":{params}}}\n"
+            );
+            let (out, _) = run(&line);
+            let value: Value = serde_json::from_str(out.trim_end()).unwrap();
+            value["result"]["instructions"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        };
+        let opencode = instructions("{\"clientInfo\":{\"name\":\"opencode\"}}");
+        assert!(opencode.contains("tools.sieve."));
+        assert!(!opencode.contains("ToolSearch"));
+        assert!(instructions("{}").contains("ToolSearch"));
+    }
+
     #[test]
     fn test_p4_26_initialize_echoes_the_protocol_version_as_sent() {
         let (out, _) =
@@ -409,7 +382,7 @@ mod tests {
 
     /// A temp dir that removes itself on drop, also after a failed
     /// assert.
-    struct Scratch(PathBuf);
+    struct Scratch(std::path::PathBuf);
 
     impl Scratch {
         fn new(label: &str) -> Self {
@@ -450,8 +423,6 @@ mod tests {
             format!("gitdir: {}\n", main.join(".git/worktrees/wt").display()),
         )
         .unwrap();
-        assert_eq!(main_worktree_root(&wt), Some(main.clone()));
-        assert_eq!(main_worktree_root(&main), None);
         assert!(advertised(&wt, &wt.join("sieve"), false));
     }
 

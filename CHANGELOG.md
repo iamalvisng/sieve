@@ -5,6 +5,23 @@ All notable changes to this project are in this file.
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.11] - 2026-11-10
+
+This release sends plain code searches through Sieve in Claude Code and OpenCode, and gives each git worktree its own index.
+
+### Added
+
+- Claude Code: a plain `rg` or `grep` over code files runs as `sieve find` once. The output starts with `[sieve] answered by: <command>`. If `sieve find` has no hits, the original search runs. The same command sent again runs the raw search. The rule covers the common flags (`-n`, `-i`, `-w`, `-l`, `-F`, `-r`, one `-e`), code-file globs and a `cd <dir> &&` prefix inside the repo.
+- Claude Code: the Grep tool gets one note that names the `sieve find` command. The same Grep sent again runs.
+- OpenCode: the plugin stops a plain code grep once and names the `sieve find` command. The MCP instructions give OpenCode its own tool load line.
+- A query in a linked git worktree builds the worktree's own index from the main checkout's extract cache, so worktree answers match the worktree's files.
+- `sieve find` names the files that its hit cap dropped, on a `more files (N):` line.
+
+### Fixed
+
+- The refresh note prints the real count of changed files.
+- The `--dir` help no longer shows an internal note, and names where the worktree search stops.
+
 ## [0.2.10] - 2026-11-04
 
 This release makes `sieve why` find the decisions behind a file, and lets your agent link decision records to code.

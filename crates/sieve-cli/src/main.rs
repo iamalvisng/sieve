@@ -53,24 +53,6 @@ fn dir_help() -> String {
     )
 }
 
-/// The `--dir` flag's long help text: the field-naming rationale below is
-/// product-name-free, so it needs no branding, only its own function —
-/// clap only auto-fills `long_help` from a doc comment when neither
-/// `help` nor `long_help` is set explicitly.
-fn dir_long_help() -> String {
-    format!(
-        "{}\n\n\
-         This field is named `context_dir`, not `dir`, on purpose: clap \
-         derives an arg's id from its field name, and a global arg shares \
-         its id with any subcommand arg of the same name. Every subcommand \
-         below also has its own `dir` field (the repo-root positional), so \
-         naming this field `dir` made clap fill both fields from one \
-         `--dir` value — the repo root then silently became the context \
-         dir. The flag itself still reads `--dir` on the command line.",
-        dir_help()
-    )
-}
-
 /// Commander takes the
 /// next token as a required option's value, even `-1`, and lets a repeated
 /// flag win with its last value. `args_override_self` ports the second
@@ -85,8 +67,11 @@ struct Cli {
         allow_hyphen_values = true,
         value_name = "path",
         help = dir_help(),
-        long_help = dir_long_help()
+        long_help = dir_help()
     )]
+    // The field is `context_dir`, not `dir`, because clap derives an arg id from
+    // the field name. A global arg shares its id with a subcommand arg of the
+    // same name, and each subcommand has its own `dir` positional.
     context_dir: Option<PathBuf>,
 
     #[command(subcommand)]

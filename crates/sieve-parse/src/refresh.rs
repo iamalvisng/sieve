@@ -551,10 +551,10 @@ pub fn ensure_fresh_graph(
 
 /// The workspace refresh: refreshes each child's own graph in
 /// turn, under `<root>/<child>/<context dir name>`, never under the
-/// parent's context dir. The outcome carries no drift count of its own;
-/// the per-child sum rides in `note`, so [`refresh_note`] prints
-/// `refreshed the graph (? files changed) before answering — refreshed
-/// alpha (1 file changed) before answering`.
+/// parent's context dir. The outcome carries the sum of the child counts,
+/// so [`refresh_note`] prints `refreshed the graph (1 file changed) before
+/// answering — refreshed alpha (1 file changed) before answering`. If any
+/// child count is unknown, both brackets are left out.
 pub fn ensure_fresh_children(
     root: &Path,
     children: &[String],
@@ -565,7 +565,8 @@ pub fn ensure_fresh_children(
     }
     let name = sieve_core::product().context_dir_name();
     let mut refreshed_in: Vec<&str> = Vec::new();
-    let mut files = 0;
+    // `None` once any refreshed child reports 0, which means its count is unknown.
+    let mut files: Option<usize> = Some(0);
     for child in children {
         let child_root = root.join(child);
         let outcome = ensure_fresh_graph(&child_root, &child_root.join(name), opts);
@@ -573,22 +574,26 @@ pub fn ensure_fresh_children(
             continue;
         }
         refreshed_in.push(child);
-        files += outcome.changed_files;
+        files = match (files, outcome.changed_files) {
+            (Some(sum), n) if n > 0 => Some(sum + n),
+            _ => None,
+        };
     }
     if refreshed_in.is_empty() {
         return RefreshOutcome::default();
     }
-    let shown = if files == 0 {
-        "?".to_string()
-    } else {
-        files.to_string()
+    let (count, total) = match files {
+        Some(n) => {
+            let word = if n == 1 { "file" } else { "files" };
+            (format!(" ({n} {word} changed)"), n)
+        }
+        None => (String::new(), 0),
     };
-    let word = if files == 1 { "file" } else { "files" };
     RefreshOutcome {
         refreshed: true,
-        changed_files: 0,
+        changed_files: total,
         note: Some(format!(
-            "refreshed {} ({shown} {word} changed) before answering",
+            "refreshed {}{count} before answering",
             refreshed_in.join(", ")
         )),
     }
@@ -602,13 +607,14 @@ pub fn refresh_note(outcome: &RefreshOutcome) -> Option<String> {
     if outcome.refreshed {
         let n = outcome.changed_files;
         let word = if n == 1 { "file" } else { "files" };
-        let shown = if n == 0 {
-            "?".to_string()
+        // A zero count means the rebuild did not know the drift size.
+        let count = if n == 0 {
+            String::new()
         } else {
-            n.to_string()
+            format!(" ({n} {word} changed)")
         };
         let built = format!(
-            "{} refreshed the graph ({shown} {word} changed) before answering",
+            "{} refreshed the graph{count} before answering",
             sieve_core::product().prefix()
         );
         return Some(match &outcome.note {
@@ -816,7 +822,7 @@ mod tests {
 
     /// The child refresh rebuilds only the drifted child, under
     /// that child's own context dir, and the note names the child with
-    /// the per-child file sum behind the `?` count.
+    /// the per-child file sum behind the count.
     #[test]
     fn test_p2_39_ensure_fresh_children_refreshes_each_child_in_turn() {
         let dir = TempDir::new("children");
@@ -839,14 +845,14 @@ mod tests {
             outcome,
             RefreshOutcome {
                 refreshed: true,
-                changed_files: 0,
+                changed_files: 1,
                 note: Some("refreshed alpha (1 file changed) before answering".to_string()),
             }
         );
         assert_eq!(
             refresh_note(&outcome).as_deref(),
             Some(
-                "[sieve] refreshed the graph (? files changed) before answering — refreshed alpha (1 file changed) before answering"
+                "[sieve] refreshed the graph (1 file changed) before answering — refreshed alpha (1 file changed) before answering"
             )
         );
         assert!(!wiring_path(&dir.path.join("sieve")).is_file());
@@ -859,6 +865,39 @@ mod tests {
         assert_eq!(
             ensure_fresh_children(&dir.path, &children, &disabled),
             RefreshOutcome::default()
+        );
+    }
+
+    /// A child with an unknown count makes the total unknown, so the
+    /// note carries no bracket in place of a sum that hides the gap.
+    #[test]
+    fn test_p2_39_an_unknown_child_count_leaves_out_the_bracket() {
+        let dir = TempDir::new("children-unknown");
+        for child in ["alpha", "beta"] {
+            write_repo_file(
+                &dir.path,
+                &format!("{child}/a.ts"),
+                "export function a() {}\n",
+            );
+            rebuild_graph_only(&dir.path.join(child), &dir.path.join(child).join("sieve"))
+                .expect("build child");
+        }
+        write_repo_file(&dir.path, "alpha/b.ts", "export function b() {}\n");
+        // Without a fingerprint the beta refresh cannot count its drift.
+        let beta_context = dir.path.join("beta").join("sieve");
+        let fp = fingerprint_path(&beta_context, &crate::extractor_stamp());
+        std::fs::remove_file(&fp).expect("remove fingerprint");
+        let children = vec!["alpha".to_string(), "beta".to_string()];
+        let outcome = ensure_fresh_children(&dir.path, &children, &RefreshOptions::default());
+        assert!(outcome.refreshed);
+        assert_eq!(outcome.changed_files, 0);
+        assert_eq!(
+            outcome.note.as_deref(),
+            Some("refreshed alpha, beta before answering")
+        );
+        assert_eq!(
+            refresh_note(&outcome).as_deref(),
+            Some("[sieve] refreshed the graph before answering — refreshed alpha, beta before answering")
         );
     }
 

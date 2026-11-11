@@ -43,6 +43,11 @@ The hooks run `sieve hook <name>`, so `sieve` must be on your `PATH`.
 - Remembered reads: the second read of an unchanged file gets this note:
   "[sieve] a.ts is unchanged since your last read. Use that copy. If you no
   longer hold it, read again." The third read passes. A changed file passes.
+- Code search: a plain `rg` or `grep` over code files runs as `sieve find`
+  once. The output starts with `[sieve] answered by: <command>`. If
+  `sieve find` has no hits, the original search runs. The same command
+  sent again runs the raw search. The Grep tool gets one note that names
+  the `sieve find` command; the same Grep sent again runs.
 - Hooks also run at session start, at each prompt and at stop.
 
 `--no-hooks` skips hook installation for other agents.

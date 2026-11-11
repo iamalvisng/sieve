@@ -65,6 +65,11 @@ pub fn query_root_with_note(
             };
             return (current, note);
         }
+        // A linked worktree has its own files, so main's index would give
+        // the wrong lines. Stop here and let the first build run.
+        if sieve_core::worktree::main_worktree_root(&current).is_some() {
+            return (current, None);
+        }
         match current.parent() {
             Some(parent) => {
                 current = parent.to_path_buf();
@@ -267,4 +272,47 @@ pub fn read_wiring_named(context_dir: &Path) -> Result<Graph, String> {
     }
     let bytes = std::fs::read(&wiring_path).map_err(|e| e.to_string())?;
     serde_json::from_slice(&bytes).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::process::Command;
+
+    fn git(dir: &Path, args: &[&str]) {
+        let out = Command::new("git")
+            .current_dir(dir)
+            .args(["-c", "user.email=t@t", "-c", "user.name=t"])
+            .args(args)
+            .output()
+            .expect("run git");
+        assert!(out.status.success(), "git {args:?}: {out:?}");
+    }
+
+    #[test]
+    fn a_nested_worktree_query_never_opens_the_main_index() {
+        let tmp = std::env::temp_dir().join(format!("sieve-qroot-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let main = std::fs::canonicalize({
+            std::fs::create_dir_all(&tmp).unwrap();
+            &tmp
+        })
+        .unwrap()
+        .join("main");
+        std::fs::create_dir_all(main.join("sieve/.graph")).unwrap();
+        std::fs::write(main.join("sieve/.graph/wiring.json"), "{}").unwrap();
+        git(&main, &["init", "-q"]);
+        git(&main, &["commit", "-q", "--allow-empty", "-m", "x"]);
+        let wt = main.join(".claude/worktrees/x");
+        git(&main, &["worktree", "add", "-q", wt.to_str().unwrap()]);
+        std::fs::create_dir_all(wt.join("src/deep")).unwrap();
+
+        let (root, note) = query_root_with_note(None, None, &wt.join("src/deep"));
+        assert_eq!(root, wt);
+        assert_eq!(note, None);
+        // The main checkout still answers from its own index.
+        let (root, _) = query_root_with_note(None, None, &main.join(".claude"));
+        assert_eq!(root, main);
+        std::fs::remove_dir_all(&tmp).unwrap();
+    }
 }

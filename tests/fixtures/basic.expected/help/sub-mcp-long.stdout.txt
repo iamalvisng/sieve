@@ -4,7 +4,8 @@ Serve the graph over MCP (stdio) — exposes sieve_query, sieve_callers,
 sieve_find, sieve_symbols, sieve_map, sieve_why and sieve_check as tools
 
 Arguments:
-  dir         repository root (default: nearest ancestor with a sieve/ index)
+  dir         repository root (default: the nearest folder with a sieve/ index;
+              the walk stops at a linked git worktree)
 
 Options:
   -h, --help  display help for command

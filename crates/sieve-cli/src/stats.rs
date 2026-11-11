@@ -17,7 +17,7 @@ use crate::ui::Ui;
 /// Flags for `sieve stats`.
 #[derive(Args, Debug)]
 pub struct StatsArgs {
-    /// repository root (default: nearest ancestor with a sieve/ index)
+    /// repository root (default: the nearest folder with a sieve/ index; the walk stops at a linked git worktree)
     #[arg(value_name = "dir")]
     pub dir: Option<PathBuf>,
     /// output the session stats as JSON

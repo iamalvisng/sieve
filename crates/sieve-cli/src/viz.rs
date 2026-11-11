@@ -26,7 +26,7 @@ pub(crate) const VIEWER: Viewer<'static> = Viewer {
 /// Flags for `sieve viz`.
 #[derive(Args, Debug)]
 pub struct VizArgs {
-    /// The repo root. Default: the nearest ancestor with a graph.
+    /// The repo root. Default: the nearest folder with a graph; the walk stops at a linked git worktree.
     #[arg(value_name = "dir")]
     pub dir: Option<PathBuf>,
 

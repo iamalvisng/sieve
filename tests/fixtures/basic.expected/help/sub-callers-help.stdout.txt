@@ -6,8 +6,8 @@ it calls); --depth N (or all) walks transitively for full blast radius
 Arguments:
   symbol                bare name, qualified (Class.method), or
                         package-qualified (pkg.Fn)
-  dir                   repository root (default: nearest ancestor with a sieve/
-                        index)
+  dir                   repository root (default: the nearest folder with a
+                        sieve/ index; the walk stops at a linked git worktree)
 
 Options:
   --direction <in|out>  link direction: "in" = callers (default), "out" =

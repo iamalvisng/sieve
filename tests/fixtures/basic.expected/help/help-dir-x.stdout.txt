@@ -5,8 +5,8 @@ or code ($0, no key)
 
 Arguments:
   query            what you want to understand, in plain words
-  dir              repository root (default: nearest ancestor with a sieve/
-                   index)
+  dir              repository root (default: the nearest folder with a sieve/
+                   index; the walk stops at a linked git worktree)
 
 Options:
   -n, --limit <n>  max results (default: "8")

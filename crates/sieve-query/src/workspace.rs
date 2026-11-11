@@ -121,6 +121,7 @@ pub fn federate_grep(
     let mut files_searched = 0;
     let mut total_hits = 0;
     let mut truncated = GrepTruncated { files: 0, hits: 0 };
+    let mut dropped_files: Vec<String> = Vec::new();
     let mut saved_files = 0;
     let mut saved_chars = 0;
     for ChildGraph { child, root, graph } in &graphs.loaded {
@@ -129,6 +130,7 @@ pub fn federate_grep(
         total_hits += r.total_hits;
         truncated.files += r.truncated.files;
         truncated.hits += r.truncated.hits;
+        dropped_files.extend(r.dropped_files.iter().map(|p| format!("{child}/{p}")));
         let paths: Vec<String> = r.groups.iter().map(|g| g.path.clone()).collect();
         if let Some((files, chars)) = saved_for(graph, &paths) {
             saved_files += files;
@@ -154,6 +156,7 @@ pub fn federate_grep(
             total_hits,
             groups,
             truncated,
+            dropped_files,
         },
         saved_files,
         saved_chars,

@@ -72,6 +72,10 @@ pub struct GrepResult {
     pub total_hits: usize,
     pub groups: Vec<GrepGroup>,
     pub truncated: GrepTruncated,
+    /// The files whose every hit the cap dropped, in search order. The text
+    /// report names them; the JSON report leaves them out.
+    #[serde(skip)]
+    pub dropped_files: Vec<String>,
 }
 
 impl GrepResult {
@@ -582,6 +586,7 @@ fn grep_with<T: AsRef<str>>(
     let mut total_hits = 0usize;
     let mut truncated_hits = 0usize;
     let mut truncated_files = 0usize;
+    let mut dropped_files: Vec<String> = Vec::new();
 
     for file_node in &file_nodes {
         let full_path = repo_root.join(&file_node.path);
@@ -617,6 +622,9 @@ fn grep_with<T: AsRef<str>>(
             let line = (idx + 1) as u32;
             if total_hits >= opts.max_hits {
                 truncated_hits += 1;
+                if dropped_files.last() != Some(&file_node.path) {
+                    dropped_files.push(file_node.path.clone());
+                }
                 continue;
             }
             let hit_text = truncate_utf16(raw_line.trim(), MAX_HIT_TEXT);
@@ -668,6 +676,10 @@ fn grep_with<T: AsRef<str>>(
         }
     }
 
+    // Only the file that straddles the cap has both shown and dropped hits.
+    let shown: std::collections::HashSet<&str> = groups.iter().map(|g| g.path.as_str()).collect();
+    dropped_files.retain(|p| !shown.contains(p.as_str()));
+
     groups.sort_by(|a, b| {
         b.in_degree
             .cmp(&a.in_degree)
@@ -683,6 +695,7 @@ fn grep_with<T: AsRef<str>>(
             files: truncated_files,
             hits: truncated_hits,
         },
+        dropped_files,
     })
 }
 
@@ -728,6 +741,9 @@ fn format_group(g: &GrepGroup) -> String {
     format!("{header}\n{}", hit_lines.join("\n"))
 }
 
+/// The most dropped file names the text report prints.
+const MAX_DROPPED_FILES: usize = 200;
+
 /// Renders a [`GrepResult`] as the plain-text `grep` report.
 pub fn format_grep_result(r: &GrepResult) -> String {
     let files_hit: std::collections::HashSet<&str> =
@@ -757,6 +773,21 @@ pub fn format_grep_result(r: &GrepResult) -> String {
             "{header}\ntruncated: {} \u{b7} narrow with --in, or use a shorter pattern",
             note_parts.join(", ")
         )
+    };
+
+    // The cap drops hit lines. This line keeps the file list whole, so an
+    // agent that wants only file names still sees every file.
+    let head = if r.dropped_files.is_empty() {
+        head
+    } else {
+        let total = r.dropped_files.len();
+        let shown = &r.dropped_files[..total.min(MAX_DROPPED_FILES)];
+        let count = if shown.len() < total {
+            format!("{total}, first {MAX_DROPPED_FILES} shown")
+        } else {
+            total.to_string()
+        };
+        format!("{head}\nmore files ({count}): {}", shown.join(", "))
     };
 
     let mut parts: Vec<String> = vec![head, String::new()];
@@ -1112,6 +1143,34 @@ mod tests {
             )
         );
         assert_eq!(text.lines().nth(2), Some(""));
+    }
+
+    #[test]
+    fn dropped_files_name_every_file_the_cap_cut_whole() {
+        // a.ts holds 301 hits and fills the cap; b.ts and c.ts hold hits and
+        // lose all of them; d.ts holds none.
+        let mut graph = empty_graph();
+        let names = ["a.ts", "b.ts", "c.ts", "d.ts"];
+        for name in names {
+            graph.nodes.push(file_node(name, 301));
+        }
+        let dir = tempdir("dropped-files");
+        write_301_hits(&dir);
+        std::fs::write(dir.join("b.ts"), "hit();\n").expect("write b");
+        std::fs::write(dir.join("c.ts"), "hit();\nhit();\n").expect("write c");
+        std::fs::write(dir.join("d.ts"), "none\n").expect("write d");
+        let result = grep_graph(&graph, &dir, "hit", &default_opts()).expect("grep runs");
+        let mut named: Vec<&str> = result.groups.iter().map(|g| g.path.as_str()).collect();
+        named.extend(result.dropped_files.iter().map(String::as_str));
+        named.sort_unstable();
+        named.dedup();
+        assert_eq!(
+            named,
+            ["a.ts", "b.ts", "c.ts"],
+            "shown plus dropped is every matching file"
+        );
+        let text = format_grep_result(&result);
+        assert_eq!(text.lines().nth(2), Some("more files (2): b.ts, c.ts"));
     }
 
     #[test]

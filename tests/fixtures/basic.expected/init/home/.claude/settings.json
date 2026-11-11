@@ -115,6 +115,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sieve hook pre-read",
+            "timeout": 5
+          }
+        ]
       }
     ]
   }

@@ -4,7 +4,7 @@
 //! event that denies a second read of a file whose content has not changed
 //! since the last read.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs::File;
 use std::io::{Read as _, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
@@ -74,7 +74,13 @@ pub fn run(args: &HookArgs, _dir_override: Option<&Path>) -> Result<(), String> 
         "cursor-session-end" => {}
         "pre-read" => {
             let text = if is_bash_call(&input) {
-                handle_pre_bash(&input, &project_dir)
+                // A plain code search is rewritten once; any other Bash call
+                // goes on to the large-read rewrite. One process runs per call.
+                handle_pre_search_rewrite(&input, &project_dir)
+                    .or_else(|| handle_pre_bash(&input, &project_dir))
+            } else if is_grep_call(&input) {
+                handle_pre_search_deny(&input, &project_dir)
+                    .map(|reason| pre_search_deny_json(&reason))
             } else {
                 handle_pre_read(&input, &project_dir)
             };
@@ -95,6 +101,11 @@ pub fn run(args: &HookArgs, _dir_override: Option<&Path>) -> Result<(), String> 
         // Legacy: the 0.1.2 `pre-search` hook added `-n`. Routing is output
         // only now, so an old config that still calls it gets no output.
         "pre-search" => {}
+        "pre-search-deny" => {
+            if let Some(text) = handle_pre_search_deny(&input, &project_dir) {
+                print!("{text}");
+            }
+        }
         "post-search" => {
             if let Some(text) = crate::route::post_search(&input, &project_dir) {
                 print!("{text}");
@@ -549,6 +560,14 @@ pub struct SessionState {
     /// agent to link the decision records. The note shows once per session.
     #[serde(rename = "linkNoted", default, skip_serializing_if = "is_false")]
     pub link_noted: bool,
+    /// The search commands the deny rule refused once and has not yet let
+    /// through. The same command sent again runs, and leaves this set.
+    #[serde(
+        rename = "deniedSearches",
+        default,
+        skip_serializing_if = "BTreeSet::is_empty"
+    )]
+    pub denied_searches: BTreeSet<String>,
 }
 
 /// The three lookup counts of one day.
@@ -1697,6 +1716,88 @@ fn handle_pre_read(input: &Value, project_dir: &Path) -> Option<String> {
     recorded.then(|| pre_read_narrow_json(file_path))
 }
 
+/// Denies a plain code search once. The record keeps the refused command, so
+/// the same command sent again passes and a different command is denied. A
+/// call with no session id, or a record that does not reach the disk, passes.
+fn handle_pre_search_deny(input: &Value, project_dir: &Path) -> Option<String> {
+    search_once(input, project_dir).map(|plan| plan.deny_text())
+}
+
+/// Rewrites a plain Bash code search once to the equal `find` command, which
+/// falls back to the original search when `find` prints nothing. It returns
+/// the `PreToolUse` allow JSON. It keeps every other `tool_input` field. The
+/// once-only record is the one the deny uses: the same command sent again
+/// passes untouched.
+fn handle_pre_search_rewrite(input: &Value, project_dir: &Path) -> Option<String> {
+    let plan = search_once(input, project_dir)?;
+    let exe = std::env::current_exe().ok()?;
+    let mut tool_input = input.get("tool_input")?.clone();
+    let original = tool_input.get("command")?.as_str()?.to_string();
+    tool_input["command"] = Value::from(plan.rewrite(exe.to_str()?, &original));
+    Some(
+        serde_json::json!({
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "allow",
+                "updatedInput": tool_input,
+            },
+        })
+        .to_string(),
+    )
+}
+
+/// The plan for a plain code search that the once-only record has not seen.
+/// The record keeps the command, so the same command sent again passes and a
+/// different command gets a plan. A call with no session id, or a record that
+/// does not reach the disk, passes.
+fn search_once(input: &Value, project_dir: &Path) -> Option<crate::route::FindPlan> {
+    input
+        .get("session_id")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())?;
+    let plan = crate::route::pre_search_plan(input, project_dir)?;
+    // The key holds only the fields that decide the search. The host adds
+    // `description`, `timeout` and similar fields to a Bash call and the model
+    // changes them on a repeat, so they stay out. A Grep call that reaches
+    // here holds only a pattern, a path and `-i`, so a changed path or case
+    // flag is a new search. The tool name keeps a Bash and a Grep apart.
+    let tool_input = input.get("tool_input")?;
+    let field = |name: &str| tool_input.get(name).cloned().unwrap_or(Value::Null);
+    let command = if is_grep_call(input) {
+        serde_json::json!([
+            "Grep",
+            field("pattern"),
+            field("path"),
+            field("-i"),
+            field("glob"),
+            field("type")
+        ])
+    } else {
+        serde_json::json!(["Bash", field("command")])
+    }
+    .to_string();
+    let session_key = lookup_key(input);
+    let (deny, recorded) =
+        update_session_checked(project_dir, &session_key, SESSION_LOCK_WAIT_MS, |session| {
+            // The second identical command passes and clears its record.
+            !session.denied_searches.remove(&command) && session.denied_searches.insert(command)
+        });
+    (deny && recorded).then_some(plan)
+}
+
+/// Builds the `PreToolUse` deny payload that gives Claude Code the search
+/// deny text as the reason.
+fn pre_search_deny_json(reason: &str) -> String {
+    serde_json::json!({
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": reason,
+        },
+    })
+    .to_string()
+}
+
 /// Builds the `PreToolUse` allow payload that narrows the Read to the first
 /// `NARROWED_LINES` lines through `updatedInput`.
 fn pre_read_narrow_json(file_path: &str) -> String {
@@ -1817,6 +1918,11 @@ fn why_read_notes(
 /// True when the hook stdin names the Bash tool.
 fn is_bash_call(input: &Value) -> bool {
     input.get("tool_name").and_then(Value::as_str) == Some("Bash")
+}
+
+/// True when the hook stdin names the Grep tool.
+fn is_grep_call(input: &Value) -> bool {
+    input.get("tool_name").and_then(Value::as_str) == Some("Grep")
 }
 
 /// Narrows a Bash read of one large file. `classify` accepts a `cat`,
@@ -4439,5 +4545,131 @@ mod tests {
             .nodes
             .iter()
             .any(|n| n.path == "new0.ts"));
+    }
+
+    fn deny_input(root: &Path, session: Option<&str>, command: &str) -> Value {
+        let mut input = serde_json::json!({
+            "cwd": root.to_string_lossy(),
+            "tool_name": "Bash",
+            "tool_input": {"command": command},
+        });
+        if let Some(id) = session {
+            input["session_id"] = Value::from(id);
+        }
+        input
+    }
+
+    #[test]
+    fn test_pre_search_deny_allows_the_repeat_and_denies_a_new_command() {
+        let dir = crate::route::tests::fixture("deny-repeat");
+        let root = dir.0.as_path();
+        let first = deny_input(root, Some("s1"), "rg total crates");
+        let other = deny_input(root, Some("s1"), "rg input crates");
+        assert!(
+            handle_pre_search_deny(&first, root).is_some(),
+            "first denies"
+        );
+        assert!(
+            handle_pre_search_deny(&other, root).is_some(),
+            "a new command denies"
+        );
+        assert_eq!(handle_pre_search_deny(&first, root), None, "repeat passes");
+        assert!(
+            handle_pre_search_deny(&first, root).is_some(),
+            "the repeat spent the escape, so the next one denies again"
+        );
+        let other_session = deny_input(root, Some("s2"), "rg total crates");
+        assert!(
+            handle_pre_search_deny(&other_session, root).is_some(),
+            "per session"
+        );
+    }
+
+    #[test]
+    fn test_pre_search_deny_key_holds_only_the_search_fields() {
+        let dir = crate::route::tests::fixture("deny-key");
+        let root = dir.0.as_path();
+        let mut first = deny_input(root, Some("s1"), "rg total crates");
+        first["tool_input"]["description"] = Value::from("Search for total");
+        let mut repeat = deny_input(root, Some("s1"), "rg total crates");
+        repeat["tool_input"]["description"] = Value::from("Look again for total");
+        repeat["tool_input"]["timeout"] = Value::from(5000);
+        assert!(handle_pre_search_deny(&first, root).is_some());
+        assert_eq!(handle_pre_search_deny(&repeat, root), None);
+
+        let grep = |path: &str| {
+            serde_json::json!({
+                "cwd": root.to_string_lossy(),
+                "session_id": "s2",
+                "tool_name": "Grep",
+                "tool_input": {"pattern": "total", "path": path},
+            })
+        };
+        assert!(handle_pre_search_deny(&grep("crates/engine"), root).is_some());
+        assert!(
+            handle_pre_search_deny(&grep("crates/engine/src"), root).is_some(),
+            "a changed path is a new search"
+        );
+    }
+
+    #[test]
+    fn test_pre_search_rewrite_keeps_the_other_fields_and_runs_once() {
+        let dir = crate::route::tests::fixture("rewrite-once");
+        let root = dir.0.as_path();
+        let mut first = deny_input(root, Some("s1"), "rg -w total crates");
+        first["tool_input"]["description"] = Value::from("Find total");
+        first["tool_input"]["timeout"] = Value::from(5000);
+        let json: Value =
+            serde_json::from_str(&handle_pre_search_rewrite(&first, root).expect("rewrites"))
+                .expect("json");
+        let hso = &json["hookSpecificOutput"];
+        assert_eq!(hso["hookEventName"], "PreToolUse");
+        assert_eq!(hso["permissionDecision"], "allow");
+        let updated = &hso["updatedInput"];
+        assert_eq!(updated["description"], "Find total");
+        assert_eq!(updated["timeout"], 5000);
+        let command = updated["command"].as_str().expect("command");
+        assert!(
+            command.contains(" find '\\btotal\\b' --in 'crates'"),
+            "{command}"
+        );
+        assert!(
+            command.ends_with("else\n{\nrg -w total crates\n}\nfi"),
+            "{command}"
+        );
+        // The repeat passes untouched; a missing session id passes too.
+        assert_eq!(handle_pre_search_rewrite(&first, root), None);
+        let no_session = deny_input(root, None, "rg -w total crates");
+        assert_eq!(handle_pre_search_rewrite(&no_session, root), None);
+    }
+
+    #[test]
+    fn test_pre_search_deny_json_is_the_claude_code_shape() {
+        let json: Value =
+            serde_json::from_str(&pre_search_deny_json("use sieve find")).expect("json");
+        let hso = &json["hookSpecificOutput"];
+        assert_eq!(hso["hookEventName"], "PreToolUse");
+        assert_eq!(hso["permissionDecision"], "deny");
+        assert_eq!(hso["permissionDecisionReason"], "use sieve find");
+    }
+
+    #[test]
+    fn test_pre_search_deny_ignores_a_missing_session_id() {
+        let dir = crate::route::tests::fixture("deny-no-session");
+        let input = deny_input(&dir.0, None, "rg total crates");
+        assert_eq!(handle_pre_search_deny(&input, &dir.0), None);
+    }
+
+    #[test]
+    fn test_pre_search_deny_passes_when_the_record_cannot_be_written() {
+        let dir = crate::route::tests::fixture("deny-no-record");
+        let input = deny_input(&dir.0, Some("s1"), "rg total crates");
+        // A file where the session folder must go makes the write fail.
+        let session = session_path(&dir.0, "s1");
+        let folder = session.parent().expect("session folder").to_path_buf();
+        let _ = std::fs::remove_dir_all(&folder);
+        std::fs::create_dir_all(folder.parent().expect("parent")).expect("mkdir");
+        std::fs::write(&folder, "x").expect("block the folder");
+        assert_eq!(handle_pre_search_deny(&input, &dir.0), None);
     }
 }

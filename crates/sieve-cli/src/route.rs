@@ -106,6 +106,45 @@ struct SearchArgs {
     paths: Vec<String>,
     /// The file of a `<file` redirect.
     stdin: Option<String>,
+    /// The first word that is not a flag. `None` when `-e` or `--regexp`
+    /// gives the pattern.
+    pattern: Option<String>,
+    /// The tool is `rg`, not `grep`.
+    rg: bool,
+    /// `-i` is present.
+    ignore_case: bool,
+    /// `-F` or `--fixed-strings` is present.
+    fixed: bool,
+    /// A flag outside the small set that `find` can answer.
+    other_flag: bool,
+    /// A flag outside the wider set that the deny rule accepts.
+    deny_off: bool,
+    /// `-w` or `--word-regexp` is present.
+    word: bool,
+    /// `-l` or `--files-with-matches` is present.
+    files_only: bool,
+    /// The values of `-e` and `--regexp`.
+    e_patterns: Vec<String>,
+    /// The values of the glob flags that keep files (`-g`, `--glob`, `--include`).
+    globs: Vec<String>,
+    /// The values of `-t` and `--type`.
+    types: Vec<String>,
+}
+
+impl SearchArgs {
+    /// Records one flag that takes a value, for the deny rule. A flag that
+    /// the rule does not know turns the rule off for this search.
+    fn note_valued(&mut self, name: &str, value: Option<String>) {
+        let value = value.unwrap_or_default();
+        match (name, self.rg) {
+            ("regexp", _) => self.e_patterns.push(value),
+            ("glob", true) | ("include", _) => self.globs.push(value),
+            ("type", true) => self.types.push(value),
+            // An exclude never adds a file to the search.
+            ("exclude" | "exclude-dir", _) => {}
+            _ => self.deny_off = true,
+        }
+    }
 }
 
 /// The directory a leading `cd` sets.
@@ -202,6 +241,7 @@ const VALUED_LONG: [&str; 18] = [
 fn parse_args(seg: &Segment, rg: bool, start: usize) -> SearchArgs {
     let mut args = SearchArgs {
         stdin: seg.stdin.clone(),
+        rg,
         ..SearchArgs::default()
     };
     let mut have_pattern = false;
@@ -212,6 +252,8 @@ fn parse_args(seg: &Segment, rg: bool, start: usize) -> SearchArgs {
         if flags_done || !text.starts_with('-') || text == "-" {
             if have_pattern {
                 args.paths.push(text.to_string());
+            } else {
+                args.pattern = Some(text.to_string());
             }
             have_pattern = true;
             continue;
@@ -226,25 +268,66 @@ fn parse_args(seg: &Segment, rg: bool, start: usize) -> SearchArgs {
                 None => (long, false),
             };
             args.line_numbers |= name == "line-number";
+            match name {
+                "fixed-strings" => args.fixed = true,
+                "line-number" | "no-heading" => {}
+                _ => args.other_flag = true,
+            }
+            let mut value = long.split_once('=').map(|(_, v)| v.to_string());
             args.recursive |= name == "recursive";
             args.blocked |= BLOCKED_LONG.iter().any(|f| text.starts_with(f));
             args.unsafe_flag |= UNSAFE_LONG.contains(&name);
             have_pattern |= name == "regexp";
             if !has_value && VALUED_LONG.contains(&name) {
-                words.next();
+                value = words.next().map(|w| w.text.clone());
+            }
+            match name {
+                "fixed-strings" | "line-number" | "no-heading" => {}
+                "word-regexp" => args.word = true,
+                "files-with-matches" => args.files_only = true,
+                "recursive" if !rg => {}
+                "regexp" | "glob" | "type" | "include" | "exclude" | "exclude-dir" => {
+                    args.note_valued(name, value);
+                }
+                _ => args.deny_off = true,
             }
             continue;
         }
         let mut cluster = text[1..].chars();
         while let Some(ch) = cluster.next() {
             args.line_numbers |= ch == 'n';
+            // In `rg`, `-r` replaces text. In `grep`, it means recursive.
+            match ch {
+                'i' => args.ignore_case = true,
+                'F' => args.fixed = true,
+                'n' | 'H' => {}
+                'r' | 'R' if !rg => {}
+                _ => args.other_flag = true,
+            }
+            match ch {
+                'i' | 'F' | 'n' | 'H' | 'e' => {}
+                'r' | 'R' if !rg => {}
+                'w' => args.word = true,
+                'l' => args.files_only = true,
+                'g' | 't' if rg => {}
+                _ => args.deny_off = true,
+            }
             args.recursive |= matches!(ch, 'r' | 'R');
             args.blocked |= BLOCKED_SHORT.contains(ch);
             args.unsafe_flag |= matches!(ch, 'z' | 'f');
             if VALUED_SHORT.contains(ch) || (rg && VALUED_SHORT_RG.contains(ch)) {
                 have_pattern |= ch == 'e';
-                if cluster.as_str().is_empty() {
-                    words.next();
+                let rest = cluster.as_str();
+                let value = if rest.is_empty() {
+                    words.next().map(|w| w.text.clone())
+                } else {
+                    Some(rest.to_string())
+                };
+                match ch {
+                    'e' => args.note_valued("regexp", value),
+                    'g' if rg => args.note_valued("glob", value),
+                    't' if rg => args.note_valued("type", value),
+                    _ => {}
                 }
                 break;
             }
@@ -377,6 +460,302 @@ fn shape_reason(
         .iter()
         .any(|s| !s.line_numbers)
         .then_some(Pass::NoN)
+}
+
+/// Characters that make a pattern or a path unsafe to repeat inside a
+/// quoted `find` command. The hook passes such a search.
+const UNQUOTABLE: [char; 12] = [
+    '"', '\\', '$', '`', '\n', '\'', ' ', '*', '?', '[', '<', '>',
+];
+
+/// Characters with a regex meaning. `grep`, `rg` and `find` read them in
+/// different dialects, so the hook denies a pattern with one only for `-F`.
+const REGEX_META: [char; 9] = ['.', '+', '(', ')', '{', '}', '^', '|', ']'];
+
+/// True when an indexed file lies under `prefix` (a root-relative folder, or
+/// empty for the root).
+fn index_has_file_under(context_dir: &Path, prefix: &str) -> Option<bool> {
+    let dir = format!("{prefix}/");
+    let under = |path: &str| prefix.is_empty() || path.starts_with(&dir);
+    Some(match hook::open_lookup(context_dir) {
+        Some(lookup) => lookup.paths().any(under),
+        None => hook::read_wiring(context_dir)?
+            .nodes
+            .iter()
+            .any(|n| n.kind == NodeKind::File && under(&n.path)),
+    })
+}
+
+/// `PreToolUse`: the deny text for one plain search of indexed code, or
+/// `None`. The text names the equal `find` command. The caller lets the same
+/// search run when the agent sends it again. Every doubt returns `None`: the
+/// call is compound, piped or redirected, a flag changes the meaning, the
+/// pattern is a regex, the target holds no indexed file, or the index is
+/// stale or absent.
+#[cfg(test)]
+pub(crate) fn pre_search(input: &Value, project_dir: &Path) -> Option<String> {
+    pre_search_plan(input, project_dir).map(|plan| plan.deny_text())
+}
+
+/// The `find` command that equals one plain search, with the `cd` the search
+/// runs after.
+#[derive(Debug, PartialEq)]
+pub(crate) struct FindPlan {
+    ignore_case: bool,
+    pattern: String,
+    /// The pattern is an identifier that `-w` matches as a whole word.
+    word: bool,
+    /// The root-relative folder or file, empty for the root.
+    scope: String,
+    /// The directory of a leading `cd <dir>`.
+    cd: Option<String>,
+}
+
+impl FindPlan {
+    /// The `find` command as the agent reads it.
+    fn display(&self) -> String {
+        let bin = crate::names::BIN;
+        let case = if self.ignore_case { " -i" } else { "" };
+        let pattern = &self.pattern;
+        let quoted = if self.word {
+            format!("\"\\b{pattern}\\b\"")
+        } else {
+            format!("--fixed \"{pattern}\"")
+        };
+        let scope = if self.scope.is_empty() {
+            String::new()
+        } else {
+            format!(" --in {}", self.scope)
+        };
+        format!("{bin} find{case} {quoted}{scope}")
+    }
+
+    /// The deny text for a search the host cannot rewrite.
+    pub(crate) fn deny_text(&self) -> String {
+        let bin = crate::names::BIN;
+        format!(
+            "[{bin}] Use: {}. {bin} find searches indexed code files only, and the same command sent again runs the raw search.",
+            self.display()
+        )
+    }
+
+    /// A shell command that runs `find` with the binary at `exe`. If `find`
+    /// prints nothing, or fails, the command runs `original` instead. If
+    /// `find` prints, the first line names the `find` command and says that
+    /// the same command sent again runs the raw search.
+    pub(crate) fn rewrite(&self, exe: &str, original: &str) -> String {
+        let mut find = format!("{} find", sh_quote(exe));
+        if self.ignore_case {
+            find.push_str(" -i");
+        }
+        if self.word {
+            find.push_str(&format!(
+                " {}",
+                sh_quote(&format!("\\b{}\\b", self.pattern))
+            ));
+        } else {
+            find.push_str(&format!(" --fixed {}", sh_quote(&self.pattern)));
+        }
+        if !self.scope.is_empty() {
+            find.push_str(&format!(" --in {}", sh_quote(&self.scope)));
+        }
+        let cd = self
+            .cd
+            .as_ref()
+            .map_or_else(String::new, |dir| format!("cd {} && ", sh_quote(dir)));
+        let note = format!(
+            "[{}] answered by: {} \u{b7} indexed code files only \u{b7} the same command sent again runs the raw search",
+            crate::names::BIN,
+            self.display()
+        );
+        format!(
+            "sieve_out=$({cd}{find} 2>/dev/null); if [ -n \"$sieve_out\" ]; then printf '%s\\n%s\\n' {} \"$sieve_out\"; else\n{{\n{original}\n}}\nfi",
+            sh_quote(&note)
+        )
+    }
+}
+
+/// Quotes one word for a POSIX shell: single quotes, and a quote inside the
+/// word closes, escapes and reopens the quotes.
+pub(crate) fn sh_quote(word: &str) -> String {
+    format!("'{}'", word.replace('\'', "'\\''"))
+}
+
+/// The plan behind [`pre_search`], or `None` on every doubt.
+pub(crate) fn pre_search_plan(input: &Value, project_dir: &Path) -> Option<FindPlan> {
+    let tool_input = input.get("tool_input")?;
+    let str_of = |key: &str| tool_input.get(key).and_then(Value::as_str);
+    let mut cd = Cd::None;
+    let (pattern, path, ignore_case, fixed, word) =
+        if input.get("tool_name").and_then(Value::as_str) == Some("Grep") {
+            // Any other field, such as context lines or multiline, changes the search.
+            let plain = tool_input.as_object()?.keys().all(|k| {
+                matches!(
+                    k.as_str(),
+                    "pattern" | "path" | "-i" | "-n" | "glob" | "type" | "output_mode"
+                )
+            });
+            let mode_ok = matches!(
+                str_of("output_mode"),
+                None | Some("content" | "files_with_matches")
+            );
+            let globs: Vec<String> = str_of("glob").map(String::from).into_iter().collect();
+            let types: Vec<String> = str_of("type").map(String::from).into_iter().collect();
+            if !plain || !mode_ok || !filters_are_code(&globs, &types) {
+                return None;
+            }
+            let ignore_case = tool_input.get("-i").and_then(Value::as_bool) == Some(true);
+            (
+                str_of("pattern")?.to_string(),
+                str_of("path").map(String::from),
+                ignore_case,
+                false,
+                false,
+            )
+        } else {
+            let command = str_of("command")?;
+            // A redirect or a substitution changes what the search reads or writes.
+            if command.contains(['<', '>', '`', '$']) {
+                return None;
+            }
+            let Analysis::Plan(plan) = analyze(command) else {
+                return None;
+            };
+            let [search] = plan.searches.as_slice() else {
+                return None;
+            };
+            let reads_stdin = !search.rg && !search.recursive && search.paths.is_empty();
+            // Exactly one pattern: the first word, or one `-e`.
+            let patterns = usize::from(search.pattern.is_some()) + search.e_patterns.len();
+            if plan.sources != 1
+                || plan.piped
+                || plan.cd == Cd::Compound
+                || search.deny_off
+                || search.unsafe_flag
+                || reads_stdin
+                || search.paths.len() > 1
+                || patterns != 1
+                || !filters_are_code(&search.globs, &search.types)
+            {
+                return None;
+            }
+            cd = plan.cd;
+            (
+                search
+                    .pattern
+                    .clone()
+                    .or_else(|| search.e_patterns.first().cloned())?,
+                search.paths.first().cloned(),
+                search.ignore_case,
+                search.fixed,
+                search.word,
+            )
+        };
+    if pattern.is_empty() || pattern.starts_with('-') || pattern.contains(UNQUOTABLE) {
+        return None;
+    }
+    // `-w` names the regex `\bname\b`, which `find` reads like the word
+    // match of `rg` only for a plain identifier.
+    if word {
+        if !pattern
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_')
+        {
+            return None;
+        }
+    } else if !fixed && pattern.contains(REGEX_META) {
+        return None;
+    }
+    if path
+        .as_deref()
+        .is_some_and(|p| p.contains(UNQUOTABLE) || non_code(p))
+    {
+        return None;
+    }
+    let context_dir = hook::resolve_context_dir(project_dir);
+    let wiring_time = std::fs::metadata(hook::wiring_path(&context_dir))
+        .and_then(|m| m.modified())
+        .ok()?;
+    if hook::index_freshness(project_dir, &context_dir).is_some_and(|f| f.missing > 0) {
+        return None;
+    }
+    let root = std::fs::canonicalize(project_dir).ok()?;
+    let cwd = input
+        .get("cwd")
+        .and_then(Value::as_str)
+        .filter(|c| !c.is_empty())
+        .map_or_else(|| project_dir.to_path_buf(), PathBuf::from);
+    // A `cd <dir>` moves the base of the path. A dir outside the project
+    // gives no index path, so the search passes.
+    let cwd = match &cd {
+        Cd::Dir(dir) => cwd.join(dir),
+        _ => cwd,
+    };
+    let rel = index_path(path.as_deref().unwrap_or("."), &cwd, &root)?;
+    let full = root.join(&rel);
+    if full.is_file() {
+        // A file target must be indexed and no newer than the index.
+        let fresh = std::fs::metadata(&full)
+            .and_then(|m| m.modified())
+            .is_ok_and(|t| t <= wiring_time);
+        let wanted = HashSet::from([rel.as_str()]);
+        let (indexed, _) = match hook::open_lookup(&context_dir) {
+            Some(lookup) => symbols_from_lookup(lookup, &wanted),
+            None => symbols_from_graph(&hook::read_wiring(&context_dir)?, &wanted),
+        };
+        if !fresh || indexed.is_empty() {
+            return None;
+        }
+    } else if !index_has_file_under(&context_dir, &rel)? {
+        // `find` would print no hit for a folder of documents or scripts.
+        return None;
+    }
+    Some(FindPlan {
+        ignore_case,
+        pattern,
+        word,
+        scope: rel,
+        cd: match cd {
+            Cd::Dir(dir) => Some(dir),
+            _ => None,
+        },
+    })
+}
+
+/// The `rg` type names whose whole file set the index holds. A type such as
+/// `java` or `php` also selects files the index does not hold (`.jsp`,
+/// `.phtml`), so `find` could give fewer matches. Those types pass.
+const CODE_TYPES: [(&str, &[&str]); 2] = [("rust", &["rs"]), ("go", &["go"])];
+
+/// True when every glob and type keeps only files of a language the index
+/// holds, so `find` covers at least the files the filter keeps. An exclude
+/// glob (`!...`) only removes files, so it is always fine.
+fn filters_are_code(globs: &[String], types: &[String]) -> bool {
+    let supported = crate::check::supported_extensions();
+    let indexed = |ext: &str| supported.contains(&format!(".{}", ext.to_lowercase()).as_str());
+    let glob_ok = |glob: &String| {
+        if glob.starts_with('!') {
+            return true;
+        }
+        // Only the file-name part (`*.ts`, `*.{ts,tsx}`) names extensions.
+        let name = glob.rsplit('/').next().unwrap_or(glob);
+        let Some(exts) = name.strip_prefix("*.") else {
+            return false;
+        };
+        let exts = exts.strip_prefix('{').and_then(|e| e.strip_suffix('}'));
+        let list = exts.unwrap_or(&name[2..]);
+        !list.is_empty()
+            && list
+                .split(',')
+                .all(|e| e.chars().all(|c| c.is_ascii_alphanumeric()) && indexed(e))
+    };
+    let type_ok = |name: &String| {
+        CODE_TYPES
+            .iter()
+            .find(|(n, _)| n == name)
+            .is_some_and(|(_, exts)| exts.iter().all(|e| indexed(e)))
+    };
+    globs.iter().all(glob_ok) && types.iter().all(type_ok)
 }
 
 /// `PostToolUse`: the `updatedToolOutput` JSON for a routed search, or
@@ -2044,5 +2423,297 @@ crates/engine/src/handlers/group_01_handlers.rs
         hook::set_test_wiring_cap(None);
         assert!(with.is_some(), "a valid lookup routes over the cap");
         assert!(without.is_none(), "no lookup passes over the cap");
+    }
+
+    fn pre_input(root: &Path, tool: &str, tool_input: Value) -> Value {
+        serde_json::json!({
+            "session_id": "s1",
+            "cwd": root.to_string_lossy(),
+            "tool_name": tool,
+            "tool_input": tool_input,
+        })
+    }
+
+    fn pre_bash(root: &Path, command: &str) -> Option<String> {
+        pre_search(
+            &pre_input(root, "Bash", serde_json::json!({"command": command})),
+            root,
+        )
+    }
+
+    #[test]
+    fn test_pre_search_names_the_equal_find_command() {
+        let dir = fixture("pre-deny");
+        let root = dir.0.as_path();
+        let handlers = "crates/engine/src/handlers";
+        assert_eq!(
+            pre_bash(root, &format!("rg handle_1 {handlers}")).as_deref(),
+            Some(&*format!(
+                "[sieve] Use: sieve find --fixed \"handle_1\" --in {handlers}. sieve find searches indexed code files only, and the same command sent again runs the raw search."
+            ))
+        );
+        let text = pre_bash(root, "grep -rn TODO .").expect("denies a folder search");
+        assert!(text.contains("sieve find --fixed \"TODO\". "), "{text}");
+        let text = pre_bash(root, "rg total").expect("denies a search with no path");
+        assert!(text.contains("sieve find --fixed \"total\". "), "{text}");
+        let text = pre_bash(root, "rg -in total crates").expect("carries -i");
+        assert!(
+            text.contains("find -i --fixed \"total\" --in crates."),
+            "{text}"
+        );
+        let text = pre_bash(root, "rg -F total.x crates").expect("-F allows any pattern");
+        assert!(
+            text.contains("find --fixed \"total.x\" --in crates."),
+            "{text}"
+        );
+        let tool = serde_json::json!({"pattern": "total", "path": handlers});
+        let text = pre_search(&pre_input(root, "Grep", tool), root).expect("denies the Grep tool");
+        assert!(
+            text.contains(&format!("sieve find --fixed \"total\" --in {handlers}.")),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn test_pre_search_passes_what_find_cannot_answer() {
+        let dir = fixture("pre-pass");
+        let root = dir.0.as_path();
+        let file = "crates/engine/src/handlers/group_00_handlers.rs";
+        std::fs::create_dir_all(root.join("scripts")).expect("mkdir scripts");
+        std::fs::write(root.join("scripts/run.sh"), "echo total\n").expect("script");
+        for command in [
+            "rg -v total crates",
+            "rg -o total crates",
+            "rg -x total crates",
+            "rg -E utf8 total crates",
+            "rg -P total crates",
+            "rg -r X total crates",
+            "rg 'foo(' crates",
+            "grep 'a+' -r crates",
+            "rg '(?i)total' crates",
+            "rg 'a.b' crates",
+            "rg total scripts",
+            "rg total | head",
+            "rg total && ls",
+            "rg total; ls",
+            "rg total $(pwd)",
+            "rg total > out.txt",
+            "rg total < in.txt",
+            "rg total README.md",
+            "rg -c total crates",
+            "rg --json total crates",
+            "rg --pre cat total crates",
+            "rg total a b",
+            "rg \"two words\" crates",
+            "rg 'a\"b' crates",
+            "grep total",
+            "rg total missing-folder",
+            "rg total ../outside",
+            "ls crates",
+            "sieve find total",
+        ] {
+            assert_eq!(pre_bash(root, command), None, "{command}");
+        }
+        let glob = serde_json::json!({"pattern": "total", "path": "crates", "glob": "*.md"});
+        assert_eq!(
+            pre_search(&pre_input(root, "Grep", glob), root),
+            None,
+            "glob field"
+        );
+        let tool = serde_json::json!({"pattern": "total", "path": "README.md"});
+        assert_eq!(
+            pre_search(&pre_input(root, "Grep", tool), root),
+            None,
+            "document target"
+        );
+        let command = format!("rg total {file}");
+        assert!(pre_bash(root, &command).is_some(), "a fresh indexed file");
+
+        // A file newer than the index passes.
+        let newer = std::time::SystemTime::now() + Duration::from_secs(60);
+        std::fs::File::options()
+            .write(true)
+            .open(root.join(file))
+            .and_then(|f| f.set_modified(newer))
+            .expect("touch");
+        assert_eq!(pre_bash(root, &command), None, "stale file");
+    }
+
+    #[test]
+    fn test_pre_search_shape_table() {
+        let dir = fixture("pre-shapes");
+        let root = dir.0.as_path();
+        let r = root.to_string_lossy();
+        // Each accepted shape names the `find` command that gives the same matches or more.
+        let word = |name: &str| format!("find \"\\b{name}\\b\"");
+        let fixed = |name: &str| format!("find --fixed \"{name}\"");
+        let deny = [
+            (
+                "rg -lw --glob '!sieve/**' -g '*.{ts,tsx}' roleAllows",
+                word("roleAllows") + ".",
+            ),
+            (
+                &format!("cd {r} && rg -nw --glob '!sieve/**' -g '*.{{ts,tsx}}' writeSetting"),
+                word("writeSetting") + ".",
+            ),
+            ("rg -w total", word("total") + "."),
+            ("grep -rnw total crates", word("total") + " --in crates."),
+            (
+                "rg -wi total crates",
+                "find -i \"\\btotal\\b\" --in crates.".to_string(),
+            ),
+            (
+                "rg --word-regexp total crates",
+                word("total") + " --in crates.",
+            ),
+            ("grep -rlw total crates", word("total") + " --in crates."),
+            ("rg -l total crates", fixed("total") + " --in crates."),
+            ("rg --files-with-matches total", fixed("total") + "."),
+            (
+                "rg -g '*.rs' total crates",
+                fixed("total") + " --in crates.",
+            ),
+            ("rg --glob=*.rs total", fixed("total") + "."),
+            ("rg -t rust total crates", fixed("total") + " --in crates."),
+            ("rg --type=go total", fixed("total") + "."),
+            (
+                "grep -rn --include='*.rs' total crates",
+                fixed("total") + " --in crates.",
+            ),
+            (
+                "grep -rn --exclude-dir=sieve --exclude='*.md' total crates",
+                fixed("total") + " --in crates.",
+            ),
+            ("rg -g '!*.md' total", fixed("total") + "."),
+            ("rg -e total crates", fixed("total") + " --in crates."),
+            ("rg -etotal crates", fixed("total") + " --in crates."),
+            ("cd crates && rg total", fixed("total") + " --in crates."),
+            (
+                "cd crates; rg total engine",
+                fixed("total") + " --in crates/engine.",
+            ),
+            (
+                &format!("cd {r}/crates && rg -w total ."),
+                word("total") + " --in crates.",
+            ),
+        ];
+        for (command, want) in deny {
+            let text = pre_bash(root, command).unwrap_or_else(|| panic!("denies: {command}"));
+            assert!(text.contains(&want), "{command}\n{text}");
+            // The same row gives a rewrite that falls back to the original.
+            let input = pre_input(root, "Bash", serde_json::json!({"command": command}));
+            let plan = pre_search_plan(&input, root).expect("a plan");
+            let rewritten = plan.rewrite("/opt/sieve", command);
+            assert!(rewritten.contains("'/opt/sieve' find"), "{rewritten}");
+            assert!(
+                rewritten.ends_with(&format!("else\n{{\n{command}\n}}\nfi")),
+                "{rewritten}"
+            );
+            assert!(
+                rewritten.contains("answered by: [sieve]")
+                    || rewritten.contains("answered by: sieve find"),
+                "{rewritten}"
+            );
+        }
+        let pass = [
+            "for p in a b; do rg -lw $p; done",
+            "rg -c -w x",
+            "rg -w x -g '*.md'",
+            "rg -w total crates | head",
+            "rg -v total crates",
+            "rg -A 2 total crates",
+            "rg -C2 -w total crates",
+            "rg -e total -e handle crates",
+            "rg total -e handle crates",
+            "rg -w 'a.b' crates",
+            "rg -w 'two words' crates",
+            "rg total crates -g '*.{rs,md}'",
+            "rg total -t md",
+            "rg total -t nosuchtype",
+            "rg -t php total crates",
+            "rg -t java total crates",
+            "rg -t ts total crates",
+            "rg -t rs total crates",
+            "rg --iglob '*.rs' total",
+            "cd /tmp && rg -w total",
+            "cd .. && rg -w total",
+            "cd crates && cd engine && rg total",
+            "rg -w total crates; ls",
+            "grep -rc total crates",
+            "rg 'a.b' crates",
+        ];
+        for command in pass {
+            assert_eq!(pre_bash(root, command), None, "{command}");
+        }
+        let tool = |tool_input: Value| pre_search(&pre_input(root, "Grep", tool_input), root);
+        let text = tool(serde_json::json!({
+            "pattern": "total", "glob": "*.rs", "output_mode": "files_with_matches", "-n": true
+        }))
+        .expect("Grep tool with a code glob");
+        assert!(text.contains(&(fixed("total") + ".")), "{text}");
+        let typed = serde_json::json!({"pattern": "total", "type": "go", "output_mode": "content"});
+        assert!(tool(typed).is_some());
+        assert!(tool(serde_json::json!({"pattern": "total", "output_mode": "count"})).is_none());
+        assert!(tool(serde_json::json!({"pattern": "total", "glob": "*.md"})).is_none());
+        assert!(tool(serde_json::json!({"pattern": "total", "-A": 2})).is_none());
+    }
+
+    #[test]
+    fn test_pre_search_rewrite_keeps_the_cd_and_quotes_every_word() {
+        let dir = fixture("pre-rewrite");
+        let root = dir.0.as_path();
+        let plan_of = |command: &str| {
+            let input = pre_input(root, "Bash", serde_json::json!({"command": command}));
+            pre_search_plan(&input, root)
+        };
+        let plan = plan_of("cd crates && rg -w total engine").expect("a plan");
+        let text = plan.rewrite("/opt/it's/sieve", "cd crates && rg -w total engine");
+        assert!(
+            text.starts_with(
+                "sieve_out=$(cd 'crates' && '/opt/it'\\''s/sieve' find '\\btotal\\b' --in 'crates/engine' 2>/dev/null);"
+            ),
+            "{text}"
+        );
+        assert!(
+            text.contains("printf '%s\\n%s\\n' '[sieve] answered by: sieve find "),
+            "{text}"
+        );
+        assert!(
+            text.contains(" \u{b7} indexed code files only \u{b7} the same command sent again runs the raw search'"),
+            "{text}"
+        );
+        // A trailing comment or `;` in the original cannot break the wrapper.
+        for original in ["grep -rn total crates # note", "grep -rn total crates;"] {
+            let input = pre_input(root, "Bash", serde_json::json!({"command": original}));
+            let plan = pre_search_plan(&input, root).expect("a plan");
+            let exe = root.join("no-such-sieve");
+            // A missing `sieve` binary makes `find` fail, so the original runs.
+            let script = plan.rewrite(exe.to_str().expect("utf8"), original);
+            let ran = std::process::Command::new("sh")
+                .arg("-c")
+                .arg(&script)
+                .current_dir(root)
+                .output()
+                .expect("run sh");
+            assert!(ran.status.success(), "{original}: {script}");
+            let out = String::from_utf8_lossy(&ran.stdout);
+            assert!(out.contains("group_00_handlers.rs:"), "{original}: {out}");
+        }
+        // A word that the shell could split or expand never reaches a command.
+        for command in [
+            "rg 'two words' crates",
+            "rg \"a'b\" crates",
+            "rg total 'my dir'",
+        ] {
+            assert!(plan_of(command).is_none(), "{command}");
+        }
+        assert_eq!(sh_quote("a'b c"), "'a'\\''b c'");
+    }
+
+    #[test]
+    fn test_pre_search_passes_without_an_index() {
+        let dir = Scratch::new("pre-no-index");
+        std::fs::write(dir.0.join("a.rs"), "fn total() {}\n").expect("write");
+        assert_eq!(pre_bash(&dir.0, "rg total a.rs"), None);
     }
 }

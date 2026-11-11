@@ -880,3 +880,52 @@ fn test_p4_24_25_statusline_matches_its_golden() {
 
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
+
+/// Runs the rewritten command of a `pre-read` Bash call in `copy`.
+fn run_rewritten(copy: &Path, session: &str, command: &str) -> String {
+    let stdin = serde_json::json!({
+        "session_id": session,
+        "cwd": copy,
+        "tool_name": "Bash",
+        "tool_input": {"command": command, "description": "search"},
+    })
+    .to_string();
+    let output = run_hook(copy, "pre-read", &stdin);
+    assert!(output.status.success());
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("the hook prints the rewrite JSON");
+    let rewritten = json["hookSpecificOutput"]["updatedInput"]["command"]
+        .as_str()
+        .expect("an updated command");
+    let ran = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(rewritten)
+        .current_dir(copy)
+        .output()
+        .expect("run the rewritten command");
+    String::from_utf8_lossy(&ran.stdout).into_owned()
+}
+
+#[test]
+fn test_rewritten_search_prints_sieve_hits_and_falls_back_to_the_raw_search() {
+    let tmp = TempDir::new("hooks-rewrite-run");
+    let copy = bare_copy(&tmp);
+    fs::write(copy.join("a.rs"), "fn needle_in_code() {}\n").expect("write a.rs");
+    fs::write(copy.join("notes.md"), "needle_in_docs only here\n").expect("write notes.md");
+    build(&copy);
+
+    let hit = run_rewritten(&copy, "s1", "grep -rn needle_in_code .");
+    assert!(
+        hit.starts_with(
+            "[sieve] answered by: sieve find --fixed \"needle_in_code\" \u{b7} indexed code files only \u{b7} the same command sent again runs the raw search"
+        ),
+        "{hit}"
+    );
+    assert!(hit.contains("a.rs"), "{hit}");
+
+    // Sieve finds nothing in a document, so the raw search prints its row.
+    let raw = run_rewritten(&copy, "s2", "grep -rn needle_in_docs .");
+    assert!(raw.contains("notes.md"), "{raw}");
+    assert!(raw.contains("needle_in_docs only here"), "{raw}");
+    assert!(!raw.contains("answered by"), "{raw}");
+}

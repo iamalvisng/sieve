@@ -1261,6 +1261,8 @@ fn merged_hooks_ojson(existing_hooks: Option<&OJson>) -> OJson {
             vec![
                 claude_hook_block(Some("Read"), "pre-read", 5),
                 claude_hook_block(Some("Bash"), "pre-read", 5),
+                // The same event denies a plain Grep tool search once.
+                claude_hook_block(Some("Grep"), "pre-read", 5),
             ],
         ),
     );
@@ -2380,6 +2382,29 @@ mod tests {
     }
 
     #[test]
+    fn init_registers_the_grep_search_hook_and_uninstall_removes_it() {
+        let dir = TempDir::new("claude-grep-hook");
+        let path = dir.path.join(".claude").join("settings.json");
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        merge_claude_global_hooks(&path).unwrap();
+        let value: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+        let grep = value["hooks"]["PreToolUse"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|e| e["matcher"] == "Grep")
+            .expect("a Grep matcher");
+        assert!(grep["hooks"][0]["command"]
+            .as_str()
+            .unwrap()
+            .contains("hook pre-read"));
+
+        strip_claude_global_hooks(&path, true).unwrap();
+        assert!(!path.exists(), "uninstall removes every Sieve entry");
+    }
+
+    #[test]
     fn merge_claude_global_hooks_keeps_a_foreign_hook_before_ours_and_is_idempotent() {
         let dir = TempDir::new("claude-global-hooks");
         let path = dir.path.join(".claude").join("settings.json");
@@ -3016,7 +3041,7 @@ mod tests {
         let text = hooks.to_pretty();
         assert!(!text.contains("pre-search"), "{text}");
         assert!(text.contains("my-own-tool"), "{text}");
-        assert_eq!(pre_tool_use_matchers(&hooks).len(), 3);
+        assert_eq!(pre_tool_use_matchers(&hooks).len(), 4);
     }
 
     #[test]
@@ -3029,5 +3054,19 @@ mod tests {
                 .any(|(m, c)| m == "Read" && c.ends_with("hook post-read")),
             "the merge must register post-read on the Read matcher, got: {commands:?}"
         );
+    }
+
+    #[test]
+    fn test_opencode_plugin_index_registers_the_search_deny_hook() {
+        let [(path, text), _] = opencode_plugin_files(Path::new("/repo"));
+        assert!(
+            path.ends_with(".opencode/plugins/sieve/index.ts"),
+            "{path:?}"
+        );
+        assert_eq!(text.lines().next(), Some(plugin_marker().as_str()));
+        assert!(text.contains("execute.before"));
+        assert!(text.contains("\"pre-search-deny\""));
+        assert!(text.contains("\"sieve\""), "the binary name is filled in");
+        assert!(!text.contains("__"), "a placeholder is left");
     }
 }

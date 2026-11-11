@@ -506,6 +506,11 @@ pub fn build_for_query(root: &Path, context_dir: &Path) -> Result<Option<usize>,
     if context_dir.join(".graph").join("wiring.json").is_file() {
         return Ok(None);
     }
+    if seed_from_main_checkout(root, context_dir) {
+        let report = sieve_parse::refresh::rebuild_graph_only(root, context_dir)
+            .map_err(|e| e.to_string())?;
+        return Ok(Some(report.files));
+    }
     let args = BuildArgs::plain(root);
     let (skip_gitignore, skip_ignore) = skip_ignore_edits(&args);
     let built = build_repo_locked(
@@ -521,6 +526,35 @@ pub fn build_for_query(root: &Path, context_dir: &Path) -> Result<Option<usize>,
         ui::print_error(&error.to_string());
     }
     Ok(Some(built.files))
+}
+
+/// Copies the extract cache of the main checkout into a linked worktree, so
+/// the first build parses only the files that differ. It copies only a cache
+/// at the current extractor stamp, because the build ignores any other. It
+/// writes a temp file, then renames it, so a reader never sees a half file.
+/// It also writes `.gitignore` with `*`, so git never sees the index.
+/// Returns `false` when it seeded nothing; the caller then builds cold.
+fn seed_from_main_checkout(root: &Path, context_dir: &Path) -> bool {
+    let Some(main) = sieve_core::worktree::main_worktree_root(root) else {
+        return false;
+    };
+    let stamp = sieve_parse::extractor_stamp();
+    let from = sieve_parse::cache::cache_path(&main.join(product().context_dir_name()), &stamp);
+    let to = sieve_parse::cache::cache_path(context_dir, &stamp);
+    let Some(cache_dir) = to.parent() else {
+        return false;
+    };
+    let tmp = cache_dir.join(format!(".extract-seed-{}", std::process::id()));
+    let copied = std::fs::create_dir_all(cache_dir)
+        .and_then(|()| std::fs::copy(&from, &tmp))
+        .and_then(|_| std::fs::rename(&tmp, &to));
+    if copied.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+        return false;
+    }
+    // A failed write only risks a visible index folder, not a wrong answer.
+    let _ = std::fs::write(context_dir.join(".gitignore"), "*\n");
+    true
 }
 
 /// What the build summary says.
@@ -1354,5 +1388,122 @@ mod tests {
         assert_eq!(counts.edge_count, built.edges as u64);
         assert!(crate::hook::read_stats(&dir).is_none(), "no hook state");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A main checkout with three Python files and two linked worktrees.
+    struct Repos {
+        tmp: PathBuf,
+        main: PathBuf,
+        seeded: PathBuf,
+        cold: PathBuf,
+    }
+
+    impl Drop for Repos {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.tmp);
+        }
+    }
+
+    fn git(dir: &Path, args: &[&str]) {
+        let out = std::process::Command::new("git")
+            .current_dir(dir)
+            .args(["-c", "user.email=t@t", "-c", "user.name=t"])
+            .args(args)
+            .output()
+            .expect("run git");
+        assert!(out.status.success(), "git {args:?}: {out:?}");
+    }
+
+    fn repos(tag: &str) -> Repos {
+        let tmp = std::env::temp_dir().join(format!("sieve-seed-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        let tmp = std::fs::canonicalize(&tmp).unwrap();
+        let main = tmp.join("main");
+        std::fs::create_dir_all(&main).unwrap();
+        for (name, text) in [
+            ("a.py", "def alpha():\n    return beta()\n"),
+            ("b.py", "def beta():\n    return 1\n"),
+            ("d.py", "def delta():\n    return alpha()\n"),
+        ] {
+            std::fs::write(main.join(name), text).unwrap();
+        }
+        git(&main, &["init", "-q"]);
+        git(&main, &["add", "-A"]);
+        git(&main, &["commit", "-q", "-m", "x"]);
+        let main_ctx = main.join("sieve");
+        build_for_query(&main, &main_ctx).unwrap();
+        let seeded = tmp.join("seeded");
+        let cold = tmp.join("cold");
+        for wt in [&seeded, &cold] {
+            git(&main, &["worktree", "add", "-q", wt.to_str().unwrap()]);
+        }
+        Repos {
+            tmp,
+            main,
+            seeded,
+            cold,
+        }
+    }
+
+    /// An edit, an add, a delete and a rename.
+    fn change(wt: &Path) {
+        std::fs::write(wt.join("a.py"), "def alpha():\n    return gamma()\n").unwrap();
+        std::fs::write(wt.join("c.py"), "def gamma():\n    return delta()\n").unwrap();
+        std::fs::remove_file(wt.join("b.py")).unwrap();
+        std::fs::rename(wt.join("d.py"), wt.join("e.py")).unwrap();
+        git(wt, &["add", "-A"]);
+    }
+
+    fn index_bytes(ctx: &Path) -> (Vec<u8>, Vec<u8>) {
+        (
+            std::fs::read(ctx.join(".graph/wiring.json")).unwrap(),
+            std::fs::read(sieve_core::askindex::ask_index_path(ctx)).unwrap(),
+        )
+    }
+
+    #[test]
+    fn a_seeded_worktree_build_equals_a_no_reuse_build() {
+        let r = repos("equal");
+        change(&r.seeded);
+        change(&r.cold);
+        let seeded_ctx = r.seeded.join("sieve");
+        assert_eq!(build_for_query(&r.seeded, &seeded_ctx).unwrap(), Some(3));
+        assert_eq!(
+            std::fs::read_to_string(seeded_ctx.join(".gitignore")).unwrap(),
+            "*\n"
+        );
+
+        let cold_ctx = r.cold.join("sieve");
+        let mut args = BuildArgs::plain(&r.cold);
+        args.no_reuse = true;
+        build_repo_locked(&r.cold, &cold_ctx, &args, Vec::new(), false, false, false).unwrap();
+        assert_eq!(index_bytes(&seeded_ctx), index_bytes(&cold_ctx));
+    }
+
+    #[test]
+    fn a_seeded_worktree_with_no_diff_parses_no_file() {
+        let r = repos("zero");
+        let ctx = r.seeded.join("sieve");
+        assert!(seed_from_main_checkout(&r.seeded, &ctx));
+        let report = sieve_parse::refresh::rebuild_graph_only(&r.seeded, &ctx).unwrap();
+        assert_eq!((report.files, report.parsed), (3, 0));
+        // The index is ignored, so git removes the worktree with no force.
+        git(&r.main, &["worktree", "remove", r.seeded.to_str().unwrap()]);
+        assert!(!r.seeded.exists());
+    }
+
+    #[test]
+    fn a_cache_at_another_stamp_builds_cold() {
+        let r = repos("stamp");
+        let cache = |ctx: &Path, stamp: &str| sieve_parse::cache::cache_path(ctx, stamp);
+        let main_ctx = r.main.join("sieve");
+        let stamp = sieve_parse::extractor_stamp();
+        std::fs::rename(cache(&main_ctx, &stamp), cache(&main_ctx, "old")).unwrap();
+        let ctx = r.seeded.join("sieve");
+        assert!(!seed_from_main_checkout(&r.seeded, &ctx));
+        assert!(!cache(&ctx, &stamp).exists());
+        assert_eq!(build_for_query(&r.seeded, &ctx).unwrap(), Some(3));
+        assert!(ctx.join(".graph/wiring.json").is_file());
     }
 }

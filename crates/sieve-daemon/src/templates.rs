@@ -17,6 +17,12 @@ If the tool schemas are not loaded yet, load all of them with one ToolSearch cal
 
 The index refreshes before each query. Results include edits you have not committed."#;
 
+/// The start of the line in [`INSTRUCTIONS`] that tells a client how to load the tools.
+pub const LOAD_LINE_START: &str = "If the tool schemas are not loaded yet";
+
+/// The load line for OpenCode, which lists MCP tools only after a `search` call.
+pub const OPENCODE_LOAD_LINE: &str = "In OpenCode, the Sieve tools are not in the tool catalog at first, so a first call fails with Unknown tool. Before your first Sieve call, run search({ namespace: \"sieve\" }) inside the execute tool. Then call each tool as tools.sieve.<tool>, for example tools.sieve.sieve_find({ pattern: \"X\" }).";
+
 /// The description of `sieve_find`.
 pub const FIND_ALL_DESC: &str = "Find every match of a pattern in indexed code. Use it in place of Grep for code search. Hits are grouped by enclosing symbol and ranked by caller count. Set fixed:true for a literal string.";
 

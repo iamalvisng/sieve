@@ -20,6 +20,7 @@ pub mod voice;
 pub mod walk;
 pub mod wiring;
 pub mod workspace;
+pub mod worktree;
 pub mod write;
 
 pub use product::{product, Product, SIEVE};

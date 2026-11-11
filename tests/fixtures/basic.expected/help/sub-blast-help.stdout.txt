@@ -4,8 +4,8 @@ Blast radius of a diff: what depends on the lines this change touched ($0, no
 LLM). Built for CI — `--format markdown` is a PR comment with a Mermaid diagram.
 
 Arguments:
-  dir                   repository root (default: nearest ancestor with a sieve/
-                        index)
+  dir                   repository root (default: the nearest folder with a
+                        sieve/ index; the walk stops at a linked git worktree)
 
 Options:
   --base <ref>          diff against this ref's merge base with HEAD (e.g.

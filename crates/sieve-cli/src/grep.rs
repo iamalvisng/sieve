@@ -22,7 +22,7 @@ pub struct GrepArgs {
     /// The regex, or literal string with `--fixed`, to search for.
     pub pattern: String,
 
-    /// The repo root. Default: the nearest ancestor with a graph.
+    /// The repo root. Default: the nearest folder with a graph; the walk stops at a linked git worktree.
     #[arg(value_name = "dir")]
     pub dir: Option<PathBuf>,
 

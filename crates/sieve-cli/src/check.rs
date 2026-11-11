@@ -21,7 +21,7 @@ use crate::ui::Ui;
 
 /// Every extension a build parses, sorted and de-duplicated: the native
 /// tier, the breadth tier and the container tier.
-fn supported_extensions() -> Vec<&'static str> {
+pub(crate) fn supported_extensions() -> Vec<&'static str> {
     let mut all = native_extensions();
     all.extend(GENERIC_LANGS.iter().flat_map(|l| l.exts.iter().copied()));
     all.extend(CONTAINER_LANGS.iter().flat_map(|l| l.exts.iter().copied()));
@@ -33,7 +33,7 @@ fn supported_extensions() -> Vec<&'static str> {
 /// Flags for `sieve check`.
 #[derive(Args, Debug)]
 pub struct CheckArgs {
-    /// The repo root. Default: the nearest ancestor with a graph.
+    /// The repo root. Default: the nearest folder with a graph; the walk stops at a linked git worktree.
     #[arg(value_name = "dir")]
     pub dir: Option<PathBuf>,
 

@@ -162,8 +162,8 @@ or code ($0, no key)
 
 Arguments:
   query            what you want to understand, in plain words
-  dir              repository root (default: nearest ancestor with a sieve/
-                   index)
+  dir              repository root (default: the nearest folder with a sieve/
+                   index; the walk stops at a linked git worktree)
 
 Options:
   -n, --limit <n>  max results (default: "8")
@@ -191,7 +191,8 @@ a file's API surface
 
 Arguments:
   file          repo-relative path (or unique basename) of the file
-  dir           repository root (default: nearest ancestor with a sieve/ index)
+  dir           repository root (default: the nearest folder with a sieve/
+                index; the walk stops at a linked git worktree)
 
 Options:
   --json        output the result as JSON
@@ -206,8 +207,9 @@ Options:
 Fail if sieve/ is stale relative to the code (for CI)
 
 Arguments:
-  dir                         repository root (default: nearest ancestor with a
-                              sieve/ index)
+  dir                         repository root (default: the nearest folder with
+                              a sieve/ index; the walk stops at a linked git
+                              worktree)
 
 Options:
   -e, --extensions <exts...>  code extensions to include
@@ -222,7 +224,8 @@ Options:
 Show this agent session's sieve-vs-source usage mix and tokens saved
 
 Arguments:
-  dir         repository root (default: nearest ancestor with a sieve/ index)
+  dir         repository root (default: the nearest folder with a sieve/ index;
+              the walk stops at a linked git worktree)
 
 Options:
   --json      output the session stats as JSON
@@ -237,8 +240,8 @@ Serve an interactive visualization of the context graph (and graph.json when
 present)
 
 Arguments:
-  dir                repository root (default: nearest ancestor with a sieve/
-                     index)
+  dir                repository root (default: the nearest folder with a sieve/
+                     index; the walk stops at a linked git worktree)
 
 Options:
   -p, --port <port>  port to serve on (default: "4400")
@@ -260,7 +263,8 @@ Serve the graph over MCP (stdio) — exposes sieve_query, sieve_callers,
 sieve_find, sieve_symbols, sieve_map, sieve_why and sieve_check as tools
 
 Arguments:
-  dir         repository root (default: nearest ancestor with a sieve/ index)
+  dir         repository root (default: the nearest folder with a sieve/ index;
+              the walk stops at a linked git worktree)
 
 Options:
   -h, --help  display help for command
@@ -276,8 +280,8 @@ it calls); --depth N (or all) walks transitively for full blast radius
 Arguments:
   symbol                bare name, qualified (Class.method), or
                         package-qualified (pkg.Fn)
-  dir                   repository root (default: nearest ancestor with a sieve/
-                        index)
+  dir                   repository root (default: the nearest folder with a
+                        sieve/ index; the walk stops at a linked git worktree)
 
 Options:
   --direction <in|out>  link direction: "in" = callers (default), "out" =
@@ -298,8 +302,8 @@ Blast radius of a diff: what depends on the lines this change touched ($0, no
 LLM). Built for CI — `--format markdown` is a PR comment with a Mermaid diagram.
 
 Arguments:
-  dir                   repository root (default: nearest ancestor with a sieve/
-                        index)
+  dir                   repository root (default: the nearest folder with a
+                        sieve/ index; the walk stops at a linked git worktree)
 
 Options:
   --base <ref>          diff against this ref's merge base with HEAD (e.g.
@@ -329,8 +333,8 @@ coupling ($0, no LLM)
 
 Arguments:
   pattern            regex pattern (or literal string with --fixed)
-  dir                repository root (default: nearest ancestor with a sieve/
-                     index)
+  dir                repository root (default: the nearest folder with a sieve/
+                     index; the walk stops at a linked git worktree)
 
 Options:
   -i, --ignore-case  case-insensitive match
@@ -349,8 +353,8 @@ Token-budgeted repo orientation — directory clusters, per-directory hubs, and
 global hotspots from the symbol graph ($0, no LLM)
 
 Arguments:
-  dir             repository root (default: nearest ancestor with a sieve/
-                  index)
+  dir             repository root (default: the nearest folder with a sieve/
+                  index; the walk stops at a linked git worktree)
 
 Options:
   --max-dirs <n>  max directory entries shown, rest counted into dropped

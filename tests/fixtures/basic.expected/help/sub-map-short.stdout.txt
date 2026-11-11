@@ -4,8 +4,8 @@ Token-budgeted repo orientation — directory clusters, per-directory hubs, and
 global hotspots from the symbol graph ($0, no LLM)
 
 Arguments:
-  dir             repository root (default: nearest ancestor with a sieve/
-                  index)
+  dir             repository root (default: the nearest folder with a sieve/
+                  index; the walk stops at a linked git worktree)
 
 Options:
   --max-dirs <n>  max directory entries shown, rest counted into dropped

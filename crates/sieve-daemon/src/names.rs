@@ -124,13 +124,13 @@ pub fn canonical_tool_name(name: &str) -> String {
 /// The boot `instructions` body, with no upkeep prefix
 ///.
 pub fn instructions() -> String {
-    instructions_with_upkeep(&[])
+    instructions_with_upkeep(&[], "")
 }
 
 /// `instructions`, with the boot upkeep lines first when there are any
 ///: the lines joined by a newline, then a blank line.
-pub fn instructions_with_upkeep(upkeep: &[String]) -> String {
-    let body = instructions_body();
+pub fn instructions_with_upkeep(upkeep: &[String], client: &str) -> String {
+    let body = instructions_body(client);
     if upkeep.is_empty() {
         body
     } else {
@@ -138,8 +138,27 @@ pub fn instructions_with_upkeep(upkeep: &[String]) -> String {
     }
 }
 
-fn instructions_body() -> String {
-    crate::templates::INSTRUCTIONS.to_string()
+/// The instructions for one MCP client. OpenCode shows an MCP tool only as
+/// `tools.<server>.<tool>` inside its `execute` tool, and it has no
+/// `ToolSearch`. The shared text names the Claude Code forms, so a model
+/// there guessed a wrong name on its first call. OpenCode gets its own
+/// load line; every other client gets the shared text unchanged.
+fn instructions_body(client: &str) -> String {
+    let shared = crate::templates::INSTRUCTIONS;
+    if !client.to_ascii_lowercase().contains("opencode") {
+        return shared.to_string();
+    }
+    shared
+        .lines()
+        .map(|line| {
+            if line.starts_with(crate::templates::LOAD_LINE_START) {
+                crate::templates::OPENCODE_LOAD_LINE
+            } else {
+                line
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 #[cfg(test)]
@@ -202,6 +221,18 @@ mod tests {
         let text = instructions();
         assert!(!text.contains('\u{1f331}') && !text.contains("tokens saved"));
         assert!(text.starts_with("This repo is indexed by Sieve"));
+    }
+
+    /// OpenCode gets the `tools.sieve.<tool>` form and no Claude Code names.
+    #[test]
+    fn opencode_instructions_name_the_opencode_call_form() {
+        let text = instructions_with_upkeep(&[], "opencode");
+        assert!(text.contains("tools.sieve.sieve_find"));
+        assert!(!text.contains("mcp__sieve__") && !text.contains("ToolSearch"));
+        assert!(text.contains("- sieve_find: every use of X."));
+        let claude = instructions_with_upkeep(&[], "claude-code");
+        assert_eq!(claude, instructions());
+        assert!(claude.contains("mcp__sieve__sieve_find"));
     }
 
     #[test]
